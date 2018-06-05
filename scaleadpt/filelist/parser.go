@@ -12,7 +12,7 @@ type FileData struct {
 	Inode            int64
 	Generation       int64
 	SnapshotId       int64
-	Filesize         int64
+	FileSize         int64
 	ModificationTime time.Time
 	Path             string
 }
@@ -122,7 +122,7 @@ func (p *Parser) parseCustomAttributes(fileData *FileData) error {
 	p.s.Mode = scanner.ScanInts
 	p.s.Whitespace = 0
 
-	fileData.Filesize, err = p.s.ParseInt64(false)
+	fileData.FileSize, err = p.s.ParseInt64(false)
 	if err != nil {
 		return err
 	}

@@ -48,9 +48,9 @@ func (a *CloseParser) Close() error {
 // The CloseParser should be closed in all cases (after processing is finished
 // or if an error occurs).
 func ApplyPolicy(fs *scaleadpt.FileSystem, options ...scaleadpt.PolicyOptioner) (*CloseParser, error) {
-	listPath := internal.NonExistingTempFile("scaleadpt-filelist-", ".list.files")
+	listPath := internal.TouchNonExistingTempFile("scaleadpt-filelist-", ".list.files")
 
-	err := fs.ApplyListPolicy(FileListPolicy, listPath)
+	err := fs.ApplyListPolicy(FileListPolicy, listPath, options...)
 	if err != nil {
 		return nil, err
 	}

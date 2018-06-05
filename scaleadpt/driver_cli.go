@@ -226,7 +226,13 @@ func (c *CLIDriver) ApplyPolicy(filesystem string, policy *Policy, options *poli
 	args := []string{}
 
 	if len(options.Subpath) > 0 {
-		args = append(args, filepath.Join("/", filesystem, options.Subpath))
+		rootDir := c.fileSystemRoot(filesystem)
+
+		if len(options.SnapshotName) > 0 {
+			rootDir = filepath.Join(rootDir, c.fileSystemSnapshotDir(filesystem), options.SnapshotName)
+		}
+
+		args = append(args, filepath.Join(rootDir, options.Subpath))
 	} else {
 		args = append(args, filesystem)
 	}
@@ -267,6 +273,14 @@ func (c *CLIDriver) ApplyPolicy(filesystem string, policy *Policy, options *poli
 	}
 
 	return nil
+}
+
+func (c *CLIDriver) fileSystemRoot(filesystem string) string {
+	return "/" + filesystem
+}
+
+func (c *CLIDriver) fileSystemSnapshotDir(filesystem string) string {
+	return ".snapshots"
 }
 
 func (c *CLIDriver) writePolicyFile(policy *Policy) (string, error) {

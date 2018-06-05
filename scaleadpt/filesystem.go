@@ -78,7 +78,7 @@ func (f *FileSystem) ApplyListPolicy(policy *Policy, listPath string, options ..
 		tempListPath = listPath
 	} else {
 		requiresMove = true
-		tempListPath = internal.NonExistingTempFile("scaleadpt-applylistpolicy-", ".list.files")
+		tempListPath = internal.TouchNonExistingTempFile("scaleadpt-applylistpolicy-", ".list.files")
 	}
 	fileListPrefix = tempListPath[0 : len(tempListPath)-len(".list.files")]
 
