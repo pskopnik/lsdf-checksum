@@ -120,11 +120,14 @@ func (s *Scanner) ExpectRune(r rune, allowWhitespace bool) error {
 }
 
 // SkipWhitespace consumes all runes which are classified as whitespace by the
-// current value of the Whitespace field.
-func (s *Scanner) SkipWhitespace() {
-	for r := s.Peek(); s.Whitespace&(1<<uint(r)) != 0; r = s.Peek() {
+// whitespace value passed in.
+// The whitespace value is interpreted exactly like s.Whitespace.
+func (s *Scanner) SkipWhitespace(whitespace uint64) error {
+	for r := s.Peek(); whitespace&(1<<uint(r)) != 0; r = s.Peek() {
 		s.Next()
 	}
+
+	return nil
 }
 
 // SkipToEOL consumes all runes until an EOL rune ('\n') is encountered.

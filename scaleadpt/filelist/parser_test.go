@@ -23,7 +23,7 @@ var _ = Describe("Parser", func() {
 				Inode:            1,
 				Generation:       2,
 				SnapshotId:       3,
-				Filesize:         4,
+				FileSize:         4,
 				ModificationTime: modTime,
 				Path:             "/some/file/path",
 			}))
@@ -39,7 +39,7 @@ var _ = Describe("Parser", func() {
 				Inode:            1,
 				Generation:       2,
 				SnapshotId:       3,
-				Filesize:         4,
+				FileSize:         4,
 				ModificationTime: modTime,
 				Path:             "/some/file/path",
 			}))
@@ -51,7 +51,7 @@ var _ = Describe("Parser", func() {
 				Inode:            2,
 				Generation:       3,
 				SnapshotId:       4,
-				Filesize:         5,
+				FileSize:         5,
 				ModificationTime: modTime,
 				Path:             "/another/file/path",
 			}))
@@ -67,7 +67,7 @@ var _ = Describe("Parser", func() {
 				Inode:            1,
 				Generation:       2,
 				SnapshotId:       3,
-				Filesize:         4,
+				FileSize:         4,
 				ModificationTime: modTime,
 				Path:             "/this is a/file /path.with/&a_lot-of/%strange (characters).?ß",
 			}))

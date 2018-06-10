@@ -6,6 +6,8 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal"
 )
 
+var _ DriverFileSystem = &FileSystem{}
+
 type FileSystem struct {
 	name   string
 	driver Driver
@@ -22,6 +24,14 @@ func OpenFileSystemWithDriver(name string, driver Driver) *FileSystem {
 	}
 }
 
+func (f *FileSystem) GetName() string {
+	return f.name
+}
+
+func (f *FileSystem) GetVersion() (string, error) {
+	return f.driver.GetVersion(f)
+}
+
 func (f *FileSystem) CreateSnapshot(name string, options ...SnapshotOptioner) (*Snapshot, error) {
 	optionsAggregate := snapshotOptions{}
 
@@ -29,14 +39,14 @@ func (f *FileSystem) CreateSnapshot(name string, options ...SnapshotOptioner) (*
 		option.apply(&optionsAggregate)
 	}
 
-	err := f.driver.CreateSnapshot(f.name, name, &optionsAggregate)
+	err := f.driver.CreateSnapshot(f, name, &optionsAggregate)
 	if err != nil {
 		return nil, err
 	}
 
-	snapshot, err := f.driver.GetSnapshot(f.name, name)
+	snapshot, err := f.driver.GetSnapshot(f, name)
 	if err != nil {
-		f.driver.DeleteSnapshot(f.name, name)
+		_ = f.driver.DeleteSnapshot(f, name)
 		return nil, err
 	}
 
@@ -45,7 +55,7 @@ func (f *FileSystem) CreateSnapshot(name string, options ...SnapshotOptioner) (*
 }
 
 func (f *FileSystem) GetSnapshot(name string) (*Snapshot, error) {
-	snapshot, err := f.driver.GetSnapshot(f.name, name)
+	snapshot, err := f.driver.GetSnapshot(f, name)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +65,7 @@ func (f *FileSystem) GetSnapshot(name string) (*Snapshot, error) {
 }
 
 func (f *FileSystem) DeleteSnapshot(name string) error {
-	return f.driver.DeleteSnapshot(f.name, name)
+	return f.driver.DeleteSnapshot(f, name)
 }
 
 func (f *FileSystem) ApplyPolicy(policy *Policy, options ...PolicyOptioner) error {
@@ -65,7 +75,7 @@ func (f *FileSystem) ApplyPolicy(policy *Policy, options ...PolicyOptioner) erro
 		option.apply(&optionsAggregate)
 	}
 
-	return f.driver.ApplyPolicy(f.name, policy, &optionsAggregate)
+	return f.driver.ApplyPolicy(f, policy, &optionsAggregate)
 }
 
 func (f *FileSystem) ApplyListPolicy(policy *Policy, listPath string, options ...PolicyOptioner) error {
@@ -98,4 +108,12 @@ func (f *FileSystem) ApplyListPolicy(policy *Policy, listPath string, options ..
 	} else {
 		return nil
 	}
+}
+
+func (f *FileSystem) GetMountRoot() (string, error) {
+	return f.driver.GetMountRoot(f)
+}
+
+func (f *FileSystem) GetSnapshotDirsInfo() (*SnapshotDirsInfo, error) {
+	return f.driver.GetSnapshotDirsInfo(f)
 }

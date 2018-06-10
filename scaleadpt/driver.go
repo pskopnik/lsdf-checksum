@@ -1,5 +1,11 @@
 package scaleadpt
 
+// DriverFileSystem is the interface expected by Drivers' providing
+// information about the FileSystem.
+type DriverFileSystem interface {
+	GetName() string
+}
+
 // Driver is the interface providing access to low-level Spectrum Scale
 // operations.
 //
@@ -7,9 +13,14 @@ package scaleadpt
 // scaleadpt package. Drivers will not propagate all fields, i.e. fields used
 // only used as part of the high-level api are not read or written.
 type Driver interface {
-	CreateSnapshot(filesystem string, name string, options *snapshotOptions) error
-	GetSnapshot(filesystem string, name string) (*Snapshot, error)
-	DeleteSnapshot(filesystem string, name string) error
+	GetVersion(filesystem DriverFileSystem) (string, error)
 
-	ApplyPolicy(filesystem string, policy *Policy, options *policyOptions) error
+	CreateSnapshot(filesystem DriverFileSystem, name string, options *snapshotOptions) error
+	GetSnapshot(filesystem DriverFileSystem, name string) (*Snapshot, error)
+	DeleteSnapshot(filesystem DriverFileSystem, name string) error
+
+	ApplyPolicy(filesystem DriverFileSystem, policy *Policy, options *policyOptions) error
+
+	GetMountRoot(filesystem DriverFileSystem) (string, error)
+	GetSnapshotDirsInfo(filesystem DriverFileSystem) (*SnapshotDirsInfo, error)
 }

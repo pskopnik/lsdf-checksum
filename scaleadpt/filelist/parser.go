@@ -3,7 +3,6 @@ package filelist
 import (
 	"errors"
 	"io"
-	"log"
 	"text/scanner"
 	"time"
 )
@@ -59,27 +58,34 @@ func (p *Parser) ParseLine() (*FileData, error) {
 
 	p.s.Error = func(_ *scanner.Scanner, msg string) {
 		scannerError = errors.New(msg)
-		log.Println(msg)
 	}
 
 	err = p.parsePreamble(fileData)
 	if err != nil {
 		return nil, err
+	} else if scannerError != nil {
+		return nil, scannerError
 	}
 
 	err = p.parseCustomAttributes(fileData)
 	if err != nil {
 		return nil, err
+	} else if scannerError != nil {
+		return nil, scannerError
 	}
 
 	err = p.parseFilenameSeparator()
 	if err != nil {
 		return nil, err
+	} else if scannerError != nil {
+		return nil, scannerError
 	}
 
 	err = p.parseFilename(fileData)
 	if err != nil {
 		return nil, err
+	} else if scannerError != nil {
+		return nil, scannerError
 	}
 
 	next := p.s.Next()
@@ -176,8 +182,10 @@ func (p *Parser) parseFilenameSeparator() error {
 		return err
 	}
 
-	p.s.Whitespace = delimitingWhitespace
-	p.s.SkipWhitespace()
+	err = p.s.SkipWhitespace(delimitingWhitespace)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

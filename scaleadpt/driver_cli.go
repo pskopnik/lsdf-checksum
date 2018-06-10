@@ -3,8 +3,10 @@ package scaleadpt
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -15,12 +17,55 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/akutz/gofsutil"
+
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal"
 )
 
 var (
 	SnapshotDoesNotExist = errors.New("Snapshot does not exist.")
 	UnexpectedFormat     = errors.New("Unexpected format encountered.")
+	PrefixNotFound       = errors.New("Prefix not found.")
+	HeaderNotFound       = errors.New("A header field was not found.")
+	FileSystemNotFound   = errors.New("The file system was not found.")
 )
+
+const gpfsMountType = "gpfs"
+
+// gpfsEntryScan is an EntryScanFunc for gofsutil.
+// The function should be used to scan all mounted gpfs based file systems.
+// The implementation is an adapted copy of the gofsutil's
+// defaultEntryScanFunc, see:
+//
+//    https://github.com/akutz/gofsutil/blob/master/gofsutil_mount.go#L99
+func gpfsEntryScan(ctx context.Context, entry gofsutil.Entry, cache map[string]gofsutil.Entry) (gofsutil.Info, bool, error) {
+	var info gofsutil.Info
+
+	if entry.FSType != gpfsMountType {
+		return info, false, nil
+	}
+
+	// Copy the Entry object's fields to the Info object.
+	info.Device = entry.MountSource
+	info.Opts = make([]string, len(entry.MountOpts))
+	copy(info.Opts, entry.MountOpts)
+	info.Path = entry.MountPoint
+	info.Type = entry.FSType
+	info.Source = entry.MountSource
+
+	if cachedEntry, ok := cache[entry.MountSource]; ok {
+		info.Source = filepath.Join(cachedEntry.MountPoint, entry.Root)
+	} else {
+		cache[entry.MountSource] = entry
+	}
+
+	return info, true, nil
+}
+
+var gpfsFsInfo = &gofsutil.FS{
+	ScanEntry: gpfsEntryScan,
+}
 
 var _ error = &CLIError{}
 
@@ -85,16 +130,26 @@ func cmdArgs(args ...string) cmdOption {
 	})
 }
 
-var gpfsErrorRegExp = regexp.MustCompile("^GPFS: (?P<messagecode>(?P<first>\\d+)-(?P<second>\\d+))( \\[(?P<severity>.)(:(?P<errcode>\\d+))?\\])?")
+var (
+	gpfsErrorRegExp = regexp.MustCompile("^GPFS: (?P<messagecode>(?P<first>\\d+)-(?P<second>\\d+))( \\[(?P<severity>.)(:(?P<errcode>\\d+))?\\])?")
+
+	snapdirOneLineRegExp = regexp.MustCompile(
+		`^Snapshot directory for "([^"]+)" is "([^"]+)" \(((root directory only)|(all directories))\)
+$`)
+	snapdirTwoLineRegExp = regexp.MustCompile(
+		`^Fileset snapshot directory for "([^"]+)" is "([^"]+)" \(((root directory only)|(all directories))\)
+Global snapshot directory for "([^"]+)" is "([^"]+)" in ((root fileset)|(all filesets))
+$`)
+)
 
 var _ Driver = &CLIDriver{}
 
 type CLIDriver struct {
 }
 
-func (c *CLIDriver) CreateSnapshot(filesystem string, name string, options *snapshotOptions) error {
+func (c *CLIDriver) CreateSnapshot(filesystem DriverFileSystem, name string, options *snapshotOptions) error {
 	args := []string{
-		filesystem,
+		filesystem.GetName(),
 		name,
 	}
 
@@ -107,8 +162,8 @@ func (c *CLIDriver) CreateSnapshot(filesystem string, name string, options *snap
 	return err
 }
 
-func (c *CLIDriver) GetSnapshot(filesystem string, name string) (*Snapshot, error) {
-	output, err := c.runOutput("mmlssnapshot", cmdArgs(filesystem, "-s", name, "-Y"))
+func (c *CLIDriver) GetSnapshot(filesystem DriverFileSystem, name string) (*Snapshot, error) {
+	output, err := c.runOutput("mmlssnapshot", cmdArgs(filesystem.GetName(), "-s", name, "-Y"))
 	if err != nil {
 		if gpfsError, ok := err.(*CLIGPFSError); ok {
 			if gpfsError.MessageCode == "6027-2612" {
@@ -133,57 +188,39 @@ func (c *CLIDriver) GetSnapshot(filesystem string, name string) (*Snapshot, erro
 }
 
 func (c *CLIDriver) parseListSnapshots(output []byte) ([]*Snapshot, error) {
-	scanner := bufio.NewScanner(bytes.NewReader(output))
+	reader := newGpfsCmdOutReader(
+		bytes.NewReader(output),
+		"mmlssnapshot",
+		[]string{
+			"directory",
+			"snapID",
+			"status",
+			"created",
+			"fileset",
+		},
+	)
 
-	columnIndices := struct {
-		directory int
-		snapID    int
-		status    int
-		created   int
-		fileset   int
-	}{}
-
-	if scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "No snapshots") {
-			return nil, nil
-		}
-
-		// Read header and extract column indices for relevant fields.
-		// The header is expected to look like this:
-		// mmlssnapshot::HEADER:version:reserved:reserved:filesystemName:directory:snapID:status:created:quotas:data:metadata:fileset:snapType:
-
-		fields := strings.Split(scanner.Text(), ":")
-		for ind, name := range fields {
-			switch name {
-			case "directory":
-				columnIndices.directory = ind
-			case "snapID":
-				columnIndices.snapID = ind
-			case "status":
-				columnIndices.status = ind
-			case "created":
-				columnIndices.created = ind
-			case "fileset":
-				columnIndices.fileset = ind
-			}
-		}
-	} else {
-		return nil, UnexpectedFormat
-	}
+	const (
+		directoryField int = iota
+		snapIDField
+		statusField
+		createdField
+		filesetField
+	)
 
 	snapshots := make([]*Snapshot, 0)
 
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), ":")
+	for reader.Scan() {
+		row := reader.Row()
 
-		id, err := strconv.ParseInt(c.clidecode(fields[columnIndices.snapID]), 10, 32)
+		id, err := strconv.ParseInt(row[snapIDField], 10, 32)
 		if err != nil {
 			return nil, err
 		}
 
 		createdAt, err := time.ParseInLocation(
 			time.ANSIC,
-			c.clidecode(fields[columnIndices.created]),
+			row[createdField],
 			time.Local,
 		)
 		if err != nil {
@@ -194,19 +231,22 @@ func (c *CLIDriver) parseListSnapshots(output []byte) ([]*Snapshot, error) {
 			snapshots,
 			&Snapshot{
 				Id:        int(id),
-				Name:      c.clidecode(fields[columnIndices.directory]),
-				Status:    c.clidecode(fields[columnIndices.status]),
+				Name:      row[directoryField],
+				Status:    row[statusField],
 				CreatedAt: createdAt,
-				Fileset:   c.clidecode(fields[columnIndices.fileset]),
+				Fileset:   row[filesetField],
 			},
 		)
+	}
+	if err := reader.Err(); err != nil {
+		return nil, err
 	}
 
 	return snapshots, nil
 }
 
-func (c *CLIDriver) DeleteSnapshot(filesystem string, name string) error {
-	_, err := c.runOutput("mmdelsnapshot", cmdArgs(filesystem, name))
+func (c *CLIDriver) DeleteSnapshot(filesystem DriverFileSystem, name string) error {
+	_, err := c.runOutput("mmdelsnapshot", cmdArgs(filesystem.GetName(), name))
 	if err != nil {
 		if gpfsError, ok := err.(*CLIGPFSError); ok {
 			if gpfsError.MessageCode == "6027-2683" || gpfsError.MessageCode == "6027-2684" {
@@ -222,19 +262,26 @@ func (c *CLIDriver) DeleteSnapshot(filesystem string, name string) error {
 	return nil
 }
 
-func (c *CLIDriver) ApplyPolicy(filesystem string, policy *Policy, options *policyOptions) error {
+func (c *CLIDriver) ApplyPolicy(filesystem DriverFileSystem, policy *Policy, options *policyOptions) error {
 	args := []string{}
 
 	if len(options.Subpath) > 0 {
-		rootDir := c.fileSystemRoot(filesystem)
+		rootDir, err := c.GetMountRoot(filesystem)
+		if err != nil {
+			return err
+		}
+		snapshotDirsInfo, err := c.GetSnapshotDirsInfo(filesystem)
+		if err != nil {
+			return err
+		}
 
 		if len(options.SnapshotName) > 0 {
-			rootDir = filepath.Join(rootDir, c.fileSystemSnapshotDir(filesystem), options.SnapshotName)
+			rootDir = filepath.Join(rootDir, snapshotDirsInfo.Global, options.SnapshotName)
 		}
 
 		args = append(args, filepath.Join(rootDir, options.Subpath))
 	} else {
-		args = append(args, filesystem)
+		args = append(args, filesystem.GetName())
 	}
 
 	policyFilePath, err := c.writePolicyFile(policy)
@@ -275,14 +322,6 @@ func (c *CLIDriver) ApplyPolicy(filesystem string, policy *Policy, options *poli
 	return nil
 }
 
-func (c *CLIDriver) fileSystemRoot(filesystem string) string {
-	return "/" + filesystem
-}
-
-func (c *CLIDriver) fileSystemSnapshotDir(filesystem string) string {
-	return ".snapshots"
-}
-
 func (c *CLIDriver) writePolicyFile(policy *Policy) (string, error) {
 	rulesContent := make([]string, len(policy.Rules))
 
@@ -306,13 +345,193 @@ func (c *CLIDriver) writePolicyFile(policy *Policy) (string, error) {
 	return f.Name(), nil
 }
 
-func (c *CLIDriver) clidecode(s string) string {
-	decoded, err := url.QueryUnescape(s)
-	if err != nil {
-		return ""
+func (c *CLIDriver) GetMountRoot(filesystem DriverFileSystem) (string, error) {
+	fileSystemRoot, err := c.getMountRootLsfs(filesystem)
+	if err == nil {
+		return fileSystemRoot, nil
+	} else if !(internal.IsExecNotFound(err) || err == PrefixNotFound) {
+		return "", err
 	}
 
-	return decoded
+	fileSystemRoot, err = c.getMountRootMount(filesystem)
+	if err != nil {
+		return "", err
+	}
+	return fileSystemRoot, nil
+}
+
+func (c *CLIDriver) getMountRootLsfs(filesystem DriverFileSystem) (string, error) {
+	filesystemName := filesystem.GetName()
+
+	output, err := c.runOutput("lsfs", cmdArgs("-v", "-Y"))
+	if err != nil {
+		return "", err
+	}
+
+	reader := newGpfsCmdOutReader(
+		bytes.NewReader(output),
+		"lsfs",
+		[]string{
+			"Device name",
+			"Mount point",
+		},
+	)
+
+	const (
+		deviceNameField int = iota
+		mountPointField
+	)
+
+	for reader.Scan() {
+		row := reader.Row()
+
+		if row[deviceNameField] == filesystemName {
+			return row[mountPointField], nil
+		}
+	}
+	if err = reader.Err(); err != nil {
+		return "", err
+	}
+
+	return "", FileSystemNotFound
+}
+
+func (c *CLIDriver) getMountRootMount(filesystem DriverFileSystem) (string, error) {
+	filesystemName := filesystem.GetName()
+
+	mounts, err := gpfsFsInfo.GetMounts(context.Background())
+	if err != nil {
+		return "", err
+	}
+
+	for _, mount := range mounts {
+		if mount.Source == filesystemName {
+			return mount.Path, nil
+		}
+	}
+
+	return "", FileSystemNotFound
+}
+
+func (c *CLIDriver) GetSnapshotDirsInfo(filesystem DriverFileSystem) (*SnapshotDirsInfo, error) {
+	filesystemName := filesystem.GetName()
+
+	output, err := c.runOutput("mmsnapdir", cmdArgs(filesystemName, "-q"))
+	if err != nil {
+		// Possible errors:
+		// mmsnapdir: 6027-1388 File system ... is not known to the GPFS cluster.
+		// This is not supported by wrapError, as the message does not start with GPFS:
+		return nil, err
+	}
+
+	return c.parseSnapdirOutput(output, filesystemName)
+}
+
+func (c *CLIDriver) parseSnapdirOutput(output []byte, filesystemName string) (*SnapshotDirsInfo, error) {
+	lineCount := bytes.Count(output, []byte("\n"))
+	if lineCount == 1 {
+		submatches := snapdirOneLineRegExp.FindSubmatch(output)
+		if len(submatches) == 0 {
+			return nil, UnexpectedFormat
+		}
+
+		if string(submatches[1]) != filesystemName {
+			return nil, UnexpectedFormat
+		}
+
+		snapshotDirsInfo := &SnapshotDirsInfo{}
+
+		snapshotDirsInfo.Fileset = string(submatches[2])
+
+		if len(submatches[4]) > 0 {
+			snapshotDirsInfo.AllDirectories = false
+		} else if len(submatches[5]) > 0 {
+			snapshotDirsInfo.AllDirectories = true
+		} else {
+			return nil, UnexpectedFormat
+		}
+
+		snapshotDirsInfo.Global = snapshotDirsInfo.Fileset
+
+		snapshotDirsInfo.GlobalsInFileset = false
+
+		return snapshotDirsInfo, nil
+	} else if lineCount == 2 {
+		submatches := snapdirTwoLineRegExp.FindSubmatch(output)
+		if len(submatches) == 0 {
+			return nil, UnexpectedFormat
+		}
+
+		if string(submatches[1]) != filesystemName || string(submatches[6]) != filesystemName {
+			return nil, UnexpectedFormat
+		}
+		snapshotDirsInfo := &SnapshotDirsInfo{}
+
+		snapshotDirsInfo.Fileset = string(submatches[2])
+
+		if len(submatches[4]) > 0 {
+			snapshotDirsInfo.AllDirectories = false
+		} else if len(submatches[5]) > 0 {
+			snapshotDirsInfo.AllDirectories = true
+		} else {
+			return nil, UnexpectedFormat
+		}
+
+		snapshotDirsInfo.Global = string(submatches[7])
+
+		if len(submatches[9]) > 0 {
+			snapshotDirsInfo.GlobalsInFileset = false
+		} else if len(submatches[10]) > 0 {
+			snapshotDirsInfo.GlobalsInFileset = true
+		} else {
+			return nil, UnexpectedFormat
+		}
+
+		return snapshotDirsInfo, nil
+	} else {
+		return nil, UnexpectedFormat
+	}
+}
+
+func (c *CLIDriver) GetVersion(filesystem DriverFileSystem) (string, error) {
+	filesystemName := filesystem.GetName()
+
+	output, err := c.runOutput("mmlsfs", cmdArgs(filesystemName, "-Y", "-V"))
+	if err != nil {
+		// Possible errors:
+		// mmlsfs: 6027-1388 File system ... is not known to the GPFS cluster.
+		// This is not supported by wrapError, as the message does not start with GPFS:
+		return "", err
+	}
+
+	reader := newGpfsCmdOutReader(
+		bytes.NewReader(output),
+		"mmlsfs",
+		[]string{
+			"deviceName",
+			"fieldName",
+			"data",
+		},
+	)
+
+	const (
+		deviceNameField int = iota
+		fieldNameField
+		dataField
+	)
+
+	for reader.Scan() {
+		row := reader.Row()
+
+		if row[deviceNameField] == filesystemName && row[fieldNameField] == "filesystemVersion" {
+			return row[dataField], nil
+		}
+	}
+	if err = reader.Err(); err != nil {
+		return "", err
+	}
+
+	return "", UnexpectedFormat
 }
 
 func (c *CLIDriver) runOutput(name string, options ...cmdOption) ([]byte, error) {
@@ -371,3 +590,148 @@ func (c *CLIDriver) wrapError(exitErr *exec.ExitError) error {
 // 	// Would probably require an implementation of a prefixSuffixSaver to be safe.
 // 	// See https://golang.org/src/os/exec/exec.go
 // }
+
+type gpfsCmdOutReader struct {
+	scanner *bufio.Scanner
+	prefix  string
+	headers []string
+	indices []int
+
+	row []string
+	err error
+}
+
+func newGpfsCmdOutReader(r io.Reader, prefix string, headers []string) *gpfsCmdOutReader {
+	return &gpfsCmdOutReader{
+		prefix:  prefix,
+		scanner: bufio.NewScanner(r),
+		headers: headers,
+	}
+}
+
+func (g *gpfsCmdOutReader) readHeader() error {
+	if g.scanner.Scan() {
+		fields := strings.Split(g.scanner.Text(), ":")
+
+		if fields[0] != g.prefix {
+			return PrefixNotFound
+		}
+
+		g.indices = make([]int, len(g.headers))
+		headerFound := make([]bool, len(g.headers))
+
+		// Iterate over all fields and store indices for headers which have
+		// been requested.
+		for fieldInd, field := range fields {
+			for headerInd, header := range g.headers {
+				if field == header {
+					g.indices[headerInd] = fieldInd
+					headerFound[headerInd] = true
+				}
+			}
+		}
+
+		// Check that all headers have been found
+		for _, found := range headerFound {
+			if !found {
+				return HeaderNotFound
+			}
+		}
+	} else if err := g.scanner.Err(); err != nil {
+		return err
+	} else {
+		return UnexpectedFormat
+	}
+
+	return nil
+}
+
+// ReadRow reads and returns the next row of the reader.
+// This is a low level method.
+// You might want to check out the Scan() method.
+func (g *gpfsCmdOutReader) ReadRow() ([]string, error) {
+	var err error
+
+	if g.indices == nil {
+		err = g.readHeader()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if g.scanner.Scan() {
+		fields := strings.Split(g.scanner.Text(), ":")
+
+		values := make([]string, len(g.headers))
+		for ind, fieldIndex := range g.indices {
+			values[ind] = g.decodeField(fields[fieldIndex])
+		}
+
+		return values, nil
+	} else if err = g.scanner.Err(); err != nil {
+		return nil, err
+	} else {
+		return nil, io.EOF
+	}
+}
+
+// Scan reads the next row from the reader and returns whether the reading was
+// successful.
+// If the reading was successful, Row() and Field() can be used to retrieve the
+// row's content.
+// If the reading was not successful, Err() returns the error. If the end of
+// the file was reached, Scan() returns false and Err() returns nil.
+//
+// Scan allows simplified access similar to bufio.Scanner.
+//
+//    for reader.Scan() {
+//    	row := reader.Row()
+//
+//    	// do something with row
+//    }
+//    if err = reader.Err(); err != nil {
+//    	return nil, err
+//    }
+func (g *gpfsCmdOutReader) Scan() bool {
+	row, err := g.ReadRow()
+	if err != nil {
+		if err != io.EOF {
+			g.err = err
+		}
+
+		g.row = nil
+
+		return false
+	}
+
+	g.row = row
+	g.err = nil
+
+	return true
+}
+
+// Row returns the last read row of the reader.
+// This method must only be called after a successful call to Scan().
+func (g *gpfsCmdOutReader) Row() []string {
+	return g.row
+}
+
+// Field returns a field from the last read row of the reader.
+// This method must only be called after a successful call to Scan().
+func (g *gpfsCmdOutReader) Field(index int) string {
+	return g.Field(index)
+}
+
+// Err returns the error yielded by the last read performed by Scan().
+func (g *gpfsCmdOutReader) Err() error {
+	return g.err
+}
+
+func (_ *gpfsCmdOutReader) decodeField(s string) string {
+	decoded, err := url.QueryUnescape(s)
+	if err != nil {
+		return ""
+	}
+
+	return decoded
+}
