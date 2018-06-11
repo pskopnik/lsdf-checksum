@@ -1,11 +1,14 @@
-// Package medasync contains the Syncer utility for synchronising the file
+// Package medasync contains the Syncer component for synchronising the file
 // system data with the meta data database.
 package medasync
 
 import (
 	"database/sql"
 	"io"
+	"path/filepath"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
@@ -51,8 +54,10 @@ var DefaultConfig = &Config{
 }
 
 type Syncer struct {
-	Config      *Config
+	Config *Config
+
 	fieldLogger logrus.FieldLogger
+	basePath    string
 }
 
 func New(config *Config) *Syncer {
@@ -67,12 +72,31 @@ func (s *Syncer) Run() error {
 	s.fieldLogger = s.Config.Logger.WithFields(logrus.Fields{
 		"run":        s.Config.RunId,
 		"snapshot":   s.Config.SnapshotName,
-		"filesystem": "",
+		"filesystem": s.Config.FileSystem.GetName(),
 		"module":     "medasync",
 	})
 
-	parser, err := s.applyPolicy()
+	// Perform the first step of the Syncer in parallel
+
+	var parser *filelist.CloseParser
+	var errg errgroup.Group
+
+	errg.Go(func() (err error) {
+		parser, err = s.applyPolicy()
+		return
+	})
+
+	errg.Go(func() (err error) {
+		err = s.prepareDatabase()
+		return
+	})
+
+	err = errg.Wait()
 	if err != nil {
+		if parser != nil {
+			_ = parser.Close()
+		}
+
 		return err
 	}
 
@@ -93,6 +117,23 @@ func (s *Syncer) Run() error {
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (s *Syncer) prepareDatabase() error {
+	s.fieldLogger.Info("Starting preparing the meta data database")
+
+	res, err := s.Config.DB.Exec(cleanInsertsQuery.get(), s.Config.RunId)
+	if err != nil {
+		return err
+	}
+
+	s.fieldLogger.WithFields(logrus.Fields{
+		"affected": alwaysRowsAffected(res),
+	}).Info("Performed delete of invalid file data in inserts table of meta data database")
+
+	s.fieldLogger.Info("Finished preparing the meta data database")
 
 	return nil
 }
@@ -133,12 +174,21 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 
 func (s *Syncer) writeInserts(parser *filelist.Parser) error {
 	var fileData *filelist.FileData
-	var medaFile meda.Insert
+	var medaInsert meda.Insert
 	var count, txCount int
 
 	s.fieldLogger.Info("Starting meta data database inserts")
 
+	err := s.fetchFileSystemPathInfo()
+	if err != nil {
+		return err
+	}
+
 	tx, prepStmt, err := s.openWriteInsertsTx()
+	if err != nil {
+		return err
+	}
+	defer prepStmt.Close()
 	defer tx.Rollback()
 
 	for {
@@ -149,14 +199,19 @@ func (s *Syncer) writeInserts(parser *filelist.Parser) error {
 			return err
 		}
 
-		medaFile = meda.Insert{
-			Path:             s.cleanPath(fileData.Path),
+		cleanPath, err := s.cleanPath(fileData.Path)
+		if err != nil {
+			return err
+		}
+
+		medaInsert = meda.Insert{
+			Path:             cleanPath,
 			ModificationTime: fileData.ModificationTime,
 			FileSize:         int(fileData.FileSize),
 			LastSeen:         s.Config.RunId,
 		}
 
-		_, err = prepStmt.Exec(&medaFile)
+		_, err = prepStmt.Exec(&medaInsert)
 		if err != nil {
 			return err
 		}
@@ -222,15 +277,41 @@ func (s *Syncer) closeWriteInsertsTx(tx *sqlx.Tx, prepStmt *sqlx.NamedStmt) erro
 	return nil
 }
 
-func (s *Syncer) cleanPath(path string) string {
-	// TODO
-	return path
+func (s *Syncer) fetchFileSystemPathInfo() error {
+	mountRoot, err := s.Config.FileSystem.GetMountRoot()
+	if err != nil {
+		return err
+	}
+	snapshotDirsInfo, err := s.Config.FileSystem.GetSnapshotDirsInfo()
+	if err != nil {
+		return err
+	}
+
+	basePath, err := filepath.Abs(
+		filepath.Join(mountRoot, snapshotDirsInfo.Global, s.Config.SnapshotName),
+	)
+	if err != nil {
+		return err
+	}
+
+	s.basePath = basePath
+
+	return nil
+}
+
+func (s *Syncer) cleanPath(path string) (string, error) {
+	relPath, err := filepath.Rel(s.basePath, path)
+	if err != nil {
+		return "", err
+	}
+
+	return "/" + relPath, nil
 }
 
 func (s *Syncer) syncDatabase() error {
 	s.fieldLogger.Info("Starting syncing the meta data database")
 
-	res, err := s.Config.DB.Exec(updateQuery.get(), s.Config.RunId)
+	res, err := s.Config.DB.Exec(updateQuery.get(), s.Config.RunId, s.Config.RunId)
 	if err != nil {
 		return err
 	}

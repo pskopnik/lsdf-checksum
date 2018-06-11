@@ -24,6 +24,7 @@ var updateQuery = substitutedQuery(
 			{FILES}.modification_time = {INSERTS}.modification_time,
 			{FILES}.last_seen = {INSERTS}.last_seen,
 			{FILES}.to_be_read = IF({FILES}.modification_time = {INSERTS}.modification_time, 0, 1)
+		WHERE {FILES}.last_seen != ?
 	;`,
 )
 
