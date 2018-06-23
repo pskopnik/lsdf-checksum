@@ -24,8 +24,8 @@ def insert(path, last_seen=1):
 
 	add_insert = (
 		"INSERT INTO inserts "
-		"(path, modification_time, file_size, last_seen) "
-		"VALUES (%s, %s, %s, %s)"
+		"(rand, path, modification_time, file_size, last_seen) "
+		"VALUES (RAND(), %s, %s, %s, %s)"
 	)
 
 	for el in read_generator(path):

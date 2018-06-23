@@ -11,7 +11,8 @@ DROP_STATEMENT = "DROP TABLE IF EXISTS {};"
 CREATE_STATEMENT = (
 	"CREATE TABLE IF NOT EXISTS `files` ("
 	"	`id` int(11) NOT NULL AUTO_INCREMENT,"
-	"	`path` varchar(2048) NOT NULL,"
+	"	`rand` double NOT NULL,"
+	"	`path` varchar(4096) NOT NULL,"
 	"	`modification_time` datetime(6) NOT NULL,"
 	"	`file_size` int(11) NOT NULL,"
 	"	`last_seen` int(11) NOT NULL,"
@@ -19,13 +20,14 @@ CREATE_STATEMENT = (
 	"	`checksum` varbinary(256) DEFAULT NULL,"
 	"	`last_read` int(11) DEFAULT NULL,"
 	"	PRIMARY KEY (`id`),"
+	"	KEY `rand` (`rand`),"
 	"	KEY `path` (`path`(1024))"
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8;"
 )
 
 INSERT_JOIN_STATEMENT = (
-	"INSERT INTO files (path, file_size, modification_time, last_seen)"
-	"	SELECT {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+	"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
+	"	SELECT {src}.rand, {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
 	"	FROM {src}"
 	"	LEFT JOIN files ON {src}.path = files.path"
 	"	WHERE files.id IS NULL"
@@ -35,8 +37,8 @@ INSERT_JOIN_STATEMENT = (
 )
 
 INSERT_IN_STATEMENT = (
-	"INSERT INTO files (path, file_size, modification_time, last_seen)"
-	"	SELECT path, file_size, modification_time, last_seen"
+	"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
+	"	SELECT rand, path, file_size, modification_time, last_seen"
 	"	FROM {src}"
 	"	WHERE {src}.path NOT IN"
 	"			(SELECT DISTINCT path FROM files)"
@@ -110,7 +112,8 @@ def bench_empty():
 CREATE_INSERTS_ORIGINAL_STATEMENT = (
 	"CREATE TABLE IF NOT EXISTS `inserts_original` ("
 	"	`id` int(11) NOT NULL AUTO_INCREMENT,"
-	"	`path` varchar(2048) NOT NULL,"
+	"	`rand` double NOT NULL,"
+	"	`path` varchar(4096) NOT NULL,"
 	"	`modification_time` datetime(6) NOT NULL,"
 	"	`file_size` int(11) NOT NULL,"
 	"	`last_seen` int(11) NOT NULL,"
@@ -119,8 +122,8 @@ CREATE_INSERTS_ORIGINAL_STATEMENT = (
 )
 
 COPY_STATEMENT = (
-	"INSERT INTO inserts_original (path, file_size, modification_time, last_seen)"
-	"	SELECT path, file_size, modification_time, last_seen"
+	"INSERT INTO inserts_original (rand, path, file_size, modification_time, last_seen)"
+	"	SELECT rand, path, file_size, modification_time, last_seen"
 	"	FROM inserts"
 	"	WHERE inserts.last_seen = %s"
 	";"
@@ -139,6 +142,7 @@ UPDATE_FILES_STATEMENT = (
 	"	RIGHT JOIN inserts"
 	"		ON inserts.path = files.path AND inserts.last_seen = %s"
 	"	SET"
+	"		files.rand = inserts.rand,"
 	"		files.file_size = inserts.file_size,"
 	"		files.modification_time = inserts.modification_time,"
 	"		files.last_seen = inserts.last_seen,"
