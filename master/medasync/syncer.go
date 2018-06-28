@@ -204,6 +204,19 @@ func (s *Syncer) writeInserts(parser *filelist.Parser) error {
 			return err
 		}
 
+		if len(cleanPath) > meda.FilesMaxPathLength {
+			s.fieldLogger.WithFields(logrus.Fields{
+				"action":                  "skipping",
+				"path":                    cleanPath,
+				"path_length":             len(cleanPath),
+				"max_allowed_path_length": meda.FilesMaxPathLength,
+				"modification_time":       fileData.ModificationTime,
+				"file_size":               int(fileData.FileSize),
+			}).Warn("Skipping file because maximum allowed path length is exceeded")
+
+			continue
+		}
+
 		medaInsert = meda.Insert{
 			Path:             cleanPath,
 			ModificationTime: fileData.ModificationTime,

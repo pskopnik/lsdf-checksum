@@ -90,7 +90,7 @@ table.
 
 
  * `id` (`int(11)`) - Auto increment id, primary key.
- * `path` (`varchar(2048)`) - The path of the file. The path must be relative to
+ * `path` (`varchar(4096)`) - The path of the file. The path must be relative to
     the root of the checksumming process but begins with a slash. This column is
     used as a `JOIN ON` column, thus a secondary index should be created on this
     column.
@@ -119,7 +119,7 @@ deleted from the Inserts table.
 
  * `id` (`int(11)`) - Auto increment id, primary key. This column is not related
     to the `id` column of the Files table.
- * `path` (`varchar(2048)`) - The path of file. This column is copied over to
+ * `path` (`varchar(4096)`) - The path of file. This column is copied over to
     the Files table.
  * `modification_time` (`datetime(6)`) - The modification time of the file. This
     column is copied over to the Files table.
@@ -151,7 +151,7 @@ tools.
 
  * `id` (`int(11)`) - Auto increment id, primary key.
  * `file_id` (`int(11)`) - The id of the file in the Files table.
- * `path` (`varchar(2048)`) - The path of the file. Corresponds to the column
+ * `path` (`varchar(4096)`) - The path of the file. Corresponds to the column
    of the same name in the Files table at the time of generation of this
    warning.
  * `modification_time` (`datetime(6)`) - The modification time of the file.

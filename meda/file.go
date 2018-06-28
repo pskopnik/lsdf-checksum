@@ -8,6 +8,8 @@ import (
 
 const FilesTableName = "files"
 
+const FilesMaxPathLength = 4096
+
 type File struct {
 	Id               int       `db:"id"`
 	Rand             float64   `db:"rand"`
