@@ -24,7 +24,7 @@ type QueueWatcherConfig struct {
 	FileSystemName string
 	Namespace      string
 
-	RunId        int
+	RunId        uint64
 	SnapshotName string
 
 	Pool   *redis.Pool

@@ -18,8 +18,10 @@ func WriteBackJobName(fileSystemName, snapshotName string) string {
 	return writeBackJobNameBase + "-" + fileSystemName + "-" + snapshotName
 }
 
+//go:generate msgp
+
 type WorkPackFile struct {
-	Id   int
+	Id   uint64
 	Path string
 }
 
@@ -30,7 +32,7 @@ type WorkPack struct {
 }
 
 type WriteBackPackFile struct {
-	Id       int
+	Id       uint64
 	Checksum []byte
 }
 

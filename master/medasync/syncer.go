@@ -40,7 +40,7 @@ type Config struct {
 	// Invokation dependent params
 
 	SnapshotName string
-	RunId        int
+	RunId        uint64
 
 	// Dynamic objects
 
@@ -222,7 +222,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		medaInsert = meda.Insert{
 			Path:             cleanPath,
 			ModificationTime: fileData.ModificationTime,
-			FileSize:         int(fileData.FileSize),
+			FileSize:         fileData.FileSize,
 			LastSeen:         s.Config.RunId,
 		}
 

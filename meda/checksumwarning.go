@@ -10,15 +10,15 @@ import (
 const ChecksumWarningsTableName = "checksum_warnings"
 
 type ChecksumWarning struct {
-	Id               int       `db:"id"`
-	FileId           int       `db:"file_id"`
+	Id               uint64    `db:"id"`
+	FileId           uint64    `db:"file_id"`
 	Path             string    `db:"path"`
 	ModificationTime time.Time `db:"modification_time"`
-	FileSize         int       `db:"file_size"`
+	FileSize         uint64    `db:"file_size"`
 	ExpectedChecksum []byte    `db:"expected_checksum"`
 	ActualChecksum   []byte    `db:"actual_checksum"`
-	Discovered       int       `db:"discovered"`
-	LastRead         int       `db:"last_read"`
+	Discovered       uint64    `db:"discovered"`
+	LastRead         uint64    `db:"last_read"`
 	Created          time.Time `db:"created"`
 }
 

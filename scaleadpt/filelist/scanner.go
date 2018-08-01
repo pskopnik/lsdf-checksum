@@ -53,6 +53,33 @@ func (s *Scanner) ParseInt64(allowWhitespace bool) (int64, error) {
 	return parsedInt, nil
 }
 
+func (s *Scanner) ParseUint64(allowWhitespace bool) (uint64, error) {
+	oldMode := s.Mode
+	oldWhitespace := s.Whitespace
+
+	s.Mode = scanner.ScanInts
+	if allowWhitespace {
+		s.Whitespace = delimitingWhitespace
+	} else {
+		s.Whitespace = 0
+	}
+	defer func() {
+		s.Mode = oldMode
+		s.Whitespace = oldWhitespace
+	}()
+
+	if s.Scan() != scanner.Int {
+		return 0, UnexpectedFormatErr
+	}
+
+	parsedInt, err := strconv.ParseUint(s.TokenText(), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return parsedInt, nil
+}
+
 // ParseTime parses a timestamp.
 // time.Parse() is used for the actual parsing.
 // The parameter layout is passed on to time.Parse() If layout is empty,

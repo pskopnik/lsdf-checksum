@@ -8,10 +8,10 @@ import (
 )
 
 type FileData struct {
-	Inode            int64
-	Generation       int64
-	SnapshotId       int64
-	FileSize         int64
+	Inode            uint64
+	Generation       uint64
+	SnapshotId       uint64
+	FileSize         uint64
 	ModificationTime time.Time
 	Path             string
 }
@@ -99,17 +99,17 @@ func (p *Parser) ParseLine() (*FileData, error) {
 func (p *Parser) parsePreamble(fileData *FileData) error {
 	var err error
 
-	fileData.Inode, err = p.s.ParseInt64(true)
+	fileData.Inode, err = p.s.ParseUint64(true)
 	if err != nil {
 		return err
 	}
 
-	fileData.Generation, err = p.s.ParseInt64(true)
+	fileData.Generation, err = p.s.ParseUint64(true)
 	if err != nil {
 		return err
 	}
 
-	fileData.SnapshotId, err = p.s.ParseInt64(true)
+	fileData.SnapshotId, err = p.s.ParseUint64(true)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func (p *Parser) parseCustomAttributes(fileData *FileData) error {
 	p.s.Mode = scanner.ScanInts
 	p.s.Whitespace = 0
 
-	fileData.FileSize, err = p.s.ParseInt64(false)
+	fileData.FileSize, err = p.s.ParseUint64(false)
 	if err != nil {
 		return err
 	}

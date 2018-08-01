@@ -15,7 +15,7 @@ import (
 //go:generate confions config ProducerConfig
 
 type ProducerConfig struct {
-	MinWorkPackFileSize int
+	MinWorkPackFileSize uint64
 
 	FileSystemName string
 	Namespace      string
@@ -162,7 +162,7 @@ func (p *Producer) produce(n uint) (bool, error) {
 		Files:          make([]WorkPackFile, 0, 1),
 	}
 	workPackMap := make(map[string]interface{})
-	totalFileSize := 0
+	var totalFileSize uint64 = 0
 	exhausted := false
 
 	for i := uint(0); i < n && !exhausted; i++ {

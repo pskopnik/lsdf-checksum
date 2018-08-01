@@ -89,26 +89,27 @@ but instead writes into the Inserts table and then "merges" rows over to this
 table.
 
 
- * `id` (`int(11)`) - Auto increment id, primary key.
+ * `id` (`bigint(20) unsigned`) - Auto increment id, primary key.
  * `path` (`varchar(4096)`) - The path of the file. The path must be relative to
     the root of the checksumming process but begins with a slash. This column is
     used as a `JOIN ON` column, thus a secondary index should be created on this
     column.
  * `modification_time` (`datetime(6)`) - The modification time of the file as
-   seen by the file system. This column is used to detect file changes.
- * `file_size` (`int(11)`) - The file size of the file, as seen by the file
-   system.
- * `last_seen` (`int(11)`) - The id of the run this file was last seen in. This
-   field is updated for all files during every runs.
- * `to_be_read` (`int(11)`) - This column is a bit (`0` or `1`) indicating
-   whether the file should be re-read and its checksum calculated. It is only
-   ever `1` while a run is ongoing. The field is set to `0` when the checksum
-   is written.
+    seen by the file system. This column is used to detect file changes.
+ * `file_size` (`bigint(20) unsigned`) - The file size of the file, as seen by
+    the file system.
+ * `last_seen` (`bigint(20) unsigned`) - The id of the run this file was last
+    seen in. This field is updated for all files during every runs.
+ * `to_be_read` (`tinyint(3) unsigned`) - This column is a bit (`0` or `1`)
+    indicating whether the file should be re-read and its checksum calculated.
+    It is only ever `1` while a run is ongoing. The field is set to `0` when the
+    checksum is written.
  * `checksum` (`varbinary(64)`) - The checksum of the file content. Whenever
-   this column is updated, `last_read` is updated as well, i.e. `last_read` is
-   the id of the run this checksum was last calculated in.
- * `last_read` (`int(11)`) - The id of the run this file was last read in. This
-   field is always updated when the checksum for the file has been calculated.
+    this column is updated, `last_read` is updated as well, i.e. `last_read` is
+    the id of the run this checksum was last calculated in.
+ * `last_read` (`bigint(20) unsigned`) - The id of the run this file was last
+    read in. This field is always updated when the checksum for the file has
+    been calculated.
 
 ##### Inserts (table `inserts`)
 
@@ -117,29 +118,30 @@ during the meta data synchronisation phase from the file system are written into
 this table. The rows are then "merged" into the Files table and later on
 deleted from the Inserts table.
 
- * `id` (`int(11)`) - Auto increment id, primary key. This column is not related
-    to the `id` column of the Files table.
+ * `id` (`bigint(20) unsigned`) - Auto increment id, primary key. This column is
+    not related to the `id` column of the Files table.
  * `path` (`varchar(4096)`) - The path of file. This column is copied over to
     the Files table.
  * `modification_time` (`datetime(6)`) - The modification time of the file. This
     column is copied over to the Files table.
- * `file_size` (`int(11)`) - The file size of the file. This column is copied
-    over to the Files table.
- * `last_seen` (`int(11)`) - The id of the run this file was retrieved in, i.e.
-    the current (ongoing) run. This column is copied over to the Files table.
+ * `file_size` (`bigint(20) unsigned`) - The file size of the file. This column
+    is copied over to the Files table.
+ * `last_seen` (`bigint(20) unsigned`) - The id of the run this file was
+    retrieved in, i.e. the current (ongoing) run. This column is copied over to
+    the Files table.
 
 ##### Runs (table `runs`)
 
 The Runs table contains a row for each run. The `id` column is referred to by
 the `last_seen`, `last_read`, ... columns of other tables.
 
- * `id` (`int(11)`) - Auto increment id, primary key.
+ * `id` (`bigint(20) unsigned`) - Auto increment id, primary key.
  * `snapshot_name` (`varchar(256)`) - The name of the snapshot used for all
-   operations throughout the run.
- * `snapshot_id` (`int(11)`) - The id of the snapshot used for all operations
-   throughout the run.
+    operations throughout the run.
+ * `snapshot_id` (`bigint(20) unsigned`) - The id of the snapshot used for all
+    operations throughout the run.
  * `run_at` (`datetime(6)`) - The timestamp of the run. This is the "Created"
-   attribute of the run's snapshot.
+    attribute of the run's snapshot.
 
 ##### Checksum Warnings (table `checksum_warnings`)
 
@@ -149,27 +151,28 @@ is meant for external consumption by monitoring / notification systems.
 Warnings which are no longer required to be stored may be deleted by external
 tools.
 
- * `id` (`int(11)`) - Auto increment id, primary key.
- * `file_id` (`int(11)`) - The id of the file in the Files table.
+ * `id` (`bigint(20) unsigned`) - Auto increment id, primary key.
+ * `file_id` (`bigint(20) unsigned`) - The id of the file in the Files table.
  * `path` (`varchar(4096)`) - The path of the file. Corresponds to the column
-   of the same name in the Files table at the time of generation of this
-   warning.
+    of the same name in the Files table at the time of generation of this
+    warning.
  * `modification_time` (`datetime(6)`) - The modification time of the file.
-   Corresponds to the column of the same name in the Files table at the time of
-   generation of this warning.
- * `file_size` (`int(11)`) - The file size of the file. Corresponds to the
-   column of the same name in the Files table at the time of generation of this
-   warning.
+    Corresponds to the column of the same name in the Files table at the time of
+    generation of this warning.
+ * `file_size` (`bigint(20) unsigned`) - The file size of the file. Corresponds
+    to the column of the same name in the Files table at the time of generation
+    of this warning.
  * `expected_checksum` (`varbinary(64)`) - The expected checksum. This is the
-   checksum written to the `checksum` column of the Files table in the last run
-   reading this file.
+    checksum written to the `checksum` column of the Files table in the last run
+    reading this file.
  * `actual_checksum` (`varbinary(64)`) - The actual checksum calculated in the
-   run the corruption was discovered in.
- * `discovered` (`int(11)`) - The id of the run the corruption was discovered
-   in. This is the run during which `actual_checksum` was calculated.
- * `last_read` (`int(11)`) - The id of the run, the file was last read in before
-   the corruption was discovered. This is the run during which
-   `expected_checksum` was calculated.
+    run the corruption was discovered in.
+ * `discovered` (`bigint(20) unsigned`) - The id of the run the corruption was
+    discovered in. This is the run during which `actual_checksum` was
+    calculated.
+ * `last_read` (`bigint(20) unsigned`) - The id of the run, the file was last
+    read in before the corruption was discovered. This is the run during which
+    `expected_checksum` was calculated.
  * `created` (`datetime(6)`) - A timestamp of when the warning was created. This
     happens during the write back of checksums into the Files table.
 

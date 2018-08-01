@@ -3,7 +3,6 @@ package workqueue
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"time"
 
 	"github.com/MasterOfBinary/gobatch/batch"
@@ -25,7 +24,7 @@ type WriteBackerConfig struct {
 	FileSystemName string
 	Namespace      string
 
-	RunId        int
+	RunId        uint64
 	SnapshotName string
 
 	Pool   *redis.Pool
@@ -225,8 +224,8 @@ type writeBackerBatchProcessor struct {
 }
 
 func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.PipelineStage) {
-	calculatedChecksums := make(map[int][]byte)
-	fileIds := make([]int, 0, 32)
+	calculatedChecksums := make(map[uint64][]byte)
+	fileIds := make([]uint64, 0, 32)
 
 	for item := range ps.Input {
 		writeBackFile := item.Get().(WriteBackPackFile)

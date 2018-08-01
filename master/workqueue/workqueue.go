@@ -16,7 +16,7 @@ import (
 type Config struct {
 	FileSystemName string
 
-	RunId        int
+	RunId        uint64
 	SnapshotName string
 
 	DB     *sqlx.DB

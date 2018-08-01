@@ -46,25 +46,25 @@ CREATE DATABASE test_schema;
 USE test_schema;
 
 CREATE TABLE `inserts` (
-	`id` int(11) NOT NULL AUTO_INCREMENT,
+	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	`rand` double NOT NULL,
 	`path` varchar(4096) NOT NULL,
 	`modification_time` datetime(6) NOT NULL,
-	`file_size` int(11) unsigned NOT NULL,
-	`last_seen` int(11) NOT NULL,
+	`file_size` bigint(20) unsigned NOT NULL,
+	`last_seen` bigint(20) unsigned NOT NULL,
 	PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `files` (
-	`id` int(11) NOT NULL AUTO_INCREMENT,
+	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	`rand` double NOT NULL,
 	`path` varchar(4096) NOT NULL,
 	`modification_time` datetime(6) NOT NULL,
-	`file_size` int(11) unsigned NOT NULL,
-	`last_seen` int(11) NOT NULL,
-	`to_be_read` int(11) NOT NULL DEFAULT 1,
+	`file_size` bigint(20) unsigned NOT NULL,
+	`last_seen` bigint(20) unsigned NOT NULL,
+	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,
 	`checksum` varbinary(64) DEFAULT NULL,
-	`last_read` int(11) DEFAULT NULL,
+	`last_read` bigint(20) unsigned DEFAULT NULL,
 	PRIMARY KEY (`id`),
 	KEY `rand` (`rand`),
 	KEY `path` (`path`(1024))

@@ -57,7 +57,7 @@ func (z *WorkPack) DecodeMsg(dc *msgp.Reader) (err error) {
 					}
 					switch msgp.UnsafeString(field) {
 					case "Id":
-						z.Files[za0001].Id, err = dc.ReadInt()
+						z.Files[za0001].Id, err = dc.ReadUint64()
 						if err != nil {
 							return
 						}
@@ -121,7 +121,7 @@ func (z *WorkPack) EncodeMsg(en *msgp.Writer) (err error) {
 		if err != nil {
 			return
 		}
-		err = en.WriteInt(z.Files[za0001].Id)
+		err = en.WriteUint64(z.Files[za0001].Id)
 		if err != nil {
 			return
 		}
@@ -155,7 +155,7 @@ func (z *WorkPack) MarshalMsg(b []byte) (o []byte, err error) {
 		// map header, size 2
 		// string "Id"
 		o = append(o, 0x82, 0xa2, 0x49, 0x64)
-		o = msgp.AppendInt(o, z.Files[za0001].Id)
+		o = msgp.AppendUint64(o, z.Files[za0001].Id)
 		// string "Path"
 		o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
 		o = msgp.AppendString(o, z.Files[za0001].Path)
@@ -214,7 +214,7 @@ func (z *WorkPack) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					switch msgp.UnsafeString(field) {
 					case "Id":
-						z.Files[za0001].Id, bts, err = msgp.ReadIntBytes(bts)
+						z.Files[za0001].Id, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							return
 						}
@@ -246,7 +246,7 @@ func (z *WorkPack) UnmarshalMsg(bts []byte) (o []byte, err error) {
 func (z *WorkPack) Msgsize() (s int) {
 	s = 1 + 15 + msgp.StringPrefixSize + len(z.FileSystemName) + 13 + msgp.StringPrefixSize + len(z.SnapshotName) + 6 + msgp.ArrayHeaderSize
 	for za0001 := range z.Files {
-		s += 1 + 3 + msgp.IntSize + 5 + msgp.StringPrefixSize + len(z.Files[za0001].Path)
+		s += 1 + 3 + msgp.Uint64Size + 5 + msgp.StringPrefixSize + len(z.Files[za0001].Path)
 	}
 	return
 }
@@ -268,7 +268,7 @@ func (z *WorkPackFile) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Id":
-			z.Id, err = dc.ReadInt()
+			z.Id, err = dc.ReadUint64()
 			if err != nil {
 				return
 			}
@@ -295,7 +295,7 @@ func (z WorkPackFile) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteInt(z.Id)
+	err = en.WriteUint64(z.Id)
 	if err != nil {
 		return
 	}
@@ -317,7 +317,7 @@ func (z WorkPackFile) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "Id"
 	o = append(o, 0x82, 0xa2, 0x49, 0x64)
-	o = msgp.AppendInt(o, z.Id)
+	o = msgp.AppendUint64(o, z.Id)
 	// string "Path"
 	o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
 	o = msgp.AppendString(o, z.Path)
@@ -341,7 +341,7 @@ func (z *WorkPackFile) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Id":
-			z.Id, bts, err = msgp.ReadIntBytes(bts)
+			z.Id, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				return
 			}
@@ -363,7 +363,7 @@ func (z *WorkPackFile) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z WorkPackFile) Msgsize() (s int) {
-	s = 1 + 3 + msgp.IntSize + 5 + msgp.StringPrefixSize + len(z.Path)
+	s = 1 + 3 + msgp.Uint64Size + 5 + msgp.StringPrefixSize + len(z.Path)
 	return
 }
 
@@ -408,7 +408,7 @@ func (z *WriteBackPack) DecodeMsg(dc *msgp.Reader) (err error) {
 					}
 					switch msgp.UnsafeString(field) {
 					case "Id":
-						z.Files[za0001].Id, err = dc.ReadInt()
+						z.Files[za0001].Id, err = dc.ReadUint64()
 						if err != nil {
 							return
 						}
@@ -454,7 +454,7 @@ func (z *WriteBackPack) EncodeMsg(en *msgp.Writer) (err error) {
 		if err != nil {
 			return
 		}
-		err = en.WriteInt(z.Files[za0001].Id)
+		err = en.WriteUint64(z.Files[za0001].Id)
 		if err != nil {
 			return
 		}
@@ -482,7 +482,7 @@ func (z *WriteBackPack) MarshalMsg(b []byte) (o []byte, err error) {
 		// map header, size 2
 		// string "Id"
 		o = append(o, 0x82, 0xa2, 0x49, 0x64)
-		o = msgp.AppendInt(o, z.Files[za0001].Id)
+		o = msgp.AppendUint64(o, z.Files[za0001].Id)
 		// string "Checksum"
 		o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
 		o = msgp.AppendBytes(o, z.Files[za0001].Checksum)
@@ -531,7 +531,7 @@ func (z *WriteBackPack) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 					switch msgp.UnsafeString(field) {
 					case "Id":
-						z.Files[za0001].Id, bts, err = msgp.ReadIntBytes(bts)
+						z.Files[za0001].Id, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							return
 						}
@@ -563,7 +563,7 @@ func (z *WriteBackPack) UnmarshalMsg(bts []byte) (o []byte, err error) {
 func (z *WriteBackPack) Msgsize() (s int) {
 	s = 1 + 6 + msgp.ArrayHeaderSize
 	for za0001 := range z.Files {
-		s += 1 + 3 + msgp.IntSize + 9 + msgp.BytesPrefixSize + len(z.Files[za0001].Checksum)
+		s += 1 + 3 + msgp.Uint64Size + 9 + msgp.BytesPrefixSize + len(z.Files[za0001].Checksum)
 	}
 	return
 }
@@ -585,7 +585,7 @@ func (z *WriteBackPackFile) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Id":
-			z.Id, err = dc.ReadInt()
+			z.Id, err = dc.ReadUint64()
 			if err != nil {
 				return
 			}
@@ -612,7 +612,7 @@ func (z *WriteBackPackFile) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteInt(z.Id)
+	err = en.WriteUint64(z.Id)
 	if err != nil {
 		return
 	}
@@ -634,7 +634,7 @@ func (z *WriteBackPackFile) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "Id"
 	o = append(o, 0x82, 0xa2, 0x49, 0x64)
-	o = msgp.AppendInt(o, z.Id)
+	o = msgp.AppendUint64(o, z.Id)
 	// string "Checksum"
 	o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
 	o = msgp.AppendBytes(o, z.Checksum)
@@ -658,7 +658,7 @@ func (z *WriteBackPackFile) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Id":
-			z.Id, bts, err = msgp.ReadIntBytes(bts)
+			z.Id, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				return
 			}
@@ -680,6 +680,6 @@ func (z *WriteBackPackFile) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *WriteBackPackFile) Msgsize() (s int) {
-	s = 1 + 3 + msgp.IntSize + 9 + msgp.BytesPrefixSize + len(z.Checksum)
+	s = 1 + 3 + msgp.Uint64Size + 9 + msgp.BytesPrefixSize + len(z.Checksum)
 	return
 }
