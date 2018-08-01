@@ -1,6 +1,7 @@
 package meda
 
 import (
+	"context"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -17,6 +18,6 @@ type Insert struct {
 	LastSeen         int       `db:"last_seen"`
 }
 
-func InsertsPrepareInsert(preparer NamedPreparer) (*sqlx.NamedStmt, error) {
-	return preparer.PrepareNamed("INSERT INTO inserts (path, modification_time, file_size, last_seen) VALUES (:path, :modification_time, :file_size, :last_seen)")
+func InsertsPrepareInsert(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {
+	return preparer.PrepareNamedContext(ctx, "INSERT INTO inserts (rand, path, modification_time, file_size, last_seen) VALUES (RAND(), :path, :modification_time, :file_size, :last_seen);")
 }

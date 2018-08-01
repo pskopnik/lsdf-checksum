@@ -3,6 +3,7 @@
 package medasync
 
 import (
+	"context"
 	"database/sql"
 	"io"
 	"path/filepath"
@@ -48,7 +49,7 @@ type Config struct {
 	Logger     logrus.FieldLogger
 }
 
-var DefaultConfig = &Config{
+var DefaultConfig = Config{
 	MaxTransactionSize: 10000,
 	Location:           time.Local,
 }
@@ -66,14 +67,15 @@ func New(config *Config) *Syncer {
 	}
 }
 
-func (s *Syncer) Run() error {
+func (s *Syncer) Run(ctx context.Context) error {
 	var err error
 
 	s.fieldLogger = s.Config.Logger.WithFields(logrus.Fields{
 		"run":        s.Config.RunId,
 		"snapshot":   s.Config.SnapshotName,
 		"filesystem": s.Config.FileSystem.GetName(),
-		"module":     "medasync",
+		"package":    "medasync",
+		"component":  "Syncer",
 	})
 
 	// Perform the first step of the Syncer in parallel
@@ -87,7 +89,7 @@ func (s *Syncer) Run() error {
 	})
 
 	errg.Go(func() (err error) {
-		err = s.prepareDatabase()
+		err = s.prepareDatabase(ctx)
 		return
 	})
 
@@ -102,7 +104,7 @@ func (s *Syncer) Run() error {
 
 	parser.Loc = s.Config.Location
 
-	err = s.writeInserts(&parser.Parser)
+	err = s.writeInserts(ctx, &parser.Parser)
 	if err != nil {
 		_ = parser.Close()
 		return err
@@ -121,10 +123,10 @@ func (s *Syncer) Run() error {
 	return nil
 }
 
-func (s *Syncer) prepareDatabase() error {
+func (s *Syncer) prepareDatabase(ctx context.Context) error {
 	s.fieldLogger.Info("Starting preparing the meta data database")
 
-	res, err := s.Config.DB.Exec(cleanInsertsQuery.get(), s.Config.RunId)
+	res, err := s.Config.DB.ExecContext(ctx, cleanInsertsQuery.get(), s.Config.RunId)
 	if err != nil {
 		return err
 	}
@@ -172,7 +174,7 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 	return parser, err
 }
 
-func (s *Syncer) writeInserts(parser *filelist.Parser) error {
+func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) error {
 	var fileData *filelist.FileData
 	var medaInsert meda.Insert
 	var count, txCount int
@@ -184,7 +186,7 @@ func (s *Syncer) writeInserts(parser *filelist.Parser) error {
 		return err
 	}
 
-	tx, prepStmt, err := s.openWriteInsertsTx()
+	tx, prepStmt, err := s.openWriteInsertsTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -224,7 +226,7 @@ func (s *Syncer) writeInserts(parser *filelist.Parser) error {
 			LastSeen:         s.Config.RunId,
 		}
 
-		_, err = prepStmt.Exec(&medaInsert)
+		_, err = prepStmt.ExecContext(ctx, &medaInsert)
 		if err != nil {
 			return err
 		}
@@ -233,12 +235,12 @@ func (s *Syncer) writeInserts(parser *filelist.Parser) error {
 		txCount += 1
 
 		if txCount >= s.Config.MaxTransactionSize {
-			err = s.closeWriteInsertsTx(tx, prepStmt)
+			err = s.closeInsertsInsertTx(tx, prepStmt)
 			if err != nil {
 				return err
 			}
 
-			tx, prepStmt, err = s.openWriteInsertsTx()
+			tx, prepStmt, err = s.openWriteInsertsTx(ctx)
 			if err != nil {
 				return err
 			}
@@ -247,7 +249,7 @@ func (s *Syncer) writeInserts(parser *filelist.Parser) error {
 		}
 	}
 
-	err = s.closeWriteInsertsTx(tx, prepStmt)
+	err = s.closeInsertsInsertTx(tx, prepStmt)
 	if err != nil {
 		return err
 	}
@@ -259,13 +261,13 @@ func (s *Syncer) writeInserts(parser *filelist.Parser) error {
 	return nil
 }
 
-func (s *Syncer) openWriteInsertsTx() (*sqlx.Tx, *sqlx.NamedStmt, error) {
-	tx, err := s.Config.DB.Beginx()
+func (s *Syncer) openWriteInsertsTx(ctx context.Context) (*sqlx.Tx, *sqlx.NamedStmt, error) {
+	tx, err := s.Config.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	prepStmt, err := meda.InsertsPrepareInsert(tx)
+	prepStmt, err := meda.InsertsPrepareInsert(ctx, tx)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, nil, err
@@ -274,7 +276,7 @@ func (s *Syncer) openWriteInsertsTx() (*sqlx.Tx, *sqlx.NamedStmt, error) {
 	return tx, prepStmt, nil
 }
 
-func (s *Syncer) closeWriteInsertsTx(tx *sqlx.Tx, prepStmt *sqlx.NamedStmt) error {
+func (s *Syncer) closeInsertsInsertTx(tx *sqlx.Tx, prepStmt *sqlx.NamedStmt) error {
 	err := prepStmt.Close()
 	if err != nil {
 		// Try to commit
