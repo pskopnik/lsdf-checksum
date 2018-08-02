@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/imdario/mergo"
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
@@ -202,26 +201,26 @@ func (p *Producer) produce(n uint) (bool, error) {
 
 // enqueue enqueues a WorkPack using the Producer's queueScheduler's Enqueue
 // method.
-// The second parameter, workPackMap, may be passed optionally to avoid
+// The second parameter, jobArgs, may be passed optionally to avoid
 // reallocating a map on every call.
-func (p *Producer) enqueue(workPack *WorkPack, workPackMap map[string]interface{}) error {
+func (p *Producer) enqueue(workPack *WorkPack, jobArgs map[string]interface{}) error {
 	var err error
 
-	if workPackMap == nil {
-		workPackMap = make(map[string]interface{})
+	if jobArgs == nil {
+		jobArgs = make(map[string]interface{})
 	}
 
 	if len(workPack.Files) == 0 {
 		return nil
 	}
 
-	err = mergo.Map(&workPackMap, workPack, mergo.WithOverride)
+	err = workPack.ToJobArgs(jobArgs)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue work pack
-	_, err = p.queueScheduler.Enqueue(workPackMap)
+	_, err = p.queueScheduler.Enqueue(jobArgs)
 	if err != nil {
 		return err
 	}

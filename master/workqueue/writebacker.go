@@ -8,7 +8,6 @@ import (
 	"github.com/MasterOfBinary/gobatch/batch"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
-	"github.com/imdario/mergo"
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
@@ -171,13 +170,13 @@ type writeBackerContext struct {
 func (w *writeBackerContext) Process(job *work.Job) error {
 	writeBackPack := WriteBackPack{}
 
-	err := mergo.Map(&writeBackPack, job.Args)
+	err := writeBackPack.FromJobArgs(job.Args)
 	if err != nil {
 		w.WriteBacker.fieldLogger.WithError(err).WithFields(logrus.Fields{
 			"action":   "skipping",
 			"args":     job.Args,
 			"job_name": job.Name,
-		}).Warn("Encountered error during arg mapping")
+		}).Warn("Encountered error during WriteBackPack unmarshaling")
 
 		return err
 	}
