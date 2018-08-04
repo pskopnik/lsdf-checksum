@@ -2,7 +2,6 @@ package meda
 
 import (
 	"context"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -10,12 +9,12 @@ import (
 const InsertsTableName = "inserts"
 
 type Insert struct {
-	Id               uint64    `db:"id"`
-	Rand             float64   `db:"rand"`
-	Path             string    `db:"path"`
-	ModificationTime time.Time `db:"modification_time"`
-	FileSize         uint64    `db:"file_size"`
-	LastSeen         uint64    `db:"last_seen"`
+	Id               uint64  `db:"id"`
+	Rand             float64 `db:"rand"`
+	Path             string  `db:"path"`
+	ModificationTime Time    `db:"modification_time"`
+	FileSize         uint64  `db:"file_size"`
+	LastSeen         uint64  `db:"last_seen"`
 }
 
 func InsertsPrepareInsert(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {

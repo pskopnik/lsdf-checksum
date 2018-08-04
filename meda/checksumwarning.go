@@ -2,7 +2,6 @@ package meda
 
 import (
 	"context"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -10,16 +9,16 @@ import (
 const ChecksumWarningsTableName = "checksum_warnings"
 
 type ChecksumWarning struct {
-	Id               uint64    `db:"id"`
-	FileId           uint64    `db:"file_id"`
-	Path             string    `db:"path"`
-	ModificationTime time.Time `db:"modification_time"`
-	FileSize         uint64    `db:"file_size"`
-	ExpectedChecksum []byte    `db:"expected_checksum"`
-	ActualChecksum   []byte    `db:"actual_checksum"`
-	Discovered       uint64    `db:"discovered"`
-	LastRead         uint64    `db:"last_read"`
-	Created          time.Time `db:"created"`
+	Id               uint64 `db:"id"`
+	FileId           uint64 `db:"file_id"`
+	Path             string `db:"path"`
+	ModificationTime Time   `db:"modification_time"`
+	FileSize         uint64 `db:"file_size"`
+	ExpectedChecksum []byte `db:"expected_checksum"`
+	ActualChecksum   []byte `db:"actual_checksum"`
+	Discovered       uint64 `db:"discovered"`
+	LastRead         uint64 `db:"last_read"`
+	Created          Time   `db:"created"`
 }
 
 func ChecksumWarningsPrepareInsert(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {

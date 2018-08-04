@@ -2,7 +2,6 @@ package meda
 
 import (
 	"context"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -12,15 +11,15 @@ const FilesTableName = "files"
 const FilesMaxPathLength = 4096
 
 type File struct {
-	Id               uint64    `db:"id"`
-	Rand             float64   `db:"rand"`
-	Path             string    `db:"path"`
-	ModificationTime time.Time `db:"modification_time"`
-	FileSize         uint64    `db:"file_size"`
-	LastSeen         uint64    `db:"last_seen"`
-	ToBeRead         uint8     `db:"to_be_read"`
-	Checksum         []byte    `db:"checksum"`
-	LastRead         uint64    `db:"last_read"`
+	Id               uint64     `db:"id"`
+	Rand             float64    `db:"rand"`
+	Path             string     `db:"path"`
+	ModificationTime Time       `db:"modification_time"`
+	FileSize         uint64     `db:"file_size"`
+	LastSeen         uint64     `db:"last_seen"`
+	ToBeRead         uint8      `db:"to_be_read"`
+	Checksum         []byte     `db:"checksum"`
+	LastRead         NullUint64 `db:"last_read"`
 }
 
 func FilesQueryCtxFilesToBeRead(ctx context.Context, querier sqlx.QueryerContext) (*sqlx.Rows, error) {
