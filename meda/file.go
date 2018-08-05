@@ -22,12 +22,19 @@ type File struct {
 	LastRead         NullUint64 `db:"last_read"`
 }
 
-func FilesQueryCtxFilesToBeRead(ctx context.Context, querier sqlx.QueryerContext) (*sqlx.Rows, error) {
-	return querier.QueryxContext(ctx, "SELECT id, path, file_size FROM files WHERE to_be_read = '1' ORDER BY rand;")
+func FilesQueryCtxFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) (*sqlx.Rows, error) {
+	return querier.QueryxContext(
+		ctx,
+		"SELECT id, rand, path, file_size FROM files WHERE to_be_read = '1' AND (rand > ? OR (rand = ? AND id > ?)) ORDER BY rand, id LIMIT ?;",
+		startRand,
+		startRand,
+		startId,
+		limit,
+	)
 }
 
 func FilesQueryCtxFilesByIdsForShare(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) (*sqlx.Rows, error) {
-	query, args, err := sqlx.In("SELECT id, path, modification_time, file_size, last_seen, checksum, last_read FROM files WHERE id IN (?) FOR SHARE;", fileIds)
+	query, args, err := sqlx.In("SELECT id, path, modification_time, file_size, last_seen, checksum, last_read FROM files WHERE id IN (?) LOCK IN SHARE MODE;", fileIds)
 	if err != nil {
 		return nil, err
 	}

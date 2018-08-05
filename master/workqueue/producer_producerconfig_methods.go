@@ -2,6 +2,8 @@ package workqueue
 
 func (p *ProducerConfig) CopyFrom(other *ProducerConfig) {
 	p.MinWorkPackFileSize = other.MinWorkPackFileSize
+	p.FetchRowBatchSize = other.FetchRowBatchSize
+	p.RowBufferSize = other.RowBufferSize
 
 	p.FileSystemName = other.FileSystemName
 	p.Namespace = other.Namespace
@@ -18,6 +20,12 @@ func (p *ProducerConfig) CopyFrom(other *ProducerConfig) {
 func (p *ProducerConfig) Merge(other *ProducerConfig) *ProducerConfig {
 	if other.MinWorkPackFileSize != 0 {
 		p.MinWorkPackFileSize = other.MinWorkPackFileSize
+	}
+	if other.FetchRowBatchSize != 0 {
+		p.FetchRowBatchSize = other.FetchRowBatchSize
+	}
+	if other.RowBufferSize != 0 {
+		p.RowBufferSize = other.RowBufferSize
 	}
 
 	if len(other.FileSystemName) > 0 {

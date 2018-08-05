@@ -11,6 +11,12 @@ import (
 	"gopkg.in/tomb.v2"
 )
 
+const gocraftWorkNamespaceBase string = "lsdf-checksum/workqueue"
+
+func GocraftWorkNamespace(prefix string) string {
+	return prefix + gocraftWorkNamespaceBase
+}
+
 //go:generate confions config Config
 
 type Config struct {
@@ -49,11 +55,10 @@ type Config struct {
 // RedisConfig contains configuration options for a connection pool to a redis
 // database.
 type RedisConfig struct {
-	Network  string
-	Address  string
-	Database int
-	// Namespace contains the namespace used in gocraft/work.
-	Namespace   string
+	Network     string
+	Address     string
+	Database    int
+	Prefix      string
 	Password    string
 	MaxIdle     int
 	IdleTimeout time.Duration
@@ -63,7 +68,6 @@ var DefaultConfig = &Config{
 	Redis: RedisConfig{
 		MaxIdle:     10,
 		IdleTimeout: 300 * time.Second,
-		Namespace:   "lsdf-checksum/workqueue",
 	},
 }
 
@@ -143,8 +147,8 @@ func (w *WorkQueue) SignalStop() {
 	w.tomb.Kill(stopSignalled)
 }
 
-func (w *WorkQueue) Wait() {
-	<-w.tomb.Dead()
+func (w *WorkQueue) Wait() error {
+	return w.tomb.Wait()
 }
 
 func (w *WorkQueue) Dead() <-chan struct{} {
@@ -247,7 +251,7 @@ func (w *WorkQueue) createProducer(controller SchedulingController) *Producer {
 		Merge(&w.Config.Producer).
 		Merge(&ProducerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      w.Config.Redis.Namespace,
+			Namespace:      GocraftWorkNamespace(w.Config.Redis.Prefix),
 
 			SnapshotName: w.Config.SnapshotName,
 
@@ -267,7 +271,7 @@ func (w *WorkQueue) createWriteBacker() *WriteBacker {
 		Merge(&w.Config.WriteBacker).
 		Merge(&WriteBackerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      w.Config.Redis.Namespace,
+			Namespace:      w.Config.Redis.Prefix + gocraftWorkNamespaceBase,
 
 			RunId:        w.Config.RunId,
 			SnapshotName: w.Config.SnapshotName,
@@ -286,7 +290,7 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 		Merge(&w.Config.QueueWatcher).
 		Merge(&QueueWatcherConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      w.Config.Redis.Namespace,
+			Namespace:      w.Config.Redis.Prefix + gocraftWorkNamespaceBase,
 
 			RunId:        w.Config.RunId,
 			SnapshotName: w.Config.SnapshotName,

@@ -89,8 +89,8 @@ func (q *QueueScheduler) SignalStop() {
 	q.tomb.Kill(stopSignalled)
 }
 
-func (q *QueueScheduler) Wait() {
-	<-q.tomb.Dead()
+func (q *QueueScheduler) Wait() error {
+	return q.tomb.Wait()
 }
 
 func (q *QueueScheduler) Dead() <-chan struct{} {
@@ -372,7 +372,8 @@ func (e *EWMAScheduler) Schedule() {
 
 	queueLength, _, err := e.queueScheduler.GetQueueInfo()
 	if err != nil {
-		e.fieldLogger.WithError(err).WithField("action", "skipping").Debug("No scheduling possible, couldn't get queueLength")
+		e.fieldLogger.WithError(err).WithField("action", "skipping").
+			Debug("No scheduling possible, couldn't get queueLength")
 		// No scheduling possible
 		return
 	}
@@ -385,7 +386,12 @@ func (e *EWMAScheduler) Schedule() {
 		return
 	}
 
-	consumption := e.previousQueueLength + enqueued - uint(queueLength)
+	var consumption uint
+	if e.previousQueueLength+enqueued < uint(queueLength) {
+		consumption = 0
+	} else {
+		consumption = e.previousQueueLength + enqueued - uint(queueLength)
+	}
 
 	deviation := float64(consumption) - normaliseDuration(timePassed, time.Second, e.consumptionEWMA)
 	if deviation < 0 {
@@ -397,9 +403,30 @@ func (e *EWMAScheduler) Schedule() {
 
 	e.deviationEWMA = updateEwma(e.deviationEWMA, e.Config.MaintainingDeviationAlpha, normaliseDuration(time.Second, timePassed, deviation))
 
+	e.fieldLogger.WithFields(logrus.Fields{
+		"previous_queue_length": e.previousQueueLength,
+		"queue_length":          queueLength,
+		"exhausted":             exhausted,
+		"enqueued":              enqueued,
+		"worker_num":            workerNum,
+		"consumption":           consumption,
+		"deviation":             deviation,
+		"consumption_alpha":     consumptionAlpha,
+		"consumption_ewma":      e.consumptionEWMA,
+		"deviation_alpha":       e.Config.MaintainingDeviationAlpha,
+		"deviation_ewma":        e.deviationEWMA,
+	}).Debug("Probed queue and calculated derivatives")
+
+	e.previousQueueLength = uint(queueLength)
+
 	if exhausted {
-		e.threshold *= 2
-		e.fieldLogger.WithField("threshold", e.threshold).Debug("Exhausted, doubled threshold")
+		prevThreshold := e.threshold
+		if e.threshold == 0 {
+			e.threshold = 1
+		} else {
+			e.threshold *= 2
+		}
+		e.fieldLogger.WithField("previous_threshold", prevThreshold).WithField("threshold", e.threshold).Debug("Exhausted, doubled threshold")
 	} else {
 		switch e.phase {
 		case esp_StartUp:
@@ -447,6 +474,13 @@ func (e *EWMAScheduler) maintainingThreshold() uint {
 	expConsumption := normaliseDuration(e.Config.MaintainingInterval, time.Second, e.consumptionEWMA)
 
 	calculatedThreshold := math.Ceil(e.Config.MaintainingDeviationFactor*expDeviation + expConsumption)
+
+	e.fieldLogger.WithFields(logrus.Fields{
+		"exp_deviation":        expDeviation,
+		"exp_consumption":      expConsumption,
+		"calculated_threshold": calculatedThreshold,
+		"uint_threshold":       uint(calculatedThreshold),
+	}).Debug("Calculating maintaining threshold")
 
 	return uint(calculatedThreshold)
 }

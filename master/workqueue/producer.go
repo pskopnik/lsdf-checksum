@@ -15,6 +15,8 @@ import (
 
 type ProducerConfig struct {
 	MinWorkPackFileSize uint64
+	FetchRowBatchSize   uint64
+	RowBufferSize       uint64
 
 	FileSystemName string
 	Namespace      string
@@ -30,6 +32,8 @@ type ProducerConfig struct {
 
 var ProducerDefaultConfig = &ProducerConfig{
 	MinWorkPackFileSize: 5 * 1024 * 1024, // 5 MiB
+	FetchRowBatchSize:   1000,
+	RowBufferSize:       1000,
 }
 
 type Producer struct {
@@ -37,7 +41,9 @@ type Producer struct {
 
 	tomb *tomb.Tomb
 
-	filesRows      *sqlx.Rows
+	filesChan      chan meda.File
+	lastRand       float64
+	lastId         uint64
 	queueScheduler *QueueScheduler
 	fieldLogger    logrus.FieldLogger
 }
@@ -67,9 +73,15 @@ func (p *Producer) Start(ctx context.Context) {
 		Controller: p.Config.Controller,
 	}
 
+	p.lastRand = -1
+	p.lastId = 0
+	p.filesChan = make(chan meda.File, p.Config.RowBufferSize)
+
 	p.queueScheduler = NewQueueScheduler(queueSchedulerConfig)
 
 	p.tomb.Go(func() error {
+		p.tomb.Go(p.rowFetcher)
+
 		p.tomb.Go(p.run)
 
 		p.queueScheduler.Start(p.tomb.Context(nil))
@@ -84,8 +96,8 @@ func (p *Producer) SignalStop() {
 	p.tomb.Kill(stopSignalled)
 }
 
-func (p *Producer) Wait() {
-	<-p.tomb.Dead()
+func (p *Producer) Wait() error {
+	return p.tomb.Wait()
 }
 
 func (p *Producer) Dead() <-chan struct{} {
@@ -100,19 +112,8 @@ func (p *Producer) run() error {
 	var err error
 	var exhausted bool
 
-	p.filesRows, err = meda.FilesQueryCtxFilesToBeRead(
-		p.tomb.Context(nil),
-		p.Config.DB,
-	)
-	if err != nil {
-		p.fieldLogger.WithError(err).WithFields(logrus.Fields{
-			"action": "stopping",
-		}).Error("Encountered error during query setup")
-
-		return err
-	}
-
 	c := p.queueScheduler.C()
+	dying := p.tomb.Dying()
 
 	p.fieldLogger.Info("Starting listening to production requests")
 
@@ -128,12 +129,10 @@ L:
 			if err != nil || exhausted {
 				break L
 			}
-		case <-p.tomb.Dying():
+		case <-dying:
 			break L
 		}
 	}
-
-	_ = p.filesRows.Close()
 
 	if err != nil {
 		p.fieldLogger.WithError(err).WithFields(logrus.Fields{
@@ -152,6 +151,101 @@ L:
 	return err
 }
 
+func (p *Producer) queueSchedulerWaiter() error {
+	p.queueScheduler.Wait()
+
+	return nil
+}
+
+func (p *Producer) rowFetcher() error {
+	var err error
+	var exhausted bool
+
+	files := make([]meda.File, p.Config.FetchRowBatchSize)
+	dying := p.tomb.Dying()
+
+	defer close(p.filesChan)
+
+	for !exhausted {
+		files, err = p.fetchNextBatch(files)
+		if err != nil {
+			p.fieldLogger.WithError(err).WithFields(logrus.Fields{
+				"action": "stopping",
+			}).Error("Encountered error while fetching next batch of File rows")
+
+			return err
+		}
+		exhausted = len(files) != cap(files)
+
+		for _, file := range files {
+			select {
+			// If dying is closed, one of the two cases will be randomly (!)
+			// selected. Thus, the function may not return instantly.
+			case p.filesChan <- file:
+			case <-dying:
+				return tomb.ErrDying
+			}
+		}
+	}
+
+	return nil
+}
+
+// fetchNextBatch fetches the next batch of meda.File rows from the database.
+// "Next" is enforced by the Producer's lastRand and lastId fields, the fields
+// are also updated before returning.
+//
+// The passed in files are reset to the slice's capacity before fetching is
+// started.
+// The files slice is always returned in a valid state, i.e. files[:] only
+// contains successfully fetched meda.File rows. This also holds when the
+// returned error != nil.
+//
+// The end of rows can be detected by comparing len(files) and cap(files) for
+// the returned meda.File slice. If the length is less than the capacity, the
+// end of the table has been reached.
+func (p *Producer) fetchNextBatch(files []meda.File) ([]meda.File, error) {
+	// Reset files slice to full capacity
+	files = files[:cap(files)]
+	i := 0
+
+	finalise := func() {
+		files = files[:i]
+		if i > 0 {
+			p.lastRand = files[i-1].Rand
+			p.lastId = files[i-1].Id
+		}
+	}
+
+	rows, err := meda.FilesQueryCtxFilesToBeReadPaginated(
+		p.tomb.Context(nil),
+		p.Config.DB,
+		p.lastRand,
+		p.lastId,
+		uint64(len(files)), // Limit number of returned rows to at most len(files)
+	)
+	if err != nil {
+		finalise()
+		return files, err
+	}
+	defer rows.Close()
+
+	for ; rows.Next(); i++ {
+		err = rows.StructScan(&files[i])
+		if err != nil {
+			finalise()
+			return files, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		finalise()
+		return files, err
+	}
+
+	finalise()
+	return files, nil
+}
+
 func (p *Producer) produce(n uint) (bool, error) {
 	var err error
 	file := meda.File{}
@@ -161,8 +255,8 @@ func (p *Producer) produce(n uint) (bool, error) {
 		Files:          make([]WorkPackFile, 0, 1),
 	}
 	workPackMap := make(map[string]interface{})
-	var totalFileSize uint64 = 0
-	exhausted := false
+	var totalFileSize uint64
+	var exhausted, ok bool
 
 	for i := uint(0); i < n && !exhausted; i++ {
 		// Initialise work pack
@@ -171,15 +265,12 @@ func (p *Producer) produce(n uint) (bool, error) {
 
 		// Prepare work pack
 		for totalFileSize < p.Config.MinWorkPackFileSize {
-			// Retrieve next file from database
-			if !p.filesRows.Next() {
-				exhausted = true
+			// If the Producer is dying, filesChan is closed by rowFetcher().
+			// Thus, this loop will also shut down quickly.
+			file, ok = <-p.filesChan
+			exhausted = !ok
+			if exhausted {
 				break
-			}
-
-			err = p.filesRows.StructScan(&file)
-			if err != nil {
-				return exhausted, err
 			}
 
 			workPack.Files = append(workPack.Files, WorkPackFile{
@@ -224,12 +315,6 @@ func (p *Producer) enqueue(workPack *WorkPack, jobArgs map[string]interface{}) e
 	if err != nil {
 		return err
 	}
-
-	return nil
-}
-
-func (p *Producer) queueSchedulerWaiter() error {
-	p.queueScheduler.Wait()
 
 	return nil
 }

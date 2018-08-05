@@ -22,5 +22,5 @@ type ChecksumWarning struct {
 }
 
 func ChecksumWarningsPrepareInsert(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {
-	return preparer.PrepareNamedContext(ctx, "INSERT INTO checksum_warnings (file_id, path, modification_time, expected_checksum, actual_checksum, discovered, last_read, created) VALUES (:file_id, :path, :modification_time, :expected_checksum, :actual_checksum, :discovered, :last_read, :created);")
+	return preparer.PrepareNamedContext(ctx, "INSERT INTO checksum_warnings (file_id, path, modification_time, file_size, expected_checksum, actual_checksum, discovered, last_read, created) VALUES (:file_id, :path, :modification_time, :file_size, :expected_checksum, :actual_checksum, :discovered, :last_read, :created);")
 }

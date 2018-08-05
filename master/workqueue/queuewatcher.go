@@ -66,8 +66,8 @@ func (q *QueueWatcher) SignalStop() {
 	q.tomb.Kill(stopSignalled)
 }
 
-func (q *QueueWatcher) Wait() {
-	<-q.tomb.Dead()
+func (q *QueueWatcher) Wait() error {
+	return q.tomb.Wait()
 }
 
 func (q *QueueWatcher) Dead() <-chan struct{} {
@@ -98,7 +98,8 @@ func (q *QueueWatcher) run() error {
 	case <-q.Config.ProductionExhausted:
 		break
 	case <-q.tomb.Dying():
-		return nil
+		q.fieldLogger.Info("Stopping watching as component is dying")
+		return tomb.ErrDying
 	}
 
 	q.client = work.NewClient(q.Config.Namespace, q.Config.Pool)
@@ -109,8 +110,11 @@ func (q *QueueWatcher) run() error {
 
 	err = q.waitForJobsFinished(ctx, CalculateChecksumJobName)
 	if err != nil {
-		// TODO
-		// When context is cancelled this is triggered, but it's okay
+		if err == context.Canceled {
+			// Tomb has canceled the context passed to waitForJobsFinished
+			q.fieldLogger.Info("Stopping watching as component is dying")
+			return tomb.ErrDying
+		}
 		q.fieldLogger.WithError(err).WithField("action", "stopping").
 			Error("Encountered error while waiting for CalculateChecksum jobs to finish processing")
 		return err
@@ -120,8 +124,11 @@ func (q *QueueWatcher) run() error {
 
 	err = q.waitForJobsFinished(ctx, WriteBackJobName(q.Config.FileSystemName, q.Config.SnapshotName))
 	if err != nil {
-		// TODO
-		// When context is cancelled this is triggered, but it's okay
+		if err == context.Canceled {
+			// Tomb has canceled the context passed to waitForJobsFinished
+			q.fieldLogger.Info("Stopping watching as component is dying")
+			return tomb.ErrDying
+		}
 		q.fieldLogger.WithError(err).WithField("action", "stopping").
 			Error("Encountered error while waiting for WriteBack jobs to finish processing")
 		return err
@@ -231,7 +238,6 @@ L:
 func (q *QueueWatcher) checkQueueEmpty(jobName string) (bool, error) {
 	queues, err := q.client.Queues()
 	if err != nil {
-		// TODO error
 		return false, err
 	}
 
@@ -252,7 +258,6 @@ func (q *QueueWatcher) checkQueueEmpty(jobName string) (bool, error) {
 func (q *QueueWatcher) checkWorkerObservationsEmpty(jobName string) (bool, error) {
 	observations, err := q.client.WorkerObservations()
 	if err != nil {
-		// TODO error
 		return false, err
 	}
 
@@ -301,7 +306,7 @@ func (q *QueueWatcher) checkRetryJobsEmpty(jobName string) (bool, error) {
 			// Multiple pages were fetched
 
 			// Check first job to see if jobs have moved up in the retry queue
-			// and thereby broke pagination
+			// and thereby have broken pagination
 			retryJobs, _, err := q.client.RetryJobs(1)
 			if err != nil {
 				// TODO error

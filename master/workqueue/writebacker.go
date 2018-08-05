@@ -5,10 +5,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/MasterOfBinary/gobatch/batch"
+	// "github.com/MasterOfBinary/gobatch/batch"
+	"github.com/go-errors/errors"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jmoiron/sqlx"
+	"github.com/seoester/gobatch/batch"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
@@ -35,6 +37,7 @@ var WriteBackerDefaultConfig = &WriteBackerConfig{
 	Batch: batch.ConfigValues{
 		MaxItems: 1000,
 		MaxTime:  10 * time.Second,
+		MinItems: 100,
 	},
 }
 
@@ -46,6 +49,7 @@ type WriteBacker struct {
 	batch             *batch.Batch
 	sourcePS          *batch.PipelineStage
 	sourcePSAvailable chan struct{}
+	batchErrors       <-chan error
 
 	workerPool       *work.WorkerPool
 	endOfQueueSignal chan struct{}
@@ -87,17 +91,23 @@ func (w *WriteBacker) Start(ctx context.Context) {
 	w.endOfQueueSignal = make(chan struct{})
 
 	w.tomb.Go(func() error {
-		w.batch.Go(
+		w.batchErrors = w.batch.Go(
 			w.tomb.Context(nil),
 			writeBackerBatchSource{w},
 			writeBackerBatchProcessor{w},
 		)
-		w.tomb.Go(w.batchDoneHandler)
+		w.tomb.Go(w.batchErrorsHandler)
+		w.tomb.Go(w.batchManager)
 
 		// Start the worker pool as soon as the "Source" pipeline stage is
 		// available.
 		w.tomb.Go(func() error {
-			<-w.sourcePSAvailable
+			select {
+			case <-w.sourcePSAvailable:
+				break
+			case <-w.tomb.Dying():
+				return nil
+			}
 
 			w.workerPool.Start()
 			w.tomb.Go(w.endOfQueueHandler)
@@ -117,8 +127,8 @@ func (w *WriteBacker) SignalStop() {
 	w.tomb.Kill(stopSignalled)
 }
 
-func (w *WriteBacker) Wait() {
-	<-w.tomb.Dead()
+func (w *WriteBacker) Wait() error {
+	return w.tomb.Wait()
 }
 
 func (w *WriteBacker) Dead() <-chan struct{} {
@@ -139,7 +149,7 @@ func (w *WriteBacker) endOfQueueHandler() error {
 		w.workerPool.Stop()
 		w.sourcePS.Close()
 	case <-w.tomb.Dying():
-		w.fieldLogger.Debug("Stopping worker pool and closing source pipeline stage because component is dying")
+		w.fieldLogger.Debug("Stopping worker pool and closing source pipeline stage as component is dying")
 
 		w.workerPool.Stop()
 		w.sourcePS.Close()
@@ -148,14 +158,42 @@ func (w *WriteBacker) endOfQueueHandler() error {
 	return nil
 }
 
-func (w *WriteBacker) batchDoneHandler() error {
+func (w *WriteBacker) batchErrorsHandler() error {
+	var err error
+	var ok bool
+L:
+	for {
+		select {
+		case err, ok = <-w.batchErrors:
+			if !ok {
+				break L
+			}
+
+			entry := w.fieldLogger.WithError(err)
+			if processorError, ok := err.(*batch.ProcessorError); ok {
+				err = processorError.Original()
+			}
+			if errorsErr, ok := err.(*errors.Error); ok {
+				entry = entry.WithField("stack_trace", errorsErr.ErrorStack())
+			}
+
+			entry.Warn("Encountered error during batch processing")
+		case <-w.tomb.Dying():
+			break L
+		}
+	}
+
+	return nil
+}
+
+func (w *WriteBacker) batchManager() error {
 	select {
 	case <-w.batch.Done():
 		w.fieldLogger.WithField("action", "stopping").Info("Received batch-finished signal, stopping component")
 
 		w.tomb.Kill(nil)
 	case <-w.tomb.Dying():
-		w.fieldLogger.Debug("Waiting for batch to finish after component is dying")
+		w.fieldLogger.Debug("Waiting for batch to finish as component is dying")
 
 		<-w.batch.Done()
 	}
@@ -180,6 +218,10 @@ func (w *writeBackerContext) Process(job *work.Job) error {
 
 		return err
 	}
+
+	w.WriteBacker.fieldLogger.WithFields(logrus.Fields{
+		"write_back_pack": writeBackPack,
+	}).Debug("Received WriteBackPack")
 
 	for _, file := range writeBackPack.Files {
 		item := batch.NextItem(w.WriteBacker.sourcePS, file)
@@ -223,6 +265,120 @@ type writeBackerBatchProcessor struct {
 }
 
 func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.PipelineStage) {
+	w.fieldLogger.Debug("Starting processing of batch")
+	defer ps.Close()
+
+	calculatedChecksums, fileIds := w.readBatchFiles(ps)
+
+	tx, filesUpdatePrepStmt, warningsInsertPrepStmt, err := w.openTxAndStmts(ctx)
+	if err != nil {
+		// TODO Error
+		ps.Errors <- errors.Wrap(err, 0)
+
+		w.fieldLogger.WithError(err).Warn("a")
+
+		return
+	}
+
+	files, err := w.fetchDBFiles(ctx, tx, fileIds)
+	if err != nil {
+		_ = w.closeTxAndStmts(tx, filesUpdatePrepStmt, warningsInsertPrepStmt)
+		// TODO Error
+		ps.Errors <- errors.Wrap(err, 0)
+
+		w.fieldLogger.WithError(err).Warn("b")
+
+		return
+	}
+
+	for ind, _ := range files {
+		// Pointer to file in files, don't copy
+		file := &files[ind]
+
+		calculatedChecksum, ok := calculatedChecksums[file.Id]
+		if !ok {
+			w.fieldLogger.WithFields(logrus.Fields{
+				"action":  "skipping",
+				"file_id": file.Id,
+			}).Warn("Database returned unknown file")
+			continue
+		} else if calculatedChecksum == nil {
+			w.fieldLogger.WithFields(logrus.Fields{
+				"action":  "skipping",
+				"file_id": file.Id,
+			}).Warn("Encountered duplicate file id")
+			continue
+		}
+
+		if file.Checksum != nil && !bytes.Equal(calculatedChecksum, file.Checksum) {
+			err = w.issueChecksumWarning(
+				ctx,
+				warningsInsertPrepStmt,
+				file,
+				calculatedChecksum,
+			)
+			if err != nil {
+				// TODO Error
+				ps.Errors <- errors.Wrap(err, 0)
+				w.fieldLogger.WithError(err).WithFields(logrus.Fields{
+					"action":            "skipping",
+					"file_id":           file.Id,
+					"file_path":         file.Path,
+					"file_size":         file.FileSize,
+					"expected_checksum": file.Checksum,
+					"actual_checksum":   calculatedChecksum,
+					"file_last_read":    file.LastRead.Uint64,
+				}).Warn("Encountered error while issuing checksum warning")
+			}
+		}
+
+		file.Checksum = calculatedChecksums[file.Id]
+		file.LastRead.Uint64, file.LastRead.Valid = w.Config.RunId, true
+		file.ToBeRead = 0
+
+		// TODO result
+		_, err = filesUpdatePrepStmt.ExecContext(ctx, file)
+		if err != nil {
+			// TODO Error
+			ps.Errors <- errors.Wrap(err, 0)
+
+			w.fieldLogger.WithError(err).WithFields(logrus.Fields{
+				"action":        "ignoring",
+				"file_id":       file.Id,
+				"file_path":     file.Path,
+				"file_size":     file.FileSize,
+				"file_checksum": file.Checksum,
+			}).Warn("Encountered error while writing new checksum to database")
+		}
+
+		calculatedChecksums[file.Id] = nil
+	}
+
+	// Check that all files received from the batch's input channel
+	// (calculatedChecksums) have been processed
+	for id, checksum := range calculatedChecksums {
+		if checksum != nil {
+			w.fieldLogger.WithFields(logrus.Fields{
+				"action":        "ignoring",
+				"file_id":       id,
+				"file_checksum": checksum,
+			}).Warn("Database returned non")
+		}
+	}
+
+	err = w.closeTxAndStmts(tx, filesUpdatePrepStmt, warningsInsertPrepStmt)
+	if err != nil {
+		// TODO Error
+		ps.Errors <- errors.Wrap(err, 0)
+		w.fieldLogger.WithError(err).Warn("f")
+
+		return
+	}
+
+	w.fieldLogger.Debug("Finished processing of batch")
+}
+
+func (w *writeBackerBatchProcessor) readBatchFiles(ps *batch.PipelineStage) (map[uint64][]byte, []uint64) {
 	calculatedChecksums := make(map[uint64][]byte)
 	fileIds := make([]uint64, 0, 32)
 
@@ -233,24 +389,20 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 		fileIds = append(fileIds, writeBackFile.Id)
 	}
 
-	tx, filesUpdatePrepStmt, warningsInsertPrepStmt, err := w.openTxAndStmts(ctx)
-	if err != nil {
-		// TODO Error
-		ps.Errors <- err
+	return calculatedChecksums, fileIds
+}
 
-		return
-	}
-
+func (w *writeBackerBatchProcessor) fetchDBFiles(ctx context.Context, tx *sqlx.Tx, fileIds []uint64) ([]meda.File, error) {
 	var file meda.File
+	files := make([]meda.File, 0, len(fileIds))
 
 	rows, err := meda.FilesQueryCtxFilesByIdsForShare(ctx, tx, fileIds)
 	if err != nil {
 		// TODO Error
-		ps.Errors <- err
-
-		_ = w.closeTxAndStmts(tx, filesUpdatePrepStmt, warningsInsertPrepStmt)
-		return
+		w.fieldLogger.WithError(err).Warn(".a")
+		return nil, errors.Wrap(err, 0)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		// TODO
@@ -259,8 +411,6 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 		err = rows.StructScan(&file)
 		if err != nil {
 			// TODO Error
-			ps.Errors <- err
-
 			w.fieldLogger.WithFields(logrus.Fields{
 				"action": "skipping",
 				"error":  err,
@@ -269,43 +419,16 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 			continue
 		}
 
-		if !bytes.Equal(calculatedChecksums[file.Id], file.Checksum) {
-			err = w.writeChecksumWarning(
-				ctx,
-				warningsInsertPrepStmt,
-				&file,
-				calculatedChecksums[file.Id],
-			)
-			if err != nil {
-				// TODO Error
-				ps.Errors <- err
-			}
-		}
-
-		file.Checksum = calculatedChecksums[file.Id]
-		file.LastRead = w.Config.RunId
-		file.ToBeRead = 0
-
-		// TODO result
-		_, err = filesUpdatePrepStmt.ExecContext(ctx, &file)
-		if err != nil {
-			// TODO Error
-			ps.Errors <- err
-		}
+		files = append(files, file)
 	}
 
 	if err = rows.Err(); err != nil {
 		// TODO Error
-		ps.Errors <- err
+		w.fieldLogger.WithError(err).Warn(".b")
+		return nil, errors.Wrap(err, 0)
 	}
 
-	err = w.closeTxAndStmts(tx, filesUpdatePrepStmt, warningsInsertPrepStmt)
-	if err != nil {
-		// TODO Error
-		ps.Errors <- err
-
-		return
-	}
+	return files, nil
 }
 
 func (w writeBackerBatchProcessor) openTxAndStmts(ctx context.Context) (
@@ -345,6 +468,7 @@ func (w writeBackerBatchProcessor) closeTxAndStmts(
 	err = warningsInsertPrepStmt.Close()
 	if err != nil {
 		// Attempt cleanup
+		_ = filesUpdatePrepStmt.Close()
 		_ = tx.Commit()
 		return
 	}
@@ -352,7 +476,6 @@ func (w writeBackerBatchProcessor) closeTxAndStmts(
 	err = filesUpdatePrepStmt.Close()
 	if err != nil {
 		// Attempt cleanup
-		_ = warningsInsertPrepStmt.Close()
 		_ = tx.Commit()
 		return
 	}
@@ -365,7 +488,7 @@ func (w writeBackerBatchProcessor) closeTxAndStmts(
 	return
 }
 
-func (w *writeBackerBatchProcessor) writeChecksumWarning(
+func (w *writeBackerBatchProcessor) issueChecksumWarning(
 	ctx context.Context,
 	warningsInsertPrepStmt *sqlx.NamedStmt,
 	file *meda.File,
@@ -377,7 +500,7 @@ func (w *writeBackerBatchProcessor) writeChecksumWarning(
 		"file_size":         file.FileSize,
 		"expected_checksum": file.Checksum,
 		"actual_checksum":   checksum,
-		"file_last_read":    file.LastRead,
+		"file_last_read":    file.LastRead.Uint64,
 	}).Info("Discovered checksum mismatch, writing checksum warning")
 
 	checksumWarning := meda.ChecksumWarning{
@@ -388,11 +511,10 @@ func (w *writeBackerBatchProcessor) writeChecksumWarning(
 		ExpectedChecksum: file.Checksum,
 		ActualChecksum:   checksum,
 		Discovered:       w.Config.RunId,
-		LastRead:         file.LastRead,
-		Created:          time.Now(),
+		LastRead:         file.LastRead.Uint64,
+		Created:          meda.Time(time.Now()),
 	}
 
-	// TODO result
 	_, err := warningsInsertPrepStmt.ExecContext(ctx, &checksumWarning)
 
 	return err

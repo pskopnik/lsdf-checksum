@@ -221,7 +221,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 
 		medaInsert = meda.Insert{
 			Path:             cleanPath,
-			ModificationTime: fileData.ModificationTime,
+			ModificationTime: meda.Time(fileData.ModificationTime),
 			FileSize:         fileData.FileSize,
 			LastSeen:         s.Config.RunId,
 		}
