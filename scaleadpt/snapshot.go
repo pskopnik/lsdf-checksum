@@ -2,34 +2,12 @@ package scaleadpt
 
 import (
 	"time"
+
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/options"
 )
 
-type SnapshotOptioner interface {
-	apply(*snapshotOptions)
-}
-
-type snapshotOptionerFunc func(*snapshotOptions)
-
-func (s snapshotOptionerFunc) apply(options *snapshotOptions) {
-	s(options)
-}
-
-type SnapshotOptions struct{}
-
-func (_ SnapshotOptions) FileSet(fileset string) SnapshotOptioner {
-	return snapshotOptionerFunc(func(options *snapshotOptions) {
-		options.Fileset = fileset
-	})
-}
-
-// SnapshotOpt provides simple access to SnapshotOptions methods.
-var SnapshotOpt = SnapshotOptions{}
-
-// snapshotOptions is the option aggregate structure for options for snapshot
-// create operations.
-type snapshotOptions struct {
-	Fileset string
-}
+// SnapshotOpt provides simple access to SnapshotOptioners methods.
+var SnapshotOpt = options.SnapshotOptioners{}
 
 type Snapshot struct {
 	filesystem *FileSystem

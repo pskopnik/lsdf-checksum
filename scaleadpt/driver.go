@@ -1,5 +1,9 @@
 package scaleadpt
 
+import (
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/options"
+)
+
 // DriverFileSystem is the interface expected by Drivers' providing
 // information about the FileSystem.
 type DriverFileSystem interface {
@@ -15,11 +19,11 @@ type DriverFileSystem interface {
 type Driver interface {
 	GetVersion(filesystem DriverFileSystem) (string, error)
 
-	CreateSnapshot(filesystem DriverFileSystem, name string, options *snapshotOptions) error
+	CreateSnapshot(filesystem DriverFileSystem, name string, opts *options.SnapshotOptions) error
 	GetSnapshot(filesystem DriverFileSystem, name string) (*Snapshot, error)
 	DeleteSnapshot(filesystem DriverFileSystem, name string) error
 
-	ApplyPolicy(filesystem DriverFileSystem, policy *Policy, options *policyOptions) error
+	ApplyPolicy(filesystem DriverFileSystem, policy *Policy, opts *options.PolicyOptions) error
 
 	GetMountRoot(filesystem DriverFileSystem) (string, error)
 	GetSnapshotDirsInfo(filesystem DriverFileSystem) (*SnapshotDirsInfo, error)

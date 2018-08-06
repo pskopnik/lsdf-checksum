@@ -20,7 +20,8 @@ import (
 
 	"github.com/akutz/gofsutil"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/options"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/utils"
 )
 
 var (
@@ -147,14 +148,14 @@ var _ Driver = &CLIDriver{}
 type CLIDriver struct {
 }
 
-func (c *CLIDriver) CreateSnapshot(filesystem DriverFileSystem, name string, options *snapshotOptions) error {
+func (c *CLIDriver) CreateSnapshot(filesystem DriverFileSystem, name string, opts *options.SnapshotOptions) error {
 	args := []string{
 		filesystem.GetName(),
 		name,
 	}
 
-	if len(options.Fileset) > 0 {
-		args = append(args, "-j", options.Fileset)
+	if len(opts.Fileset) > 0 {
+		args = append(args, "-j", opts.Fileset)
 	}
 
 	_, err := c.runOutput("mmcrsnapshot", cmdArgs(args...))
@@ -262,10 +263,10 @@ func (c *CLIDriver) DeleteSnapshot(filesystem DriverFileSystem, name string) err
 	return nil
 }
 
-func (c *CLIDriver) ApplyPolicy(filesystem DriverFileSystem, policy *Policy, options *policyOptions) error {
+func (c *CLIDriver) ApplyPolicy(filesystem DriverFileSystem, policy *Policy, opts *options.PolicyOptions) error {
 	args := []string{}
 
-	if len(options.Subpath) > 0 {
+	if len(opts.Subpath) > 0 {
 		rootDir, err := c.GetMountRoot(filesystem)
 		if err != nil {
 			return err
@@ -275,11 +276,11 @@ func (c *CLIDriver) ApplyPolicy(filesystem DriverFileSystem, policy *Policy, opt
 			return err
 		}
 
-		if len(options.SnapshotName) > 0 {
-			rootDir = filepath.Join(rootDir, snapshotDirsInfo.Global, options.SnapshotName)
+		if len(opts.SnapshotName) > 0 {
+			rootDir = filepath.Join(rootDir, snapshotDirsInfo.Global, opts.SnapshotName)
 		}
 
-		args = append(args, filepath.Join(rootDir, options.Subpath))
+		args = append(args, filepath.Join(rootDir, opts.Subpath))
 	} else {
 		args = append(args, filesystem.GetName())
 	}
@@ -292,25 +293,25 @@ func (c *CLIDriver) ApplyPolicy(filesystem DriverFileSystem, policy *Policy, opt
 
 	args = append(args, "-P", policyFilePath)
 
-	if len(options.SnapshotName) > 0 {
-		args = append(args, "-S", options.SnapshotName)
+	if len(opts.SnapshotName) > 0 {
+		args = append(args, "-S", opts.SnapshotName)
 	}
-	if len(options.Action) > 0 {
-		args = append(args, "-I", options.Action)
+	if len(opts.Action) > 0 {
+		args = append(args, "-I", opts.Action)
 	}
-	if len(options.FileListPrefix) > 0 {
-		args = append(args, "-f", options.FileListPrefix)
+	if len(opts.FileListPrefix) > 0 {
+		args = append(args, "-f", opts.FileListPrefix)
 	}
-	if len(options.QoSClass) > 0 {
-		args = append(args, "--qos", options.QoSClass)
+	if len(opts.QoSClass) > 0 {
+		args = append(args, "--qos", opts.QoSClass)
 	}
-	if len(options.NodeList) > 0 {
-		args = append(args, "-N", strings.Join(options.NodeList, ","))
+	if len(opts.NodeList) > 0 {
+		args = append(args, "-N", strings.Join(opts.NodeList, ","))
 	}
-	if len(options.GlobalWorkDirectory) > 0 {
-		args = append(args, "-g", options.GlobalWorkDirectory)
+	if len(opts.GlobalWorkDirectory) > 0 {
+		args = append(args, "-g", opts.GlobalWorkDirectory)
 	}
-	for key, val := range options.Substitutions {
+	for key, val := range opts.Substitutions {
 		args = append(args, "-M", key+"="+val)
 	}
 
@@ -349,7 +350,7 @@ func (c *CLIDriver) GetMountRoot(filesystem DriverFileSystem) (string, error) {
 	fileSystemRoot, err := c.getMountRootLsfs(filesystem)
 	if err == nil {
 		return fileSystemRoot, nil
-	} else if !(internal.IsExecNotFound(err) || err == PrefixNotFound) {
+	} else if !(utils.IsExecNotFound(err) || err == PrefixNotFound) {
 		return "", err
 	}
 

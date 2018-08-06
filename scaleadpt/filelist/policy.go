@@ -5,7 +5,8 @@ import (
 	"os"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
-	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/options"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/utils"
 )
 
 var ruleContent = `RULE 'listFilesRule'
@@ -47,10 +48,13 @@ func (a *CloseParser) Close() error {
 // matching files.
 // The CloseParser should be closed in all cases (after processing is finished
 // or if an error occurs).
-func ApplyPolicy(fs *scaleadpt.FileSystem, options ...scaleadpt.PolicyOptioner) (*CloseParser, error) {
-	listPath := internal.TouchNonExistingTempFile("scaleadpt-filelist-", ".list.files")
+func ApplyPolicy(fs *scaleadpt.FileSystem, opts ...options.PolicyOptioner) (*CloseParser, error) {
+	// Extract TempDir from opts
+	tempDir := (&options.PolicyOptions{}).Apply(opts).TempDir
 
-	err := fs.ApplyListPolicy(FileListPolicy, listPath, options...)
+	listPath := utils.TouchNonExistingTempFile("scaleadpt-filelist-", ".list.files", tempDir)
+
+	err := fs.ApplyListPolicy(FileListPolicy, listPath, opts...)
 	if err != nil {
 		return nil, err
 	}
