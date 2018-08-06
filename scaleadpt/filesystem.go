@@ -3,8 +3,8 @@ package scaleadpt
 import (
 	"strings"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/options"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/utils"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
 var _ DriverFileSystem = &FileSystem{}

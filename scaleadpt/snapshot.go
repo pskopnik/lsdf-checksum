@@ -3,7 +3,7 @@ package scaleadpt
 import (
 	"time"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/options"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
 // SnapshotOpt provides simple access to SnapshotOptioners methods.

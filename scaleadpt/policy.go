@@ -1,7 +1,7 @@
 package scaleadpt
 
 import (
-	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/options"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
 // PolicyOpt provides simple access to PolicyOptioners methods.

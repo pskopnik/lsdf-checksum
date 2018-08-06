@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
-	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/options"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/utils"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
 var ruleContent = `RULE 'listFilesRule'
