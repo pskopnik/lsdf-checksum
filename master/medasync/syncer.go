@@ -17,6 +17,7 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/filelist"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
 //go:generate confions config Config
@@ -142,7 +143,7 @@ func (s *Syncer) prepareDatabase(ctx context.Context) error {
 }
 
 func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
-	options := []scaleadpt.PolicyOptioner{
+	options := []options.PolicyOptioner{
 		scaleadpt.PolicyOpt.SnapshotName(s.Config.SnapshotName),
 		scaleadpt.PolicyOpt.Subpath(s.Config.Subpath),
 		scaleadpt.PolicyOpt.TempDir(s.Config.TemporaryDirectory),
