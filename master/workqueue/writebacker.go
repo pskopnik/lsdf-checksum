@@ -35,9 +35,8 @@ type WriteBackerConfig struct {
 
 var WriteBackerDefaultConfig = &WriteBackerConfig{
 	Batch: batch.ConfigValues{
-		MaxItems: 1000,
+		MinItems: 1000,
 		MaxTime:  10 * time.Second,
-		MinItems: 100,
 	},
 }
 
