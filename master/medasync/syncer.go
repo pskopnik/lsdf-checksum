@@ -32,6 +32,7 @@ type Config struct {
 
 	// Static Params
 
+	TemporaryDirectory  string
 	GlobalWorkDirectory string
 	NodeList            []string
 	Subpath             string
@@ -144,10 +145,12 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 	options := []scaleadpt.PolicyOptioner{
 		scaleadpt.PolicyOpt.SnapshotName(s.Config.SnapshotName),
 		scaleadpt.PolicyOpt.Subpath(s.Config.Subpath),
+		scaleadpt.PolicyOpt.TempDir(s.Config.TemporaryDirectory),
 	}
 
 	fields := logrus.Fields{
 		"distributed_execution": false,
+		"temporary_directory":   s.Config.TemporaryDirectory,
 	}
 
 	if len(s.Config.GlobalWorkDirectory) > 0 && len(s.Config.NodeList) > 0 {

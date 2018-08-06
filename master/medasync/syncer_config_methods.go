@@ -3,6 +3,7 @@ package medasync
 func (c *Config) CopyFrom(other *Config) {
 	c.MaxTransactionSize = other.MaxTransactionSize
 
+	c.TemporaryDirectory = other.TemporaryDirectory
 	c.GlobalWorkDirectory = other.GlobalWorkDirectory
 	c.NodeList = other.NodeList
 	c.Subpath = other.Subpath
@@ -20,6 +21,9 @@ func (c *Config) Merge(other *Config) *Config {
 		c.MaxTransactionSize = other.MaxTransactionSize
 	}
 
+	if len(other.TemporaryDirectory) > 0 {
+		c.TemporaryDirectory = other.TemporaryDirectory
+	}
 	if len(other.GlobalWorkDirectory) > 0 {
 		c.GlobalWorkDirectory = other.GlobalWorkDirectory
 	}
