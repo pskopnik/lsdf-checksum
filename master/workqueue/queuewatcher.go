@@ -27,12 +27,12 @@ type QueueWatcherConfig struct {
 	RunId        uint64
 	SnapshotName string
 
-	Pool   *redis.Pool
-	Logger logrus.FieldLogger
+	Pool   *redis.Pool        `yaml:"-"`
+	Logger logrus.FieldLogger `yaml:"-"`
 
 	// ProductionExhausted is a channel which must be closed as soon as all
 	// items have been enqueued, i.e. production is exhausted.
-	ProductionExhausted <-chan struct{}
+	ProductionExhausted <-chan struct{} `yaml:"-"`
 }
 
 var QueueWatcherDefaultConfig = QueueWatcherConfig{

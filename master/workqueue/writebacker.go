@@ -28,9 +28,9 @@ type WriteBackerConfig struct {
 	RunId        uint64
 	SnapshotName string
 
-	Pool   *redis.Pool
-	DB     *meda.DB
-	Logger logrus.FieldLogger
+	Pool   *redis.Pool        `yaml:"-"`
+	DB     *meda.DB           `yaml:"-"`
+	Logger logrus.FieldLogger `yaml:"-"`
 }
 
 var WriteBackerDefaultConfig = &WriteBackerConfig{

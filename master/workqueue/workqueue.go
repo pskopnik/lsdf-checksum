@@ -45,8 +45,8 @@ type Config struct {
 	RunId        uint64
 	SnapshotName string
 
-	DB     *meda.DB
-	Logger logrus.FieldLogger
+	DB     *meda.DB           `yaml:"-"`
+	Logger logrus.FieldLogger `yaml:"-"`
 
 	Redis RedisConfig
 	// EWMAScheduler contains the configuration for the EWMAScheduler

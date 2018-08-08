@@ -22,11 +22,11 @@ type ProducerConfig struct {
 
 	SnapshotName string
 
-	Pool   *redis.Pool
-	DB     *meda.DB
-	Logger logrus.FieldLogger
+	Pool   *redis.Pool        `yaml:"-"`
+	DB     *meda.DB           `yaml:"-"`
+	Logger logrus.FieldLogger `yaml:"-"`
 
-	Controller SchedulingController
+	Controller SchedulingController `yaml:"-"`
 }
 
 var ProducerDefaultConfig = &ProducerConfig{

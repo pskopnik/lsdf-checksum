@@ -34,8 +34,8 @@ type QueueSchedulerConfig struct {
 	Namespace string
 	JobName   string
 
-	Pool   *redis.Pool
-	Logger logrus.FieldLogger
+	Pool   *redis.Pool        `yaml:"-"`
+	Logger logrus.FieldLogger `yaml:"-"`
 
 	Controller SchedulingController
 }
