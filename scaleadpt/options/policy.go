@@ -11,7 +11,12 @@ type PolicyOptions struct {
 	NodeList            []string
 	GlobalWorkDirectory string
 	Substitutions       map[string]string
-	TempDir             string
+	// TempDir is the temporary directory used by functions in this package.
+	// It is also passed as the LocalWorkDirectory to policy apply operations.
+	// If this is empty (i.e. not explicitly set) `/tmp` is in all likelihood
+	// be used.
+	// The directory must exist and be writable.
+	TempDir string
 }
 
 func (p *PolicyOptions) Apply(opts []PolicyOptioner) *PolicyOptions {

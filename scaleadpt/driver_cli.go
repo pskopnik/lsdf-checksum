@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -285,7 +284,7 @@ func (c *CLIDriver) ApplyPolicy(filesystem DriverFileSystem, policy *Policy, opt
 		args = append(args, filesystem.GetName())
 	}
 
-	policyFilePath, err := c.writePolicyFile(policy)
+	policyFilePath, err := c.writePolicyFile(policy, opts.TempDir)
 	if err != nil {
 		return err
 	}
@@ -311,6 +310,9 @@ func (c *CLIDriver) ApplyPolicy(filesystem DriverFileSystem, policy *Policy, opt
 	if len(opts.GlobalWorkDirectory) > 0 {
 		args = append(args, "-g", opts.GlobalWorkDirectory)
 	}
+	if len(opts.TempDir) > 0 {
+		args = append(args, "-s", opts.TempDir)
+	}
 	for key, val := range opts.Substitutions {
 		args = append(args, "-M", key+"="+val)
 	}
@@ -323,7 +325,7 @@ func (c *CLIDriver) ApplyPolicy(filesystem DriverFileSystem, policy *Policy, opt
 	return nil
 }
 
-func (c *CLIDriver) writePolicyFile(policy *Policy) (string, error) {
+func (c *CLIDriver) writePolicyFile(policy *Policy, tmpDir string) (string, error) {
 	rulesContent := make([]string, len(policy.Rules))
 
 	for ind, rule := range policy.Rules {
@@ -332,7 +334,8 @@ func (c *CLIDriver) writePolicyFile(policy *Policy) (string, error) {
 
 	policyFileContent := strings.Join(rulesContent, "\n\n")
 
-	f, err := ioutil.TempFile("", "scaleadpt-policy-file")
+	fileName := utils.TouchNonExistingTempFile("scaleadpt-policy-file-", "", tmpDir)
+	f, err := os.Create(fileName)
 	if err != nil {
 		return "", err
 	}
@@ -343,7 +346,7 @@ func (c *CLIDriver) writePolicyFile(policy *Policy) (string, error) {
 		return "", err
 	}
 
-	return f.Name(), nil
+	return fileName, nil
 }
 
 func (c *CLIDriver) GetMountRoot(filesystem DriverFileSystem) (string, error) {
