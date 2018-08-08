@@ -6,9 +6,40 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-const FilesTableName = "files"
+const filesTableNameBase = "files"
+
+func (d *DB) FilesTableName() string {
+	return d.Config.TablePrefix + filesTableNameBase
+}
 
 const FilesMaxPathLength = 4096
+
+// https://mariadb.com/kb/en/library/building-the-best-index-for-a-given-select/
+// https://dev.mysql.com/doc/refman/5.7/en/create-index.html
+// https://mariadb.com/kb/en/library/xtradbinnodb-server-system-variables/#innodb_large_prefix
+// https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_large_prefix
+
+const filesCreateTableQuery = GenericQuery(`
+	CREATE TABLE IF NOT EXISTS {FILES} (
+		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+		rand double NOT NULL,
+		path varchar(4096) NOT NULL,
+		modification_time datetime(6) NOT NULL,
+		file_size bigint(20) unsigned NOT NULL,
+		last_seen bigint(20) unsigned NOT NULL,
+		to_be_read tinyint(3) unsigned NOT NULL DEFAULT 1,
+		checksum varbinary(64) DEFAULT NULL,
+		last_read bigint(20) unsigned DEFAULT NULL,
+		PRIMARY KEY (id),
+		KEY rand (rand),
+		KEY path (path(1024))
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+`)
+
+func (d *DB) filesCreateTable(ctx context.Context) error {
+	_, err := d.ExecContext(ctx, filesCreateTableQuery.SubstituteAll(d))
+	return err
+}
 
 type File struct {
 	Id               uint64     `db:"id"`
@@ -22,10 +53,27 @@ type File struct {
 	LastRead         NullUint64 `db:"last_read"`
 }
 
-func FilesQueryCtxFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) (*sqlx.Rows, error) {
+const filesQueryFilesToBeReadPaginatedQuery = GenericQuery(`
+	SELECT
+		id, rand, path, file_size
+	FROM {FILES}
+		WHERE
+				to_be_read = '1'
+			AND
+				(rand > ? OR (rand = ? AND id > ?))
+		ORDER BY rand, id
+		LIMIT ?
+	;
+`)
+
+func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) (*sqlx.Rows, error) {
+	if querier == nil {
+		querier = &d.DB
+	}
+
 	return querier.QueryxContext(
 		ctx,
-		"SELECT id, rand, path, file_size FROM files WHERE to_be_read = '1' AND (rand > ? OR (rand = ? AND id > ?)) ORDER BY rand, id LIMIT ?;",
+		filesQueryFilesToBeReadPaginatedQuery.SubstituteAll(d),
 		startRand,
 		startRand,
 		startId,
@@ -33,8 +81,21 @@ func FilesQueryCtxFilesToBeReadPaginated(ctx context.Context, querier sqlx.Query
 	)
 }
 
-func FilesQueryCtxFilesByIdsForShare(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) (*sqlx.Rows, error) {
-	query, args, err := sqlx.In("SELECT id, path, modification_time, file_size, last_seen, checksum, last_read FROM files WHERE id IN (?) LOCK IN SHARE MODE;", fileIds)
+const filesQueryFilesByIdsForShareQuery = GenericQuery(`
+	SELECT
+		id, path, modification_time, file_size, last_seen, checksum, last_read
+	FROM {FILES}
+		WHERE id IN (?)
+		LOCK IN SHARE MODE
+	;
+`)
+
+func (d *DB) FilesQueryFilesByIdsForShare(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) (*sqlx.Rows, error) {
+	if querier == nil {
+		querier = &d.DB
+	}
+
+	query, args, err := sqlx.In(filesQueryFilesByIdsForShareQuery.SubstituteAll(d), fileIds)
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +107,20 @@ func FilesQueryCtxFilesByIdsForShare(ctx context.Context, querier RebindQueryerC
 	return querier.QueryxContext(ctx, query, args...)
 }
 
-func FilesPrepareUpdateChecksum(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {
-	return preparer.PrepareNamedContext(ctx, "UPDATE files SET checksum = :checksum, last_read = :last_read, to_be_read = '0' WHERE id = :id;")
+const filesPrepareUpdateChecksumQuery = GenericQuery(`
+	UPDATE {FILES}
+		SET
+			checksum = :checksum,
+			last_read = :last_read,
+			to_be_read = '0'
+		WHERE id = :id
+	;
+`)
+
+func (d *DB) FilesPrepareUpdateChecksum(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {
+	if preparer == nil {
+		preparer = &d.DB
+	}
+
+	return preparer.PrepareNamedContext(ctx, filesPrepareUpdateChecksumQuery.SubstituteAll(d))
 }
