@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
@@ -24,7 +23,7 @@ type ProducerConfig struct {
 	SnapshotName string
 
 	Pool   *redis.Pool
-	DB     *sqlx.DB
+	DB     *meda.DB
 	Logger logrus.FieldLogger
 
 	Controller SchedulingController
@@ -217,7 +216,7 @@ func (p *Producer) fetchNextBatch(files []meda.File) ([]meda.File, error) {
 		}
 	}
 
-	rows, err := meda.FilesQueryCtxFilesToBeReadPaginated(
+	rows, err := p.Config.DB.FilesQueryFilesToBeReadPaginated(
 		p.tomb.Context(nil),
 		p.Config.DB,
 		p.lastRand,

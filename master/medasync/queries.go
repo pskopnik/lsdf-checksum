@@ -1,21 +1,10 @@
 package medasync
 
 import (
-	"strings"
-
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 )
 
-type substitutedQuery string
-
-func (s substitutedQuery) get() string {
-	return strings.NewReplacer(
-		"{FILES}", meda.FilesTableName,
-		"{INSERTS}", meda.InsertsTableName,
-	).Replace(string(s))
-}
-
-var updateQuery = substitutedQuery(
+const updateQuery = meda.GenericQuery(
 	`UPDATE {FILES}
 		RIGHT JOIN {INSERTS}
 			ON {INSERTS}.path = {FILES}.path AND {INSERTS}.last_seen = ?
@@ -29,7 +18,7 @@ var updateQuery = substitutedQuery(
 	;`,
 )
 
-var insertQuery = substitutedQuery(
+const insertQuery = meda.GenericQuery(
 	`INSERT INTO {FILES} (rand, path, file_size, modification_time, last_seen)
 		SELECT RAND(), {INSERTS}.path, {INSERTS}.file_size, {INSERTS}.modification_time, {INSERTS}.last_seen
 		FROM {INSERTS}
@@ -40,13 +29,13 @@ var insertQuery = substitutedQuery(
 	;`,
 )
 
-var deleteQuery = substitutedQuery(
+const deleteQuery = meda.GenericQuery(
 	`DELETE FROM {FILES}
 		WHERE last_seen != ?
 	;`,
 )
 
-var cleanInsertsQuery = substitutedQuery(
+const cleanInsertsQuery = meda.GenericQuery(
 	`DELETE FROM {INSERTS}
 		WHERE last_seen = ?
 	;`,

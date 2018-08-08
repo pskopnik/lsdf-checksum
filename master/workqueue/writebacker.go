@@ -29,7 +29,7 @@ type WriteBackerConfig struct {
 	SnapshotName string
 
 	Pool   *redis.Pool
-	DB     *sqlx.DB
+	DB     *meda.DB
 	Logger logrus.FieldLogger
 }
 
@@ -395,7 +395,7 @@ func (w *writeBackerBatchProcessor) fetchDBFiles(ctx context.Context, tx *sqlx.T
 	var file meda.File
 	files := make([]meda.File, 0, len(fileIds))
 
-	rows, err := meda.FilesQueryCtxFilesByIdsForShare(ctx, tx, fileIds)
+	rows, err := w.Config.DB.FilesQueryFilesByIdsForShare(ctx, tx, fileIds)
 	if err != nil {
 		// TODO Error
 		w.fieldLogger.WithError(err).Warn(".a")
@@ -441,14 +441,14 @@ func (w writeBackerBatchProcessor) openTxAndStmts(ctx context.Context) (
 		return
 	}
 
-	filesUpdatePrepStmt, err = meda.FilesPrepareUpdateChecksum(ctx, tx)
+	filesUpdatePrepStmt, err = w.Config.DB.FilesPrepareUpdateChecksum(ctx, tx)
 	if err != nil {
 		// Close everything hitherto
 		_ = tx.Commit()
 		return
 	}
 
-	warningsInsertPrepStmt, err = meda.ChecksumWarningsPrepareInsert(ctx, tx)
+	warningsInsertPrepStmt, err = w.Config.DB.ChecksumWarningsPrepareInsert(ctx, tx)
 	if err != nil {
 		// Close everything hitherto
 		_ = filesUpdatePrepStmt.Close()

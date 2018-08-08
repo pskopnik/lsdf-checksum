@@ -37,7 +37,7 @@ type Config struct {
 	GlobalWorkDirectory string
 	NodeList            []string
 	Subpath             string
-	Location            *time.Location
+	Location            *time.Location `yaml:"-"`
 
 	// Invokation dependent params
 
@@ -46,9 +46,9 @@ type Config struct {
 
 	// Dynamic objects
 
-	DB         *sqlx.DB
-	FileSystem *scaleadpt.FileSystem
-	Logger     logrus.FieldLogger
+	DB         *meda.DB              `yaml:"-"`
+	FileSystem *scaleadpt.FileSystem `yaml:"-"`
+	Logger     logrus.FieldLogger    `yaml:"-"`
 }
 
 var DefaultConfig = Config{
@@ -128,7 +128,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 func (s *Syncer) prepareDatabase(ctx context.Context) error {
 	s.fieldLogger.Info("Starting preparing the meta data database")
 
-	res, err := s.Config.DB.ExecContext(ctx, cleanInsertsQuery.get(), s.Config.RunId)
+	res, err := s.Config.DB.ExecContext(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
 		return err
 	}
@@ -271,7 +271,7 @@ func (s *Syncer) openWriteInsertsTx(ctx context.Context) (*sqlx.Tx, *sqlx.NamedS
 		return nil, nil, err
 	}
 
-	prepStmt, err := meda.InsertsPrepareInsert(ctx, tx)
+	prepStmt, err := s.Config.DB.InsertsPrepareInsert(ctx, tx)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, nil, err
@@ -330,7 +330,7 @@ func (s *Syncer) cleanPath(path string) (string, error) {
 func (s *Syncer) syncDatabase() error {
 	s.fieldLogger.Info("Starting syncing the meta data database")
 
-	res, err := s.Config.DB.Exec(updateQuery.get(), s.Config.RunId, s.Config.RunId)
+	res, err := s.Config.DB.Exec(updateQuery.SubstituteAll(s.Config.DB), s.Config.RunId, s.Config.RunId)
 	if err != nil {
 		return err
 	}
@@ -339,7 +339,7 @@ func (s *Syncer) syncDatabase() error {
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed update of existing files in meta data database")
 
-	res, err = s.Config.DB.Exec(insertQuery.get(), s.Config.RunId)
+	res, err = s.Config.DB.Exec(insertQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func (s *Syncer) syncDatabase() error {
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed copying of new files in meta data database")
 
-	res, err = s.Config.DB.Exec(deleteQuery.get(), s.Config.RunId)
+	res, err = s.Config.DB.Exec(deleteQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
 		return err
 	}
@@ -357,7 +357,7 @@ func (s *Syncer) syncDatabase() error {
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed deleting of old files in meta data database")
 
-	res, err = s.Config.DB.Exec(cleanInsertsQuery.get(), s.Config.RunId)
+	res, err = s.Config.DB.Exec(cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
 		return err
 	}

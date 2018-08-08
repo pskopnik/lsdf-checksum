@@ -6,15 +6,35 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
+
+	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 )
 
-const gocraftWorkNamespaceBase string = "lsdf-checksum/workqueue"
+const gocraftWorkNamespaceBase string = "lsdf-checksum/workqueue:work"
 
 func GocraftWorkNamespace(prefix string) string {
 	return prefix + gocraftWorkNamespaceBase
+}
+
+//go:generate confions config RedisConfig
+
+// RedisConfig contains configuration options for a connection pool to a redis
+// database.
+type RedisConfig struct {
+	Network     string
+	Address     string
+	Database    int
+	Prefix      string
+	Password    string
+	MaxIdle     int
+	IdleTimeout time.Duration
+}
+
+var RedisDefaultConfig = &RedisConfig{
+	MaxIdle:     10,
+	IdleTimeout: 300 * time.Second,
 }
 
 //go:generate confions config Config
@@ -25,7 +45,7 @@ type Config struct {
 	RunId        uint64
 	SnapshotName string
 
-	DB     *sqlx.DB
+	DB     *meda.DB
 	Logger logrus.FieldLogger
 
 	Redis RedisConfig
@@ -52,24 +72,7 @@ type Config struct {
 	WriteBacker WriteBackerConfig
 }
 
-// RedisConfig contains configuration options for a connection pool to a redis
-// database.
-type RedisConfig struct {
-	Network     string
-	Address     string
-	Database    int
-	Prefix      string
-	Password    string
-	MaxIdle     int
-	IdleTimeout time.Duration
-}
-
-var DefaultConfig = &Config{
-	Redis: RedisConfig{
-		MaxIdle:     10,
-		IdleTimeout: 300 * time.Second,
-	},
-}
+var DefaultConfig = &Config{}
 
 type WorkQueue struct {
 	Config *Config
