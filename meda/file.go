@@ -33,7 +33,7 @@ const filesCreateTableQuery = GenericQuery(`
 		PRIMARY KEY (id),
 		KEY rand (rand),
 		KEY path (path(1024))
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 
 func (d *DB) filesCreateTable(ctx context.Context) error {

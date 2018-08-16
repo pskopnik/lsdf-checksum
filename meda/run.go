@@ -23,7 +23,7 @@ const runsCreateTableQuery = GenericQuery(`
 		run_at datetime(6) DEFAULT NULL,
 		state varchar(20) NOT NULL,
 		PRIMARY KEY (id)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 
 func (d *DB) runsCreateTable(ctx context.Context) error {

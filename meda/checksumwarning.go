@@ -25,7 +25,7 @@ const checksumWarningsCreateTableQuery = GenericQuery(`
 		last_read bigint(20) unsigned NOT NULL,
 		created datetime(6) NOT NULL,
 		PRIMARY KEY (id)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 
 func (d *DB) checksumWarningsCreateTable(ctx context.Context) error {

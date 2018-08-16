@@ -21,7 +21,7 @@ const insertsCreateTableQuery = GenericQuery(`
 		file_size bigint(20) unsigned NOT NULL,
 		last_seen bigint(20) unsigned NOT NULL,
 		PRIMARY KEY (id)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 
 func (d *DB) insertsCreateTable(ctx context.Context) error {
