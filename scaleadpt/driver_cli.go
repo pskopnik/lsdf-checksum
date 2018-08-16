@@ -19,7 +19,7 @@ import (
 
 	"github.com/akutz/gofsutil"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/utils"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/utils"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
