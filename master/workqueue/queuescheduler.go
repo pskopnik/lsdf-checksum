@@ -190,6 +190,17 @@ func (q *QueueScheduler) GetWorkerNum() (int, error) {
 
 	workerNum := 0
 	for _, heartbeat := range heartbeats {
+		found := false
+		for _, jobName := range heartbeat.JobNames {
+			if jobName == q.Config.JobName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+
 		workerNum += int(heartbeat.Concurrency)
 	}
 
