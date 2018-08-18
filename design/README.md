@@ -142,6 +142,11 @@ the `last_seen`, `last_read`, ... columns of other tables.
     operations throughout the run.
  * `run_at` (`datetime(6)`) - The timestamp of the run. This is the "Created"
     attribute of the run's snapshot.
+ * `sync_mode` (`varchar(20)`) - The run's sync mode. This is either `full` or
+    `incremental`.
+ * `state` (`varchar(20)`) - The state of the run. The state expresses the
+    state of the data in the database. This information is sufficient to
+    resume aborted (or failed) runs.
 
 ##### Checksum Warnings (table `checksum_warnings`)
 
@@ -220,10 +225,11 @@ Some considerations:
 
 #### Resilience
 
- * Should any sort of error occur during processing of a work pack which the
+ * If any sort of error occurs during processing of a work pack which the
     worker cannot recover from, the work pack is re-queued. The number of (max)
-    retries can be configured per queued item, i.e. work pack.
- * Workers are regularly checking in with the work queue (hearbeat). If no
+    retries can be configured per queued item, i.e. work pack. It is enforced
+    by the underlying queue library.
+ * Workers are regularly checking in with the work queue (heartbeat). If no
     heartbeat is received for some time, all jobs currently being processed by
     the worker are re-queued. This allows for a worker crashing or a system
     being restarted without much impact on the checksum calculations.
