@@ -91,6 +91,9 @@ func (d *DB) Migrate(ctx context.Context) error {
 	return nil
 }
 
+// GenericQuery is a query string with placeholders instead of table names.
+// By using SubstituteAll() the placeholders are replaced by the actual table
+// names resulting in a query string suitable for being executed.
 type GenericQuery string
 
 func (s GenericQuery) SubstituteAll(db *DB) string {

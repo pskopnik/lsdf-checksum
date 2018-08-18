@@ -61,7 +61,7 @@ const filesQueryFilesToBeReadPaginatedQuery = GenericQuery(`
 				to_be_read = '1'
 			AND
 				(rand > ? OR (rand = ? AND id > ?))
-		ORDER BY rand, id
+		ORDER BY rand, id ASC
 		LIMIT ?
 	;
 `)
