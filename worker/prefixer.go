@@ -177,13 +177,10 @@ func (p *Prefixer) reap() uint {
 }
 
 type cacheEntry struct {
-	// TODO
-	// Make safe for concurrent use: Either:
-	//  * Protect by Mutex / atomic
-	//  * Simply copy and then re-Store()
-
 	Written time.Time
 	Value   interface{}
+	Deleted bool
+	Lock    sync.RWMutex
 }
 
 type expiringCache struct {
@@ -193,49 +190,137 @@ type expiringCache struct {
 }
 
 func (e *expiringCache) Lookup(key interface{}) (interface{}, error) {
-	var entry *cacheEntry
-
 	now := time.Now()
+
+	value, ok, entry := e.loadValueAndEntry(key, now)
+	if ok {
+		return value, nil
+	}
+
+	if entry == nil {
+		value, ok, entry = e.allocateAndStoreLockedEntry(key, now)
+		if ok {
+			return value, nil
+		}
+	} else {
+		// Lock entry returned by loadValueAndEntry()
+		entry.Lock.Lock()
+	}
+
+	if e.isEntryValid(entry, now) {
+		value = entry.Value
+		entry.Lock.Unlock()
+
+		return value, nil
+	}
+
+	value, err := e.Fetch(key)
+	if err != nil {
+		entry.Lock.Unlock()
+		return nil, err
+	}
+
+	entry.Deleted = false
+	entry.Written = now
+	entry.Value = value
+
+	entry.Lock.Unlock()
+
+	return value, nil
+}
+
+func (e *expiringCache) loadValueAndEntry(
+	key interface{}, now time.Time,
+) (interface{}, bool, *cacheEntry) {
+	var entry *cacheEntry
 
 	entryIntf, ok := e.cache.Load(key)
 	if ok {
 		entry = entryIntf.(*cacheEntry)
 
-		if entry.Written.Add(e.TTL).After(now) {
-			// Valid
-			return entry.Value, nil
+		entry.Lock.RLock()
+
+		if e.isEntryValid(entry, now) {
+			value := entry.Value
+			entry.Lock.RUnlock()
+
+			return value, true, nil
+		} else {
+			entry.Lock.RUnlock()
+
 		}
 	}
 
-	value, err := e.Fetch(key)
-	if err != nil {
-		return nil, err
+	return nil, false, entry
+}
+
+func (e *expiringCache) allocateAndStoreLockedEntry(
+	key interface{}, now time.Time,
+) (interface{}, bool, *cacheEntry) {
+	entry := &cacheEntry{}
+
+	entry.Lock.Lock()
+
+	loadedEntryIntf, loaded := e.cache.LoadOrStore(key, entry)
+	if loaded {
+		// Unlock entry to be discarded... just for form
+		entry.Lock.Unlock()
+
+		entry = loadedEntryIntf.(*cacheEntry)
+
+		entry.Lock.RLock()
+
+		if e.isEntryValid(entry, now) {
+			value := entry.Value
+			entry.Lock.RUnlock()
+
+			return value, true, nil
+		} else {
+			entry.Lock.RUnlock()
+
+			entry.Lock.Lock()
+		}
 	}
 
-	if entry == nil {
-		entry = &cacheEntry{}
-		entry.Written = now
-		entry.Value = value
-		e.cache.Store(key, entry)
-	} else {
-		entry.Written = now
-		entry.Value = value
-	}
+	return nil, false, entry
+}
 
-	return value, nil
+func (e *expiringCache) isEntryValid(entry *cacheEntry, now time.Time) bool {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	return !entry.Deleted && entry.Written.Add(e.TTL).After(now)
 }
 
 func (e *expiringCache) RemoveExpired() uint {
 	var removed uint
+	var toBeDeleted bool
 
 	now := time.Now()
 
 	e.cache.Range(func(key interface{}, value interface{}) bool {
 		entry := value.(*cacheEntry)
 
-		if entry.Written.Add(e.TTL).Before(now) {
+		entry.Lock.RLock()
+
+		toBeDeleted = entry.Written.Add(e.TTL).Before(now)
+
+		entry.Lock.RUnlock()
+
+		if toBeDeleted {
+			entry.Lock.Lock()
+
+			// Check again
+			if !entry.Written.Add(e.TTL).Before(now) {
+				entry.Lock.Unlock()
+				return true
+			}
+
+			entry.Deleted = true
 			e.cache.Delete(key)
 			removed++
+
+			entry.Lock.Unlock()
 		}
 
 		return true
