@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/go-errors/errors"
 	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 
@@ -53,7 +54,7 @@ type Config struct {
 
 var DefaultConfig = Config{
 	MaxTransactionSize: 10000,
-	Location:           time.Local,
+	Location:           time.UTC,
 }
 
 type Syncer struct {
@@ -76,6 +77,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 		"run":        s.Config.RunId,
 		"snapshot":   s.Config.SnapshotName,
 		"filesystem": s.Config.FileSystem.GetName(),
+		"subpath":    s.Config.Subpath,
 		"package":    "medasync",
 		"component":  "Syncer",
 	})
@@ -187,12 +189,16 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 
 	err := s.fetchFileSystemPathInfo()
 	if err != nil {
-		return err
+		// TODO
+		// ERRORS
+		return errors.Wrap(err, 0)
 	}
 
 	tx, prepStmt, err := s.openWriteInsertsTx(ctx)
 	if err != nil {
-		return err
+		// TODO
+		// ERRORS
+		return errors.Wrap(err, 0)
 	}
 	defer prepStmt.Close()
 	defer tx.Rollback()
@@ -202,12 +208,16 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return err
+			// TODO
+			// ERRORS
+			return errors.Wrap(err, 0)
 		}
 
 		cleanPath, err := s.cleanPath(fileData.Path)
 		if err != nil {
-			return err
+			// TODO
+			// ERRORS
+			return errors.Wrap(err, 0)
 		}
 
 		if len(cleanPath) > meda.FilesMaxPathLength {
@@ -232,7 +242,9 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 
 		_, err = prepStmt.ExecContext(ctx, &medaInsert)
 		if err != nil {
-			return err
+			// TODO
+			// ERRORS
+			return errors.Wrap(err, 0)
 		}
 
 		count += 1
@@ -241,12 +253,16 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		if txCount >= s.Config.MaxTransactionSize {
 			err = s.closeInsertsInsertTx(tx, prepStmt)
 			if err != nil {
-				return err
+				// TODO
+				// ERRORS
+				return errors.Wrap(err, 0)
 			}
 
 			tx, prepStmt, err = s.openWriteInsertsTx(ctx)
 			if err != nil {
-				return err
+				// TODO
+				// ERRORS
+				return errors.Wrap(err, 0)
 			}
 
 			txCount = 0
@@ -255,7 +271,9 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 
 	err = s.closeInsertsInsertTx(tx, prepStmt)
 	if err != nil {
-		return err
+		// TODO
+		// ERRORS
+		return errors.Wrap(err, 0)
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
