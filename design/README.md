@@ -75,6 +75,8 @@ The meta data synchronisation has three steps:
 
 #### SQL Scheme
 
+Ensure that a proper UTF-8 encoding (utf8mb4) is used.
+
 ##### Files (table `files`)
 
 The Files table is the central data store for both file meta data and checksums.
@@ -90,10 +92,10 @@ table.
 
 
  * `id` (`bigint(20) unsigned`) - Auto increment id, primary key.
- * `path` (`varchar(4096)`) - The path of the file. The path must be relative to
-    the root of the checksumming process but begins with a slash. This column is
-    used as a `JOIN ON` column, thus a secondary index should be created on this
-    column.
+ * `path` (`varbinary(4096)`) - The path of the file. The path must be relative
+    to the root of the checksumming process but begins with a slash. This column
+    is used as a `JOIN ON` column, thus a secondary index should be created on
+    this column.
  * `modification_time` (`datetime(6)`) - The modification time of the file as
     seen by the file system. This column is used to detect file changes.
  * `file_size` (`bigint(20) unsigned`) - The file size of the file, as seen by
@@ -120,7 +122,7 @@ deleted from the Inserts table.
 
  * `id` (`bigint(20) unsigned`) - Auto increment id, primary key. This column is
     not related to the `id` column of the Files table.
- * `path` (`varchar(4096)`) - The path of file. This column is copied over to
+ * `path` (`varbinary(4096)`) - The path of file. This column is copied over to
     the Files table.
  * `modification_time` (`datetime(6)`) - The modification time of the file. This
     column is copied over to the Files table.
@@ -158,7 +160,7 @@ tools.
 
  * `id` (`bigint(20) unsigned`) - Auto increment id, primary key.
  * `file_id` (`bigint(20) unsigned`) - The id of the file in the Files table.
- * `path` (`varchar(4096)`) - The path of the file. Corresponds to the column
+ * `path` (`varbinary(4096)`) - The path of the file. Corresponds to the column
     of the same name in the Files table at the time of generation of this
     warning.
  * `modification_time` (`datetime(6)`) - The modification time of the file.

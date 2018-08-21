@@ -16,7 +16,7 @@ const checksumWarningsCreateTableQuery = GenericQuery(`
 	CREATE TABLE IF NOT EXISTS {CHECKSUM_WARNINGS} (
 		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 		file_id bigint(20) unsigned NOT NULL,
-		path varchar(4096) NOT NULL,
+		path varbinary(4096) NOT NULL,
 		modification_time datetime(6) NOT NULL,
 		file_size bigint(20) unsigned NOT NULL,
 		expected_checksum varbinary(64) NOT NULL,

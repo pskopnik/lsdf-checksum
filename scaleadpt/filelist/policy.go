@@ -4,20 +4,27 @@ import (
 	"bufio"
 	"os"
 
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/utils"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
-	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/internal/utils"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
-var ruleContent = `RULE 'listFilesRule'
+const escapeRuleContent = `RULE 'escapeRule'
+	EXTERNAL LIST 'files'
+	ESCAPE '%|.,-: '`
+const listFilesRuleContent = `RULE 'listFilesRule'
 	LIST 'files'
 	SHOW('|' || varchar(file_size) || '|' || varchar(modification_time) || '|')`
 
 var FileListPolicy = &scaleadpt.Policy{
 	Rules: []*scaleadpt.Rule{
 		&scaleadpt.Rule{
+			RuleName: "escapeRule",
+			Content:  escapeRuleContent,
+		},
+		&scaleadpt.Rule{
 			RuleName: "listFilesRule",
-			Content:  ruleContent,
+			Content:  listFilesRuleContent,
 		},
 	},
 }

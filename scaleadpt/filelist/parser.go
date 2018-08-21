@@ -3,6 +3,7 @@ package filelist
 import (
 	"errors"
 	"io"
+	"net/url"
 	"text/scanner"
 	"time"
 )
@@ -165,7 +166,13 @@ func (p *Parser) parseFilename(fileData *FileData) error {
 		return UnexpectedFormatErr
 	}
 
-	fileData.Path = p.s.TokenText()
+	text := p.s.TokenText()
+	unescaped, err := url.QueryUnescape(text)
+	if err != nil {
+		return err
+	}
+
+	fileData.Path = unescaped
 
 	return nil
 }

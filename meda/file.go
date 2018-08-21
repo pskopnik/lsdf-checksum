@@ -23,7 +23,7 @@ const filesCreateTableQuery = GenericQuery(`
 	CREATE TABLE IF NOT EXISTS {FILES} (
 		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 		rand double NOT NULL,
-		path varchar(4096) NOT NULL,
+		path varbinary(4096) NOT NULL,
 		modification_time datetime(6) NOT NULL,
 		file_size bigint(20) unsigned NOT NULL,
 		last_seen bigint(20) unsigned NOT NULL,
@@ -32,7 +32,7 @@ const filesCreateTableQuery = GenericQuery(`
 		last_read bigint(20) unsigned DEFAULT NULL,
 		PRIMARY KEY (id),
 		KEY rand (rand),
-		KEY path (path(1024))
+		KEY path (path(2048))
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 
