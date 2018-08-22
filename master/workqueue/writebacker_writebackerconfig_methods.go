@@ -5,7 +5,10 @@ import (
 )
 
 func (w *WriteBackerConfig) CopyFrom(other *WriteBackerConfig) {
-	w.Batch = other.Batch
+	w.Batch.MinTime = other.Batch.MinTime
+	w.Batch.MinItems = other.Batch.MinItems
+	w.Batch.MaxTime = other.Batch.MaxTime
+	w.Batch.MaxItems = other.Batch.MaxItems
 
 	w.FileSystemName = other.FileSystemName
 	w.Namespace = other.Namespace

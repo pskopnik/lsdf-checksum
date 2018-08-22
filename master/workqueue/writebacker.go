@@ -161,27 +161,19 @@ func (w *WriteBacker) endOfQueueHandler() error {
 
 func (w *WriteBacker) batchErrorsHandler() error {
 	var err error
-	var ok bool
-L:
-	for {
-		select {
-		case err, ok = <-w.batchErrors:
-			if !ok {
-				break L
-			}
 
-			entry := w.fieldLogger.WithError(err)
-			if processorError, ok := err.(*batch.ProcessorError); ok {
-				err = processorError.Original()
-			}
-			if errorsErr, ok := err.(*errors.Error); ok {
-				entry = entry.WithField("stack_trace", errorsErr.ErrorStack())
-			}
+	for err = range w.batchErrors {
+		entry := w.fieldLogger.WithError(err)
 
-			entry.Warn("Encountered error during batch processing")
-		case <-w.tomb.Dying():
-			break L
+		if processorError, ok := err.(*batch.ProcessorError); ok {
+			err = processorError.Original()
 		}
+
+		if errorsErr, ok := err.(*errors.Error); ok {
+			entry = entry.WithField("stack_trace", errorsErr.ErrorStack())
+		}
+
+		entry.Warn("Encountered error during batch processing")
 	}
 
 	return nil
