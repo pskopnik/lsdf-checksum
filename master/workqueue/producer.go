@@ -14,6 +14,7 @@ import (
 
 type ProducerConfig struct {
 	MinWorkPackFileSize uint64
+	MaxWorkPackFileNumber uint64
 	FetchRowBatchSize   uint64
 	RowBufferSize       uint64
 
@@ -31,6 +32,7 @@ type ProducerConfig struct {
 
 var ProducerDefaultConfig = &ProducerConfig{
 	MinWorkPackFileSize: 5 * 1024 * 1024, // 5 MiB
+	MaxWorkPackFileNumber: 1000,
 	FetchRowBatchSize:   1000,
 	RowBufferSize:       1000,
 }
@@ -254,16 +256,17 @@ func (p *Producer) produce(n uint) (bool, error) {
 		Files:          make([]WorkPackFile, 0, 1),
 	}
 	workPackMap := make(map[string]interface{})
-	var totalFileSize uint64
+	var totalFileSize, numberOfFiles uint64
 	var exhausted, ok bool
 
 	for i := uint(0); i < n && !exhausted; i++ {
 		// Initialise work pack
 		workPack.Files = workPack.Files[:0]
 		totalFileSize = 0
+		numberOfFiles = 0
 
 		// Prepare work pack
-		for totalFileSize < p.Config.MinWorkPackFileSize {
+		for totalFileSize < p.Config.MinWorkPackFileSize && numberOfFiles < p.Config.MaxWorkPackFileNumber  {
 			// If the Producer is dying, filesChan is closed by rowFetcher().
 			// Thus, this loop will also shut down quickly.
 			file, ok = <-p.filesChan
@@ -278,6 +281,7 @@ func (p *Producer) produce(n uint) (bool, error) {
 			})
 
 			totalFileSize += file.FileSize
+			numberOfFiles++
 		}
 
 		err = p.enqueue(&workPack, workPackMap)
