@@ -119,7 +119,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 		return err
 	}
 
-	err = s.syncDatabase()
+	err = s.syncDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 func (s *Syncer) prepareDatabase(ctx context.Context) error {
 	s.fieldLogger.Info("Starting preparing the meta data database")
 
-	res, err := s.Config.DB.ExecContext(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
+	res, err := s.execWithReadCommitted(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
 		return err
 	}
@@ -345,39 +345,39 @@ func (s *Syncer) cleanPath(path string) (string, error) {
 	return "/" + relPath, nil
 }
 
-func (s *Syncer) syncDatabase() error {
+func (s *Syncer) syncDatabase(ctx context.Context) error {
 	s.fieldLogger.Info("Starting syncing the meta data database")
 
-	res, err := s.Config.DB.Exec(updateQuery.SubstituteAll(s.Config.DB), s.Config.RunId, s.Config.RunId)
+	res, err := s.execWithReadCommitted(ctx, updateQuery.SubstituteAll(s.Config.DB), s.Config.RunId, s.Config.RunId)
 	if err != nil {
-		return err
+		return errors.Wrap(err, 0)
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed update of existing files in meta data database")
 
-	res, err = s.Config.DB.Exec(insertQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
+	res, err = s.execWithReadCommitted(ctx, insertQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
-		return err
+		return errors.Wrap(err, 0)
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed copying of new files in meta data database")
 
-	res, err = s.Config.DB.Exec(deleteQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
+	res, err = s.execWithReadCommitted(ctx, deleteQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
-		return err
+		return errors.Wrap(err, 0)
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed deleting of old files in meta data database")
 
-	res, err = s.Config.DB.Exec(cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
+	res, err = s.execWithReadCommitted(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
-		return err
+		return errors.Wrap(err, 0)
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
@@ -387,6 +387,28 @@ func (s *Syncer) syncDatabase() error {
 	s.fieldLogger.Info("Finished syncing the meta data database")
 
 	return nil
+}
+
+func (s *Syncer) execWithReadCommitted(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	tx, err := s.Config.DB.BeginTxx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelReadCommitted,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, 0)
+	}
+
+	res, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		_ = tx.Commit()
+		return nil, errors.Wrap(err, 0)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, errors.Wrap(err, 0)
+	}
+
+	return res, nil
 }
 
 func alwaysRowsAffected(res sql.Result) int64 {
