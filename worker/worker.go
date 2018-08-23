@@ -6,7 +6,6 @@ import (
 	"errors"
 	"hash"
 	"io"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"golang.org/x/time/rate"
 	"gopkg.in/tomb.v2"
 
+	"git.scc.kit.edu/sdm/lsdf-checksum/lengthsafe"
 	"git.scc.kit.edu/sdm/lsdf-checksum/master/workqueue"
 	"git.scc.kit.edu/sdm/lsdf-checksum/ratedreader"
 )
@@ -209,7 +209,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 
 	for _, file := range workPack.Files {
 		path := filepath.Join(prefix, file.Path)
-		fileReader, err := os.Open(path)
+		fileReader, err := lengthsafe.Open(path)
 		if err != nil {
 			w.Worker.fieldLogger.WithError(err).WithFields(logrus.Fields{
 				"action":     "skipping",

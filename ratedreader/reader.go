@@ -1,3 +1,7 @@
+// Package ratedreader provides an implementation of a rate limited io.Reader.
+//
+// A token bucket algorithm (https://godoc.org/golang.org/x/time/rate) performs
+// the rate limiting / scheduling.
 package ratedreader
 
 import (
