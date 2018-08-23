@@ -2,7 +2,6 @@ package worker
 
 import (
 	"testing"
-	"time"
 )
 
 const testKey = "someKey"
@@ -12,12 +11,14 @@ func BenchmarkExpiringCache(b *testing.B) {
 	count := 0
 
 	cache := expiringCache{
-		TTL: time.Hour,
+		TTL: -1,
 		Fetch: func(key interface{}) (interface{}, error) {
 			count++
 			return testStr, nil
 		},
 	}
+
+	// b.SetParallelism(10)
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {

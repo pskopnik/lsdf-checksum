@@ -177,12 +177,24 @@ func (p *Prefixer) reap() uint {
 }
 
 type cacheEntry struct {
+	Exists  bool
+	Lock    sync.RWMutex
 	Written time.Time
 	Value   interface{}
-	Deleted bool
-	Lock    sync.RWMutex
 }
 
+// expiringCache provides a cache with map-style access where each entry has a
+// maximum lifetime.
+// After an entry expired, it has to be re-fetched.
+//
+// Create an expiringCache by declaring a new struct and setting its Fetch and
+// optionally its TTL fields.
+// If TTL is 0, keys will be fetched on every Lookup().
+// If TTL is negative, entries will have an infinite lifetime and will never be
+// re-fetched.
+//
+// When an entry expired, it is still allocated in the map. Use RemoveExpired()
+// to remove expired entries.
 type expiringCache struct {
 	cache sync.Map
 	TTL   time.Duration
@@ -220,7 +232,7 @@ func (e *expiringCache) Lookup(key interface{}) (interface{}, error) {
 		return nil, err
 	}
 
-	entry.Deleted = false
+	entry.Exists = true
 	entry.Written = now
 	entry.Value = value
 
@@ -289,12 +301,16 @@ func (e *expiringCache) isEntryValid(entry *cacheEntry, now time.Time) bool {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	return !entry.Deleted && entry.Written.Add(e.TTL).After(now)
+	return entry.Exists && e.TTL < 0 || entry.Written.Add(e.TTL).After(now)
 }
 
 func (e *expiringCache) RemoveExpired() uint {
 	var removed uint
 	var toBeDeleted bool
+
+	if e.TTL < 0 {
+		return removed
+	}
 
 	now := time.Now()
 
@@ -316,7 +332,7 @@ func (e *expiringCache) RemoveExpired() uint {
 				return true
 			}
 
-			entry.Deleted = true
+			entry.Exists = false
 			e.cache.Delete(key)
 			removed++
 
