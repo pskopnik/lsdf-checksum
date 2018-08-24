@@ -52,7 +52,7 @@ func gpfsEntryScan(ctx context.Context, entry gofsutil.Entry, cache map[string]g
 	copy(info.Opts, entry.MountOpts)
 	info.Path = entry.MountPoint
 	info.Type = entry.FSType
-	info.Source = entry.MountSource
+	info.Source = entry.Root
 
 	if cachedEntry, ok := cache[entry.MountSource]; ok {
 		info.Source = filepath.Join(cachedEntry.MountPoint, entry.Root)
@@ -72,7 +72,10 @@ var _ error = &CLIError{}
 type CLIError struct {
 	*exec.ExitError
 
-	// ExitStatus it the exit status of the command.
+	// Args are the arguments passed to the program.
+	// The name of the program is Args[0].
+	Args []string
+	// ExitStatus is the exit status of the command.
 	// If unavailable, ExitStatus is set to 0.
 	ExitStatus int
 	// Stderr is the stderr output of the command as a string.
@@ -82,13 +85,15 @@ type CLIError struct {
 func (c *CLIError) Error() string {
 	if c.ExitStatus > 0 {
 		return fmt.Sprintf(
-			"Command failed, exit status = %d.\nStderr of the command:\n%s",
+			"Command failed, exit status = %d.\nCommand: %s\nStderr of the command:\n%s",
 			c.ExitStatus,
+			strings.Join(c.Args, " "),
 			c.Stderr,
 		)
 	} else {
 		return fmt.Sprintf(
-			"Command failed.\nStderr of the command:\n%s",
+			"Command failed.\nCommand: %s\nStderr of the command:\n%s",
+			strings.Join(c.Args, " "),
 			c.Stderr,
 		)
 	}
@@ -353,11 +358,21 @@ func (c *CLIDriver) GetMountRoot(filesystem DriverFileSystem) (string, error) {
 	fileSystemRoot, err := c.getMountRootLsfs(filesystem)
 	if err == nil {
 		return fileSystemRoot, nil
-	} else if !(utils.IsExecNotFound(err) || err == PrefixNotFound) {
+	} else if err == FileSystemNotFound {
+		// If the file system could not be found return the error
+		return "", err
+	} else if utils.IsExecNotFound(err) || err == PrefixNotFound {
+		// If the lsfs executable could not be found or the output did not
+		// match the expected format go on to try getMountRootMountinfo
+	} else if cliError, ok := err.(*CLIError); ok && cliError.ExitStatus != 0 {
+		// If the lsfs returned an unsuccessful exit status go on
+		// to try getMountRootMountinfo
+	} else {
+		// Otherwise: Return error
 		return "", err
 	}
 
-	fileSystemRoot, err = c.getMountRootMount(filesystem)
+	fileSystemRoot, err = c.getMountRootMountinfo(filesystem)
 	if err != nil {
 		return "", err
 	}
@@ -400,7 +415,7 @@ func (c *CLIDriver) getMountRootLsfs(filesystem DriverFileSystem) (string, error
 	return "", FileSystemNotFound
 }
 
-func (c *CLIDriver) getMountRootMount(filesystem DriverFileSystem) (string, error) {
+func (c *CLIDriver) getMountRootMountinfo(filesystem DriverFileSystem) (string, error) {
 	filesystemName := filesystem.GetName()
 
 	mounts, err := gpfsFsInfo.GetMounts(context.Background())
@@ -409,7 +424,7 @@ func (c *CLIDriver) getMountRootMount(filesystem DriverFileSystem) (string, erro
 	}
 
 	for _, mount := range mounts {
-		if mount.Source == filesystemName {
+		if mount.Source == "/" && (mount.Device == filesystemName || mount.Device == "/dev/" + filesystemName) {
 			return mount.Path, nil
 		}
 	}
@@ -549,7 +564,7 @@ func (c *CLIDriver) runOutput(name string, options ...cmdOption) ([]byte, error)
 
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			err = c.wrapError(exitErr)
+			err = c.wrapError(exitErr, cmd)
 		}
 
 		return output, err
@@ -558,7 +573,7 @@ func (c *CLIDriver) runOutput(name string, options ...cmdOption) ([]byte, error)
 	return output, nil
 }
 
-func (c *CLIDriver) wrapError(exitErr *exec.ExitError) error {
+func (c *CLIDriver) wrapError(exitErr *exec.ExitError, cmd *exec.Cmd) error {
 	stderr := string(exitErr.Stderr)
 
 	exitStatus := 0
@@ -569,6 +584,7 @@ func (c *CLIDriver) wrapError(exitErr *exec.ExitError) error {
 	submatches := gpfsErrorRegExp.FindStringSubmatch(stderr)
 
 	cliErr := CLIError{
+		Args:       cmd.Args,
 		ExitError:  exitErr,
 		Stderr:     stderr,
 		ExitStatus: exitStatus,
