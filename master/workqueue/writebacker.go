@@ -5,12 +5,11 @@ import (
 	"context"
 	"time"
 
-	// "github.com/MasterOfBinary/gobatch/batch"
+	"github.com/MasterOfBinary/gobatch/batch"
 	"github.com/go-errors/errors"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jmoiron/sqlx"
-	"github.com/seoester/gobatch/batch"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
