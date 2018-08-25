@@ -59,6 +59,15 @@ func NewQueueWatcher(config *QueueWatcherConfig) *QueueWatcher {
 }
 
 func (q *QueueWatcher) Start(ctx context.Context) {
+	q.fieldLogger = q.Config.Logger.WithFields(logrus.Fields{
+		"run":        q.Config.RunId,
+		"snapshot":   q.Config.SnapshotName,
+		"filesystem": q.Config.FileSystemName,
+		"namespace":  q.Config.Namespace,
+		"package":    "workqueue",
+		"component":  "QueueWatcher",
+	})
+
 	q.tomb, _ = tomb.WithContext(ctx)
 
 	q.tomb.Go(q.run)
@@ -82,15 +91,6 @@ func (q *QueueWatcher) Err() error {
 
 func (q *QueueWatcher) run() error {
 	var err error
-
-	q.fieldLogger = q.Config.Logger.WithFields(logrus.Fields{
-		"run":        q.Config.RunId,
-		"snapshot":   q.Config.SnapshotName,
-		"filesystem": q.Config.FileSystemName,
-		"namespace":  q.Config.Namespace,
-		"package":    "workqueue",
-		"component":  "QueueWatcher",
-	})
 
 	q.fieldLogger.Info("Starting watching")
 
