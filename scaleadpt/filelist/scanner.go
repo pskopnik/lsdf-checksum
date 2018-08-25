@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ErrUnexpectedFormat = errors.New("Unexpteced format encountered.")
+	ErrUnexpectedFormat = errors.New("unexpected format encountered")
 )
 
 const (

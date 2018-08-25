@@ -355,7 +355,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 				"action":        "ignoring",
 				"file_id":       id,
 				"file_checksum": checksum,
-			}).Warn("Database returned non")
+			}).Warn("Database returned excess files")
 		}
 	}
 

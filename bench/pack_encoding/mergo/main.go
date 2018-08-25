@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	errInvalidType error = errors.New("Invalid type.")
+	errInvalidType error = errors.New("invalid type")
 )
 
 var (

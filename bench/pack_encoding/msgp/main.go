@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	errUnexpectedTailingBytes error = errors.New("Unexpected tailing bytes")
+	errUnexpectedTailingBytes error = errors.New("unexpected tailing bytes")
 )
 
 var sampleWorkPack workqueue.WorkPack = workqueue.WorkPack{

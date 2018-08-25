@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrMaxChecksExceeded = errors.New("MaxRetryJobChecks exceeded")
+	ErrMaxChecksExceeded = errors.New("number of checks exceeded MaxRetryJobChecks")
 )
 
 //go:generate confions config QueueWatcherConfig

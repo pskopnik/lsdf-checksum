@@ -24,11 +24,11 @@ import (
 )
 
 var (
-	ErrSnapshotDoesNotExist = errors.New("Snapshot does not exist.")
-	ErrUnexpectedFormat     = errors.New("Unexpected format encountered.")
-	ErrPrefixNotFound       = errors.New("Prefix not found.")
-	ErrHeaderNotFound       = errors.New("A header field was not found.")
-	ErrFileSystemNotFound   = errors.New("The file system was not found.")
+	ErrSnapshotDoesNotExist = errors.New("snapshot does not exist")
+	ErrUnexpectedFormat     = errors.New("unexpected format encountered")
+	ErrPrefixNotFound       = errors.New("prefix not found")
+	ErrHeaderNotFound       = errors.New("a header field was not found")
+	ErrFileSystemNotFound   = errors.New("the file system was not found")
 )
 
 const gpfsMountType = "gpfs"
