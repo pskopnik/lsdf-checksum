@@ -179,7 +179,7 @@ func (q *QueueScheduler) GetQueueInfo() (count int64, latency int64, err error) 
 }
 
 // GetWorkerNum returns the number of (alive) workers currently registered
-// with the queuing system.
+// with the queueing system.
 // This is equal to the total currency of the queueing system.
 //
 // This method is meant to be part of the lower facing API (towards
@@ -303,9 +303,9 @@ type ewmaSchedulerPhase int
 
 // Constants related to EWMAScheduler
 const (
-	esp_Uninitialised ewmaSchedulerPhase = iota
-	esp_StartUp
-	esp_Maintaining
+	espUninitialised ewmaSchedulerPhase = iota
+	espStartUp
+	espMaintaining
 )
 
 var _ SchedulingController = &EWMAScheduler{}
@@ -341,7 +341,7 @@ func (e *EWMAScheduler) Init(queueScheduler *QueueScheduler) {
 	})
 
 	// Initialise state
-	e.phase = esp_StartUp
+	e.phase = espStartUp
 	e.startUpStepCount = 0
 	e.previousQueueLength = 0
 	e.deviationEWMA = 0
@@ -411,7 +411,7 @@ func (e *EWMAScheduler) Schedule() {
 		deviation = -deviation
 	}
 
-	consumptionAlpha := 1 - math.Exp(-normaliseDuration(timePassed, e.Config.ConsumptionLifetime))
+	consumptionAlpha := float64(1.0) - math.Exp(-normaliseDuration(timePassed, e.Config.ConsumptionLifetime))
 	e.consumptionEWMA = updateEwma(e.consumptionEWMA, consumptionAlpha, normaliseDuration(time.Second, timePassed, float64(consumption)))
 
 	e.deviationEWMA = updateEwma(e.deviationEWMA, e.Config.MaintainingDeviationAlpha, normaliseDuration(time.Second, timePassed, deviation))
@@ -439,27 +439,42 @@ func (e *EWMAScheduler) Schedule() {
 		} else {
 			e.threshold *= 2
 		}
-		e.fieldLogger.WithField("previous_threshold", prevThreshold).WithField("threshold", e.threshold).Debug("Exhausted, doubled threshold")
+		e.fieldLogger.WithFields(logrus.Fields{
+			"previous_threshold": prevThreshold,
+			"threshold":          e.threshold,
+		}).Debug("Exhausted, doubled threshold")
 	} else {
 		switch e.phase {
-		case esp_StartUp:
-			e.startUpStepCount += 1
+		case espStartUp:
+			e.startUpStepCount++
 			e.threshold = e.minLength(e.startupThreshold(uint(workerNum)), uint(workerNum))
 
-			e.fieldLogger.WithField("threshold", e.threshold).WithField("phase", "startup").Debug("Calculated threshold")
+			e.fieldLogger.WithFields(logrus.Fields{
+				"threshold": e.threshold,
+				"phase":     "startup",
+			}).Debug("Calculated threshold")
 			if e.startUpStepCount >= e.Config.StartUpSteps {
-				e.phase = esp_Maintaining
+				e.phase = espMaintaining
 				e.queueScheduler.SetInterval(e.Config.MaintainingInterval)
 
 				e.threshold = e.minLength(e.maintainingThreshold(), uint(workerNum))
-				e.fieldLogger.WithField("threshold", e.threshold).WithField("phase", "startup").Debug("Switching to maintaining phase")
+				e.fieldLogger.WithFields(logrus.Fields{
+					"threshold": e.threshold,
+					"phase":     "startup",
+				}).Debug("Switching to maintaining phase")
 			}
-		case esp_Maintaining:
+		case espMaintaining:
 			e.threshold = e.minLength(e.maintainingThreshold(), uint(workerNum))
-			e.fieldLogger.WithField("threshold", e.threshold).WithField("phase", "maintaining").Debug("Calculated threshold")
+			e.fieldLogger.WithFields(logrus.Fields{
+				"threshold": e.threshold,
+				"phase":     "maintaining",
+			}).Debug("Calculated threshold")
 		default:
 			e.threshold = e.minLength(0, uint(workerNum))
-			e.fieldLogger.WithField("threshold", e.threshold).WithField("phase", "unknown").Debug("Calculated threshold")
+			e.fieldLogger.WithFields(logrus.Fields{
+				"threshold": e.threshold,
+				"phase":     "unknown",
+			}).Debug("Calculated threshold")
 		}
 	}
 
@@ -513,6 +528,10 @@ func (e *EWMAScheduler) minLength(calculatedLength uint, workerNum uint) uint {
 
 	if calculatedLength > minLength {
 		minLength = calculatedLength
+	}
+
+	if minLength == 0 {
+		minLength = 1
 	}
 
 	return minLength
