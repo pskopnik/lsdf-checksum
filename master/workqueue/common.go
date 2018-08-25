@@ -9,8 +9,6 @@ var (
 	ErrTailingBytes        error = errors.New("Encoding format error: Unexpected tailing bytes")
 	ErrPackKeyNotFound           = errors.New("Pack key not found in Job's Args")
 	ErrPackValueCastFailed       = errors.New("Failed to cast value of pack key in Job's Args")
-
-	stopSignalled error = errors.New("Stop signalled")
 )
 
 const (

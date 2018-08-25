@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"crypto/sha1"
-	"errors"
 	"hash"
 	"io"
 	"path/filepath"
@@ -15,16 +14,13 @@ import (
 	"golang.org/x/time/rate"
 	"gopkg.in/tomb.v2"
 
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/lengthsafe"
 	"git.scc.kit.edu/sdm/lsdf-checksum/master/workqueue"
 	"git.scc.kit.edu/sdm/lsdf-checksum/ratedreader"
 )
 
 const bufferSize int = 32 * 1024
-
-var (
-	stopSignalled error = errors.New("Stop signalled")
-)
 
 type Config struct {
 	Concurrency   int
@@ -112,7 +108,7 @@ func (w *Worker) Start(ctx context.Context) {
 }
 
 func (w *Worker) SignalStop() {
-	w.tomb.Kill(stopSignalled)
+	w.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
 func (w *Worker) Wait() error {

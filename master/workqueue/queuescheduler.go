@@ -10,6 +10,8 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
+
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 )
 
 type SchedulingController interface {
@@ -86,7 +88,7 @@ func (q *QueueScheduler) Start(ctx context.Context) {
 }
 
 func (q *QueueScheduler) SignalStop() {
-	q.tomb.Kill(stopSignalled)
+	q.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
 func (q *QueueScheduler) Wait() error {

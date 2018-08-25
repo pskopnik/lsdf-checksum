@@ -9,6 +9,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/cache"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/master/workqueue"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
 )
@@ -60,7 +61,7 @@ func (p *Prefixer) Start(ctx context.Context) {
 }
 
 func (p *Prefixer) SignalStop() {
-	p.tomb.Kill(stopSignalled)
+	p.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
 func (p *Prefixer) Wait() error {

@@ -9,6 +9,8 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
+
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 )
 
 var (
@@ -63,7 +65,7 @@ func (q *QueueWatcher) Start(ctx context.Context) {
 }
 
 func (q *QueueWatcher) SignalStop() {
-	q.tomb.Kill(stopSignalled)
+	q.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
 func (q *QueueWatcher) Wait() error {

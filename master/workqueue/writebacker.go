@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 )
 
@@ -124,7 +125,7 @@ func (w *WriteBacker) SignalEndOfQueue() {
 }
 
 func (w *WriteBacker) SignalStop() {
-	w.tomb.Kill(stopSignalled)
+	w.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
 func (w *WriteBacker) Wait() error {

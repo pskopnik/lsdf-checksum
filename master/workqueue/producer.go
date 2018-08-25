@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 )
 
@@ -94,7 +95,7 @@ func (p *Producer) Start(ctx context.Context) {
 }
 
 func (p *Producer) SignalStop() {
-	p.tomb.Kill(stopSignalled)
+	p.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
 func (p *Producer) Wait() error {
