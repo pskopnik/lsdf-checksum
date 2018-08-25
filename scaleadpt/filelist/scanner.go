@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	UnexpectedFormatErr = errors.New("Unexpteced format encountered.")
+	ErrUnexpectedFormat = errors.New("Unexpteced format encountered.")
 )
 
 const (
@@ -42,7 +42,7 @@ func (s *Scanner) ParseInt64(allowWhitespace bool) (int64, error) {
 	}()
 
 	if s.Scan() != scanner.Int {
-		return 0, UnexpectedFormatErr
+		return 0, ErrUnexpectedFormat
 	}
 
 	parsedInt, err := strconv.ParseInt(s.TokenText(), 10, 64)
@@ -69,7 +69,7 @@ func (s *Scanner) ParseUint64(allowWhitespace bool) (uint64, error) {
 	}()
 
 	if s.Scan() != scanner.Int {
-		return 0, UnexpectedFormatErr
+		return 0, ErrUnexpectedFormat
 	}
 
 	parsedInt, err := strconv.ParseUint(s.TokenText(), 10, 64)
@@ -103,7 +103,7 @@ func (s *Scanner) ParseTime(layout string, loc *time.Location) (time.Time, error
 	}()
 
 	if s.Scan() != scanner.Ident {
-		return time.Time{}, UnexpectedFormatErr
+		return time.Time{}, ErrUnexpectedFormat
 	}
 
 	if len(layout) == 0 {
@@ -140,7 +140,7 @@ func (s *Scanner) ExpectRune(r rune, allowWhitespace bool) error {
 	}()
 
 	if s.Scan() != r {
-		return UnexpectedFormatErr
+		return ErrUnexpectedFormat
 	}
 
 	return nil

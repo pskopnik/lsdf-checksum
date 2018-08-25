@@ -120,8 +120,8 @@ func (d *DB) RunsQueryAll(ctx context.Context, querier sqlx.QueryerContext) (*sq
 }
 
 var (
-	ErrInvalidRunSyncModeValue = errors.New("Invalid RunSyncMode value.")
-	ErrInvalidRunStateValue = errors.New("Invalid RunState value.")
+	ErrInvalidRunSyncModeValueType = errors.New("Invalid RunSyncMode value type.")
+	ErrInvalidRunStateValueType = errors.New("Invalid RunState value type.")
 )
 
 type RunSyncMode int8
@@ -155,7 +155,7 @@ func (r RunSyncMode) Value() (driver.Value, error) {
 func (r *RunSyncMode) Scan(src interface{}) error {
 	strSrc, ok := src.(string)
 	if !ok {
-		return ErrInvalidRunSyncModeValue
+		return ErrInvalidRunSyncModeValueType
 	}
 
 	switch strSrc {
@@ -217,7 +217,7 @@ func (r RunState) Value() (driver.Value, error) {
 func (r *RunState) Scan(src interface{}) error {
 	strSrc, ok := src.(string)
 	if !ok {
-		return ErrInvalidRunStateValue
+		return ErrInvalidRunStateValueType
 	}
 
 	switch strSrc {

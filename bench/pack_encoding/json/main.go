@@ -2,14 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/master/workqueue"
-)
-
-var (
-	unexpectedTailingBytes error = errors.New("Unexpected tailing bytes")
 )
 
 var sampleWorkPack workqueue.WorkPack = workqueue.WorkPack{

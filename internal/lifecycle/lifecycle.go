@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ErrStopSignalled = errors.New("Stop signalled.")
+	ErrStopSignalled = errors.New("stop signalled")
 )
 
 type AutonomousComponent interface {

@@ -91,7 +91,7 @@ func (p *Parser) ParseLine() (*FileData, error) {
 
 	next := p.s.Next()
 	if next != eol && next != scanner.EOF {
-		return nil, UnexpectedFormatErr
+		return nil, ErrUnexpectedFormat
 	}
 
 	return fileData, nil
@@ -163,7 +163,7 @@ func (p *Parser) parseFilename(fileData *FileData) error {
 	}()
 
 	if p.s.Scan() != scanner.Ident {
-		return UnexpectedFormatErr
+		return ErrUnexpectedFormat
 	}
 
 	text := p.s.TokenText()

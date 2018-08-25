@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	invalidType error = errors.New("invalidType")
+	errInvalidType error = errors.New("Invalid type.")
 )
 
 var (
@@ -29,7 +29,7 @@ func (s sliceTransformer) Transformer(typ reflect.Type) func(dst, src reflect.Va
 			dstType := dst.Type()
 			if dstType.Kind() != reflect.Slice {
 				fmt.Println(dstType)
-				return invalidType
+				return errInvalidType
 			}
 
 			srcLen := src.Len()

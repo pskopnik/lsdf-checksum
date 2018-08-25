@@ -24,11 +24,11 @@ import (
 )
 
 var (
-	SnapshotDoesNotExist = errors.New("Snapshot does not exist.")
-	UnexpectedFormat     = errors.New("Unexpected format encountered.")
-	PrefixNotFound       = errors.New("Prefix not found.")
-	HeaderNotFound       = errors.New("A header field was not found.")
-	FileSystemNotFound   = errors.New("The file system was not found.")
+	ErrSnapshotDoesNotExist = errors.New("Snapshot does not exist.")
+	ErrUnexpectedFormat     = errors.New("Unexpected format encountered.")
+	ErrPrefixNotFound       = errors.New("Prefix not found.")
+	ErrHeaderNotFound       = errors.New("A header field was not found.")
+	ErrFileSystemNotFound   = errors.New("The file system was not found.")
 )
 
 const gpfsMountType = "gpfs"
@@ -173,7 +173,7 @@ func (c *CLIDriver) GetSnapshot(filesystem DriverFileSystem, name string) (*Snap
 		if gpfsError, ok := err.(*CLIGPFSError); ok {
 			if gpfsError.MessageCode == "6027-2612" {
 				// https://www.ibm.com/support/knowledgecenter/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/6027-2612.htm
-				return nil, SnapshotDoesNotExist
+				return nil, ErrSnapshotDoesNotExist
 			}
 		}
 
@@ -186,7 +186,7 @@ func (c *CLIDriver) GetSnapshot(filesystem DriverFileSystem, name string) (*Snap
 	}
 
 	if len(snapshots) != 1 {
-		return nil, UnexpectedFormat
+		return nil, ErrUnexpectedFormat
 	}
 
 	return snapshots[0], nil
@@ -257,7 +257,7 @@ func (c *CLIDriver) DeleteSnapshot(filesystem DriverFileSystem, name string) err
 			if gpfsError.MessageCode == "6027-2683" || gpfsError.MessageCode == "6027-2684" {
 				// https://www.ibm.com/support/knowledgecenter/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/6027-2683.htm
 				// https://www.ibm.com/support/knowledgecenter/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/6027-2684.htm
-				return SnapshotDoesNotExist
+				return ErrSnapshotDoesNotExist
 			}
 		}
 
@@ -358,10 +358,10 @@ func (c *CLIDriver) GetMountRoot(filesystem DriverFileSystem) (string, error) {
 	fileSystemRoot, err := c.getMountRootLsfs(filesystem)
 	if err == nil {
 		return fileSystemRoot, nil
-	} else if err == FileSystemNotFound {
+	} else if err == ErrFileSystemNotFound {
 		// If the file system could not be found return the error
 		return "", err
-	} else if utils.IsExecNotFound(err) || err == PrefixNotFound {
+	} else if utils.IsExecNotFound(err) || err == ErrPrefixNotFound {
 		// If the lsfs executable could not be found or the output did not
 		// match the expected format go on to try getMountRootMountinfo
 	} else if cliError, ok := err.(*CLIError); ok && cliError.ExitStatus != 0 {
@@ -412,7 +412,7 @@ func (c *CLIDriver) getMountRootLsfs(filesystem DriverFileSystem) (string, error
 		return "", err
 	}
 
-	return "", FileSystemNotFound
+	return "", ErrFileSystemNotFound
 }
 
 func (c *CLIDriver) getMountRootMountinfo(filesystem DriverFileSystem) (string, error) {
@@ -429,7 +429,7 @@ func (c *CLIDriver) getMountRootMountinfo(filesystem DriverFileSystem) (string, 
 		}
 	}
 
-	return "", FileSystemNotFound
+	return "", ErrFileSystemNotFound
 }
 
 func (c *CLIDriver) GetSnapshotDirsInfo(filesystem DriverFileSystem) (*SnapshotDirsInfo, error) {
@@ -451,11 +451,11 @@ func (c *CLIDriver) parseSnapdirOutput(output []byte, filesystemName string) (*S
 	if lineCount == 1 {
 		submatches := snapdirOneLineRegExp.FindSubmatch(output)
 		if len(submatches) == 0 {
-			return nil, UnexpectedFormat
+			return nil, ErrUnexpectedFormat
 		}
 
 		if string(submatches[1]) != filesystemName {
-			return nil, UnexpectedFormat
+			return nil, ErrUnexpectedFormat
 		}
 
 		snapshotDirsInfo := &SnapshotDirsInfo{}
@@ -467,7 +467,7 @@ func (c *CLIDriver) parseSnapdirOutput(output []byte, filesystemName string) (*S
 		} else if len(submatches[5]) > 0 {
 			snapshotDirsInfo.AllDirectories = true
 		} else {
-			return nil, UnexpectedFormat
+			return nil, ErrUnexpectedFormat
 		}
 
 		snapshotDirsInfo.Global = snapshotDirsInfo.Fileset
@@ -478,11 +478,11 @@ func (c *CLIDriver) parseSnapdirOutput(output []byte, filesystemName string) (*S
 	} else if lineCount == 2 {
 		submatches := snapdirTwoLineRegExp.FindSubmatch(output)
 		if len(submatches) == 0 {
-			return nil, UnexpectedFormat
+			return nil, ErrUnexpectedFormat
 		}
 
 		if string(submatches[1]) != filesystemName || string(submatches[6]) != filesystemName {
-			return nil, UnexpectedFormat
+			return nil, ErrUnexpectedFormat
 		}
 		snapshotDirsInfo := &SnapshotDirsInfo{}
 
@@ -493,7 +493,7 @@ func (c *CLIDriver) parseSnapdirOutput(output []byte, filesystemName string) (*S
 		} else if len(submatches[5]) > 0 {
 			snapshotDirsInfo.AllDirectories = true
 		} else {
-			return nil, UnexpectedFormat
+			return nil, ErrUnexpectedFormat
 		}
 
 		snapshotDirsInfo.Global = string(submatches[7])
@@ -503,12 +503,12 @@ func (c *CLIDriver) parseSnapdirOutput(output []byte, filesystemName string) (*S
 		} else if len(submatches[10]) > 0 {
 			snapshotDirsInfo.GlobalsInFileset = true
 		} else {
-			return nil, UnexpectedFormat
+			return nil, ErrUnexpectedFormat
 		}
 
 		return snapshotDirsInfo, nil
 	} else {
-		return nil, UnexpectedFormat
+		return nil, ErrUnexpectedFormat
 	}
 }
 
@@ -550,7 +550,7 @@ func (c *CLIDriver) GetVersion(filesystem DriverFileSystem) (string, error) {
 		return "", err
 	}
 
-	return "", UnexpectedFormat
+	return "", ErrUnexpectedFormat
 }
 
 func (c *CLIDriver) runOutput(name string, options ...cmdOption) ([]byte, error) {
@@ -634,7 +634,7 @@ func (g *gpfsCmdOutReader) readHeader() error {
 		fields := strings.Split(g.scanner.Text(), ":")
 
 		if fields[0] != g.prefix {
-			return PrefixNotFound
+			return ErrPrefixNotFound
 		}
 
 		g.indices = make([]int, len(g.headers))
@@ -654,13 +654,13 @@ func (g *gpfsCmdOutReader) readHeader() error {
 		// Check that all headers have been found
 		for _, found := range headerFound {
 			if !found {
-				return HeaderNotFound
+				return ErrHeaderNotFound
 			}
 		}
 	} else if err := g.scanner.Err(); err != nil {
 		return err
 	} else {
-		return UnexpectedFormat
+		return ErrUnexpectedFormat
 	}
 
 	return nil

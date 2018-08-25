@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	unexpectedTailingBytes error = errors.New("Unexpected tailing bytes")
+	errUnexpectedTailingBytes error = errors.New("Unexpected tailing bytes")
 )
 
 var sampleWorkPack workqueue.WorkPack = workqueue.WorkPack{
@@ -92,7 +92,7 @@ func retrievePack(jobArgs map[string]interface{}) (*workqueue.WorkPack, error) {
 		return nil, err
 	}
 	if len(msgpBuf) != 0 {
-		return nil, unexpectedTailingBytes
+		return nil, errUnexpectedTailingBytes
 	}
 
 	return workPack, nil

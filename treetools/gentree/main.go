@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	InsufficientlySpecifiedErr = errors.New("Insufficiently specified parameters.")
+	ErrInsufficientlySpecified = errors.New("Insufficiently specified parameters.")
 )
 
 const (
@@ -139,7 +139,7 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 		c.src,
 	)
 	if c.subDirectoryDistribution == nil {
-		return InsufficientlySpecifiedErr
+		return ErrInsufficientlySpecified
 	}
 
 	c.fileDistribution = DistributionFromSpec(
@@ -147,7 +147,7 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 		c.src,
 	)
 	if c.fileDistribution == nil {
-		return InsufficientlySpecifiedErr
+		return ErrInsufficientlySpecified
 	}
 
 	c.fileSizeDistribution = DistributionFromSpec(
@@ -155,7 +155,7 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 		c.src,
 	)
 	if c.fileSizeDistribution == nil {
-		return InsufficientlySpecifiedErr
+		return ErrInsufficientlySpecified
 	}
 
 	return nil
