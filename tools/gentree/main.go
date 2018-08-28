@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	ErrInsufficientlySpecified = errors.New("Insufficiently specified parameters.")
+	ErrInsufficientlySpecified = errors.New("insufficiently specified parameters")
 )
 
 const (
