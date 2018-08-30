@@ -8,6 +8,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/go-errors/errors v1.0.1
+	github.com/go-logfmt/logfmt v0.3.0
 	github.com/go-sql-driver/mysql v1.4.0
 	github.com/gocraft/work v0.5.1
 	github.com/golang/protobuf v1.2.0 // indirect
