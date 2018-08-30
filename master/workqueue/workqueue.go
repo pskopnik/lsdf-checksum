@@ -19,6 +19,20 @@ func GocraftWorkNamespace(prefix string) string {
 	return prefix + gocraftWorkNamespaceBase
 }
 
+func PerformanceMonitorUnit(fileSystemName, snapshotName string) string {
+	return fileSystemName + "-" + snapshotName
+}
+
+var _ GetNodesNumer = queueSchedulerGetNodesNumer{}
+
+type queueSchedulerGetNodesNumer struct {
+	*QueueScheduler
+}
+
+func (q queueSchedulerGetNodesNumer) GetNodesNum() (uint, error) {
+	return q.GetNodesNum()
+}
+
 //go:generate confions config RedisConfig
 
 // RedisConfig contains configuration options for a connection pool to a redis
@@ -71,9 +85,17 @@ type Config struct {
 	// All known run time dependent options (database connections, RunId, etc.)
 	// will be overwritten when the final configuration is assembled.
 	WriteBacker WriteBackerConfig
+	// PerformanceMonitor contains the configuration for the
+	// PerformanceMonitor. Here only static configuration options should be
+	// set.
+	// All known run time dependent options (database connections, RunId, etc.)
+	// will be overwritten when the final configuration is assembled.
+	PerformanceMonitor PerformanceMonitorConfig
 }
 
-var DefaultConfig = &Config{}
+var DefaultConfig = &Config{
+	Redis: *RedisDefaultConfig,
+}
 
 type WorkQueue struct {
 	Config *Config
@@ -87,6 +109,7 @@ type WorkQueue struct {
 	producer             *Producer
 	writeBacker          *WriteBacker
 	queueWatcher         *QueueWatcher
+	performanceMonitor   *PerformanceMonitor
 }
 
 func New(config *Config) *WorkQueue {
@@ -136,11 +159,17 @@ func (w *WorkQueue) Start(ctx context.Context) {
 		w.writeBacker = w.createWriteBacker()
 		w.writeBacker.Start(w.tomb.Context(nil))
 
+		w.performanceMonitor = w.createPerformanceMonitor(w.producer.queueScheduler)
+		w.performanceMonitor.Start(w.tomb.Context(nil))
+
 		w.tomb.Go(w.writeBackerStopper)
+		w.tomb.Go(w.performanceMonitorStopper)
 
 		w.tomb.Go(w.producerManager)
 		w.tomb.Go(w.queueWatcherManager)
 		w.tomb.Go(w.writeBackerManager)
+		w.tomb.Go(w.performanceMonitorManager)
+
 		w.tomb.Go(w.waiter)
 
 		return nil
@@ -168,9 +197,8 @@ func (w *WorkQueue) producerManager() error {
 	case <-w.producer.Dead():
 		return w.producer.Err()
 	case <-w.tomb.Dying():
+		return tomb.ErrDying
 	}
-
-	return nil
 }
 
 func (w *WorkQueue) queueWatcherManager() error {
@@ -178,9 +206,8 @@ func (w *WorkQueue) queueWatcherManager() error {
 	case <-w.queueWatcher.Dead():
 		return w.queueWatcher.Err()
 	case <-w.tomb.Dying():
+		return tomb.ErrDying
 	}
-
-	return nil
 }
 
 func (w *WorkQueue) writeBackerManager() error {
@@ -188,15 +215,29 @@ func (w *WorkQueue) writeBackerManager() error {
 	case <-w.writeBacker.Dead():
 		return w.writeBacker.Err()
 	case <-w.tomb.Dying():
+		return tomb.ErrDying
 	}
+}
 
-	return nil
+func (w *WorkQueue) performanceMonitorManager() error {
+	select {
+	case <-w.performanceMonitor.Dead():
+		err := w.performanceMonitor.Err()
+		if err == lifecycle.ErrStopSignalled {
+			return nil
+		} else {
+			return err
+		}
+	case <-w.tomb.Dying():
+		return tomb.ErrDying
+	}
 }
 
 func (w *WorkQueue) waiter() error {
 	w.producer.Wait()
 	w.queueWatcher.Wait()
 	w.writeBacker.Wait()
+	w.performanceMonitor.Wait()
 
 	return nil
 }
@@ -204,14 +245,21 @@ func (w *WorkQueue) waiter() error {
 func (w *WorkQueue) writeBackerStopper() error {
 	select {
 	case <-w.queueWatcher.Dead():
-		break
+		w.writeBacker.SignalEndOfQueue()
+		return nil
 	case <-w.tomb.Dying():
-		break
+		return tomb.ErrDying
 	}
+}
 
-	w.writeBacker.SignalEndOfQueue()
-
-	return nil
+func (w *WorkQueue) performanceMonitorStopper() error {
+	select {
+	case <-w.queueWatcher.Dead():
+		w.performanceMonitor.SignalStop()
+		return nil
+	case <-w.tomb.Dying():
+		return tomb.ErrDying
+	}
 }
 
 func (w *WorkQueue) testRedis() error {
@@ -263,7 +311,7 @@ func (w *WorkQueue) createProducer(controller SchedulingController) *Producer {
 			DB:     w.Config.DB,
 			Logger: w.fieldLogger,
 
-			Controller: w.schedulingController,
+			Controller: controller,
 		})
 
 	return NewProducer(config)
@@ -275,7 +323,7 @@ func (w *WorkQueue) createWriteBacker() *WriteBacker {
 		Merge(&w.Config.WriteBacker).
 		Merge(&WriteBackerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      w.Config.Redis.Prefix + gocraftWorkNamespaceBase,
+			Namespace:      GocraftWorkNamespace(w.Config.Redis.Prefix),
 
 			RunId:        w.Config.RunId,
 			SnapshotName: w.Config.SnapshotName,
@@ -294,7 +342,7 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 		Merge(&w.Config.QueueWatcher).
 		Merge(&QueueWatcherConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      w.Config.Redis.Prefix + gocraftWorkNamespaceBase,
+			Namespace:      GocraftWorkNamespace(w.Config.Redis.Prefix),
 
 			RunId:        w.Config.RunId,
 			SnapshotName: w.Config.SnapshotName,
@@ -306,4 +354,24 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 		})
 
 	return NewQueueWatcher(config)
+}
+
+func (w *WorkQueue) createPerformanceMonitor(queueScheduler *QueueScheduler) *PerformanceMonitor {
+
+	config := PerformanceMonitorDefaultConfig.
+		Clone().
+		Merge(&w.Config.PerformanceMonitor).
+		Merge(&PerformanceMonitorConfig{
+			Prefix: w.Config.Redis.Prefix,
+
+			Unit: PerformanceMonitorUnit(w.Config.FileSystemName, w.Config.SnapshotName),
+
+			Pool:   w.pool,
+			Logger: w.Config.Logger,
+			GetNodesNumer: queueSchedulerGetNodesNumer{
+				QueueScheduler: queueScheduler,
+			},
+		})
+
+	return NewPerformanceMonitor(config)
 }
