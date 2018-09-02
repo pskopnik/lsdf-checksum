@@ -14,11 +14,13 @@ type Config struct {
 	Driver          string
 	DataSourceName  string
 	TablePrefix     string
+	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
 }
 
 var DefaultConfig = &Config{
+	MaxOpenConns:    100,
 	MaxIdleConns:    50,
 	ConnMaxLifetime: 10 * time.Minute,
 }
@@ -42,6 +44,7 @@ func Open(config *Config) (*DB, error) {
 		Config: config,
 	}
 
+	db.SetMaxOpenConns(config.MaxOpenConns)
 	db.SetMaxIdleConns(config.MaxIdleConns)
 	db.SetConnMaxLifetime(config.ConnMaxLifetime)
 

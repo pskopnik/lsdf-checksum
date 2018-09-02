@@ -8,6 +8,7 @@ func (c *Config) CopyFrom(other *Config) {
 	c.Driver = other.Driver
 	c.DataSourceName = other.DataSourceName
 	c.TablePrefix = other.TablePrefix
+	c.MaxOpenConns = other.MaxOpenConns
 	c.MaxIdleConns = other.MaxIdleConns
 	c.ConnMaxLifetime = other.ConnMaxLifetime
 }
@@ -21,6 +22,9 @@ func (c *Config) Merge(other *Config) *Config {
 	}
 	if len(other.TablePrefix) > 0 {
 		c.TablePrefix = other.TablePrefix
+	}
+	if other.MaxOpenConns != 0 {
+		c.MaxOpenConns = other.MaxOpenConns
 	}
 	if other.MaxIdleConns != 0 {
 		c.MaxIdleConns = other.MaxIdleConns
