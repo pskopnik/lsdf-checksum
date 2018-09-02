@@ -357,15 +357,6 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed update of existing files in meta data database")
 
-	res, err = s.execWithReadCommitted(ctx, insertQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
-	if err != nil {
-		return errors.Wrap(err, 0)
-	}
-
-	s.fieldLogger.WithFields(logrus.Fields{
-		"affected": alwaysRowsAffected(res),
-	}).Info("Performed copying of new files in meta data database")
-
 	res, err = s.execWithReadCommitted(ctx, deleteQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
 		return errors.Wrap(err, 0)
@@ -374,6 +365,15 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 	s.fieldLogger.WithFields(logrus.Fields{
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed deleting of old files in meta data database")
+
+	res, err = s.execWithReadCommitted(ctx, insertQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
+	if err != nil {
+		return errors.Wrap(err, 0)
+	}
+
+	s.fieldLogger.WithFields(logrus.Fields{
+		"affected": alwaysRowsAffected(res),
+	}).Info("Performed copying of new files in meta data database")
 
 	res, err = s.execWithReadCommitted(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
