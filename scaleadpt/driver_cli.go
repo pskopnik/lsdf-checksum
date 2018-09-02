@@ -424,7 +424,7 @@ func (c *CLIDriver) getMountRootMountinfo(filesystem DriverFileSystem) (string, 
 	}
 
 	for _, mount := range mounts {
-		if mount.Source == "/" && (mount.Device == filesystemName || mount.Device == "/dev/" + filesystemName) {
+		if mount.Source == "/" && (mount.Device == filesystemName || mount.Device == "/dev/"+filesystemName) {
 			return mount.Path, nil
 		}
 	}

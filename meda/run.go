@@ -121,7 +121,7 @@ func (d *DB) RunsQueryAll(ctx context.Context, querier sqlx.QueryerContext) (*sq
 
 var (
 	ErrInvalidRunSyncModeValueType = errors.New("invalid RunSyncMode value type")
-	ErrInvalidRunStateValueType = errors.New("invalid RunState value type")
+	ErrInvalidRunStateValueType    = errors.New("invalid RunState value type")
 )
 
 type RunSyncMode int8

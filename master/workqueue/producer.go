@@ -14,10 +14,10 @@ import (
 //go:generate confions config ProducerConfig
 
 type ProducerConfig struct {
-	MinWorkPackFileSize uint64
+	MinWorkPackFileSize   uint64
 	MaxWorkPackFileNumber uint64
-	FetchRowBatchSize   uint64
-	RowBufferSize       uint64
+	FetchRowBatchSize     uint64
+	RowBufferSize         uint64
 
 	FileSystemName string
 	Namespace      string
@@ -32,10 +32,10 @@ type ProducerConfig struct {
 }
 
 var ProducerDefaultConfig = &ProducerConfig{
-	MinWorkPackFileSize: 5 * 1024 * 1024, // 5 MiB
+	MinWorkPackFileSize:   5 * 1024 * 1024, // 5 MiB
 	MaxWorkPackFileNumber: 1000,
-	FetchRowBatchSize:   1000,
-	RowBufferSize:       1000,
+	FetchRowBatchSize:     1000,
+	RowBufferSize:         1000,
 }
 
 type Producer struct {
@@ -267,7 +267,7 @@ func (p *Producer) produce(n uint) (bool, error) {
 		numberOfFiles = 0
 
 		// Prepare work pack
-		for totalFileSize < p.Config.MinWorkPackFileSize && numberOfFiles < p.Config.MaxWorkPackFileNumber  {
+		for totalFileSize < p.Config.MinWorkPackFileSize && numberOfFiles < p.Config.MaxWorkPackFileNumber {
 			// If the Producer is dying, filesChan is closed by rowFetcher().
 			// Thus, this loop will also shut down quickly.
 			file, ok = <-p.filesChan
