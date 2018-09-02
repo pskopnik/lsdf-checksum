@@ -34,11 +34,13 @@ type WriteBackerConfig struct {
 }
 
 var WriteBackerDefaultConfig = &WriteBackerConfig{
+	// Process Batch if after MinTime MinItems have been received.
+	// Process Batch earlier if MaxTime or MaxItems have been exceeded.
 	Batch: batch.ConfigValues{
-		MinTime: 100 * time.Millisecond,
+		MinTime:  1 * time.Second,
 		MinItems: 1000,
 		MaxTime:  10 * time.Second,
-		MaxItems: 10000,
+		MaxItems: 5000,
 	},
 }
 
