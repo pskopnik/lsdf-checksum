@@ -1,273 +1,814 @@
 #!/usr/bin/env python3
 
-import mysql.connector
+import csv
 import datetime
-import time
+import sys
+
+import mysql.connector
 from argh import ArghParser
 
 
-DROP_STATEMENT = "DROP TABLE IF EXISTS {};"
+class TestCase(object):
+	def create_inserts_table(self, cnx):
+		raise NotImplemented
 
-CREATE_STATEMENT = (
-	"CREATE TABLE IF NOT EXISTS `files` ("
-	"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
-	"	`rand` double NOT NULL,"
-	"	`path` varchar(4096) NOT NULL,"
-	"	`modification_time` datetime(6) NOT NULL,"
-	"	`file_size` bigint(20) unsigned NOT NULL,"
-	"	`last_seen` bigint(20) unsigned NOT NULL,"
-	"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
-	"	`checksum` varbinary(256) DEFAULT NULL,"
-	"	`last_read` bigint(20) unsigned DEFAULT NULL,"
-	"	PRIMARY KEY (`id`),"
-	"	KEY `rand` (`rand`),"
-	"	KEY `path` (`path`(1024))"
-	") ENGINE=InnoDB DEFAULT CHARSET=utf8;"
-)
+	def create_files_table(self, cnx):
+		raise NotImplemented
 
-INSERT_JOIN_STATEMENT = (
-	"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
-	"	SELECT {src}.rand, {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
-	"	FROM {src}"
-	"	LEFT JOIN files ON {src}.path = files.path"
-	"	WHERE files.id IS NULL"
-	"		AND"
-	"			{src}.last_seen = %s"
-	";"
-)
+	def fast_populate_inserts(self, cnx, src_table, run_id):
+		"""Populates the inserts table with data from src_table.
 
-INSERT_IN_STATEMENT = (
-	"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
-	"	SELECT rand, path, file_size, modification_time, last_seen"
-	"	FROM {src}"
-	"	WHERE {src}.path NOT IN"
-	"			(SELECT DISTINCT path FROM files)"
-	"		AND"
-	"			last_seen = %s"
-	";"
-)
+		src_table has the fields (path, modification_time, file_size).
+		The last_seen field in the inserts table should be set to run_id.
+		"""
+		raise NotImplemented
 
-def drop_table(cnx, cursor, table):
-	cursor.execute(DROP_STATEMENT.format(table))
-	cnx.commit()
+	def fast_copy_to_files(self, cnx, src_table, run_id):
+		raise NotImplemented
 
-def reset(cnx, cursor):
-	drop_table(cnx, cursor, "files")
+	def insert_new_files(self, cnx, run_id):
+		raise NotImplemented
 
-	cursor.execute(CREATE_STATEMENT)
-	cnx.commit()
+	def update_existing_files(self, cnx, run_id):
+		raise NotImplemented
 
-def insert_join(cnx, cursor, src="inserts"):
-	cursor.execute(INSERT_JOIN_STATEMENT.format(src=src), (1,))
-	cnx.commit()
+	def delete_old_files(self, cnx, run_id):
+		raise NotImplemented
 
-def insert_in(cnx, cursor, src="inserts"):
-	cursor.execute(INSERT_IN_STATEMENT.format(src=src), (1,))
-	cnx.commit()
 
-def bench_empty():
-	cnx = mysql.connector.connect(user='root', database='test_schema')
-	cursor = cnx.cursor()
+class TestCaseBase(TestCase):
+	POPULATE_INSERTS_STMT = (
+		"INSERT INTO `inserts`"
+		"	(`rand`, `path`, `modification_time`, `file_size`, `last_seen`)"
+		"		SELECT"
+		"			RAND(), `path`, `modification_time`, `file_size`, '{run}'"
+		"		FROM `{src}`"
+		";"
+	)
 
-	join_times = list()
+	CREATE_INSERTS_TABLE_STMT = (
+		"CREATE TABLE `inserts` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`rand` double NOT NULL,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	PRIMARY KEY (`id`)"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
 
-	for _ in range(10):
-		reset(cnx, cursor)
+	CREATE_FILES_TABLE_STMT = (
+		"CREATE TABLE `files` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`rand` double NOT NULL,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
+		"	`checksum` varbinary(256) DEFAULT NULL,"
+		"	`last_read` bigint(20) unsigned DEFAULT NULL,"
+		"	PRIMARY KEY (`id`),"
+		"	KEY `rand` (`rand`),"
+		"	KEY `path` (`path`(2048))"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+	UPDATE_EXISTING_FILES_STMT = None
+	INSERT_NEW_FILES_STMT = None
+	DELETE_OLD_FILES_STMT = None
+
+	def create_inserts_table(self, cnx):
+		self._execute_stmt(cnx, self.CREATE_INSERTS_TABLE_STMT)
+
+	def create_files_table(self, cnx):
+		self._execute_stmt(cnx, self.CREATE_FILES_TABLE_STMT)
+
+	def fast_populate_inserts(self, cnx, src_table, run_id):
+		stmt = self.POPULATE_INSERTS_STMT.format(src=src_table, run=run_id)
+
+		self._execute_stmt(cnx, stmt)
+
+	def fast_copy_to_files(self, cnx, src_table, run_id):
+		return self.insert_new_files(cnx, run_id, src_table=src_table)
+
+	def insert_new_files(self, cnx, run_id, src_table="inserts"):
+		stmt = self.INSERT_NEW_FILES_STMT.format(src=src_table, run=run_id)
+
+		return self._analyze_stmt(cnx, stmt, isolation_level='READ COMMITTED')
+
+	def update_existing_files(self, cnx, run_id):
+		stmt = self.UPDATE_EXISTING_FILES_STMT.format(run=run_id)
+
+		return self._analyze_stmt(cnx, stmt, isolation_level='READ COMMITTED')
+
+	def delete_old_files(self, cnx, run_id):
+		stmt = self.DELETE_OLD_FILES_STMT.format(run=run_id)
+
+		return self._analyze_stmt(cnx, stmt, isolation_level='READ COMMITTED')
+
+	def _execute_stmt(self, cnx, stmt, isolation_level=None):
+		cnx.start_transaction(isolation_level=isolation_level)
+		cursor = cnx.cursor()
+
+		cursor.execute(stmt)
+		result = list(cursor)
+
+		cnx.commit()
+		cursor.close()
+
+		return result
+
+	def _analyze_stmt(self, cnx, stmt, isolation_level=None):
+		stmt = "ANALYZE FORMAT=json " + stmt
+
+		cnx.start_transaction(isolation_level=isolation_level)
+		cursor = cnx.cursor()
+
+		cursor.execute(stmt)
+		results = list(cursor)
+
+		cnx.commit()
+		cursor.close()
+
+		if len(results) > 0 and len(results[0]) > 0:
+			return results[0][0]
+		else:
+			return None
+
+
+class TestCaseBaseNoRand(TestCaseBase):
+	POPULATE_INSERTS_STMT = (
+		"INSERT INTO `inserts`"
+		"	(`path`, `modification_time`, `file_size`, `last_seen`)"
+		"		SELECT"
+		"			`path`, `modification_time`, `file_size`, '{run}'"
+		"		FROM `{src}`"
+		";"
+	)
+
+	CREATE_INSERTS_TABLE_STMT = (
+		"CREATE TABLE `inserts` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	PRIMARY KEY (`id`)"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+	CREATE_FILES_TABLE_STMT = (
+		"CREATE TABLE `files` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
+		"	`checksum` varbinary(256) DEFAULT NULL,"
+		"	`last_read` bigint(20) unsigned DEFAULT NULL,"
+		"	PRIMARY KEY (`id`),"
+		"	KEY `path` (`path`(2048))"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+
+class TestCaseNoRand(TestCaseBaseNoRand):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"	SET"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"	WHERE files.last_seen != {run}"
+		";"
+	)
+
+	INSERT_NEW_FILES_STMT = (
+		"INSERT INTO files (path, file_size, modification_time, last_seen)"
+		"	SELECT {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	FROM {src}"
+		"	LEFT JOIN files ON {src}.path = files.path"
+		"	WHERE files.id IS NULL"
+		"		AND"
+		"			{src}.last_seen = {run}"
+		";"
+	)
+
+	DELETE_OLD_FILES_STMT = (
+		"DELETE FROM files"
+		"	WHERE last_seen != {run}"
+		";"
+	)
+
+
+class TestCaseInitial(TestCaseBase):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"	SET"
+		"		files.rand = inserts.rand,"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"	WHERE files.last_seen != {run}"
+		";"
+	)
+
+	INSERT_NEW_FILES_STMT = (
+		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
+		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	FROM {src}"
+		"	LEFT JOIN files ON {src}.path = files.path"
+		"	WHERE files.id IS NULL"
+		"		AND"
+		"			{src}.last_seen = {run}"
+		";"
+	)
+
+	DELETE_OLD_FILES_STMT = (
+		"DELETE FROM files"
+		"	WHERE last_seen != {run}"
+		";"
+	)
+
+
+class TestCaseInsertExists(TestCaseInitial):
+	INSERT_NEW_FILES_STMT = (
+		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
+		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	FROM {src}"
+		"	WHERE"
+		"			NOT EXISTS ("
+		"				SELECT 1 FROM files"
+		"					WHERE files.path = {src}.path"
+		"			)"
+		"		AND"
+		"			{src}.last_seen = {run}"
+		";"
+	)
+
+
+class TestCaseDontUpdateRand(TestCaseInitial):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"	SET"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"	WHERE files.last_seen != {run}"
+		";"
+	)
+
+
+class TestCaseUpdateAllConditionsInOn(TestCaseInitial):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND inserts.last_seen = {run} AND files.last_seen != {run}"
+		"	SET"
+		"		files.rand = inserts.rand,"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		";"
+	)
+
+
+class TestCaseUpdateNoJoinConditions(TestCaseInitial):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path"
+		"	SET"
+		"		files.rand = inserts.rand,"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		";"
+	)
+
+
+class TestCaseUpdateIndexInsertsPath(TestCaseUpdateNoJoinConditions):
+	CREATE_INSERTS_TABLE_STMT = (
+		"CREATE TABLE `inserts` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`rand` double NOT NULL,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	PRIMARY KEY (`id`),"
+		"	KEY `path` (`path`(2048))"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+
+class TestCaseUpdateNoInsertsConditions(TestCaseInitial):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path"
+		"	SET"
+		"		files.rand = inserts.rand,"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"	WHERE files.last_seen != {run}"
+		";"
+	)
+
+
+class TestCaseUpdateNoInsertsConditionsAllInOn(TestCaseUpdateNoInsertsConditions):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND files.last_seen != {run}"
+		"	SET"
+		"		files.rand = inserts.rand,"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		";"
+	)
+
+
+class TestCaseUpdateNoInsertsConditionsAllInOnCompositeIndex(TestCaseUpdateNoInsertsConditionsAllInOn):
+	CREATE_FILES_TABLE_STMT = (
+		"CREATE TABLE `files` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`rand` double NOT NULL,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
+		"	`checksum` varbinary(256) DEFAULT NULL,"
+		"	`last_read` bigint(20) unsigned DEFAULT NULL,"
+		"	PRIMARY KEY (`id`),"
+		"	KEY `rand` (`rand`),"
+		"	KEY `path_last_seen` (`path`(2048),`last_seen`)"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+
+class BenchResult(object):
+	"""Container for metrics resulting from a single bench run.
+
+	Attributes:
+		scenario (Scenario): Scenario which produced the metrics.
+		case (Case): Case which produced the metrics.
+		update_existing_duration (float): Duration of the update_existing
+			procedure.
+		update_existing_analysis (str): Output of the ANALYZE FORMAT=json
+			statement applied on the update_existing procedure.
+		insert_new_duration (float): Duration of the insert_new procedure.
+		insert_new_analysis (str): Output of the ANALYZE FORMAT=json statement
+			applied on the insert_new procedure.
+		delete_old_duration (float): Duration of the delete_old procedure.
+		delete_old_analysis (str): Output of the ANALYZE FORMAT=json statement
+			applied on the delete_old procedure.
+	"""
+
+	def __init__(self, scenario=None, case=None):
+		self.scenario = scenario
+		self.case = case
+
+	def scenario_name(self):
+		if self.scenario is None:
+			return None
+
+		try:
+			return self.scenario.name
+		except AttributeError:
+			return self.scenario.__class__.__name__
+
+	def case_name(self):
+		if self.case is None:
+			return None
+
+		try:
+			return self.case.name
+		except AttributeError:
+			return self.case.__class__.__name__
+
+	def __str__(self):
+		return repr(self)
+
+	def __repr__(self):
+		return "BenchResult({})".format({
+			"scenario": self.scenario_name(),
+			"case": self.case_name(),
+			"update_existing_duration": self.update_existing_duration,
+			"insert_new_duration": self.insert_new_duration,
+			"delete_old_duration": self.delete_old_duration,
+		})
+
+
+class Scenario(object):
+	DROP_TABLE_STMT = (
+		"DROP TABLE `{name}`;"
+	)
+
+	OPTIMIZE_TABLE_STMT = (
+		"OPTIMIZE TABLE `{name}`;"
+	)
+
+	RENAME_TABLE_STMT = (
+		"RENAME TABLE `{src}` TO `{dst}`;"
+	)
+
+	def __init__(self, cnx, case, file_data_table="file_data"):
+		self.cnx = cnx
+		self.case = case
+		self.file_data_table = file_data_table
+
+	def setup(self):
+		pass
+
+	def setup_bench(self):
+		pass
+
+	def bench(self):
+		result = BenchResult(
+			scenario=self,
+			case=self.case,
+		)
+
+		run_id = self.bench_run_id
 
 		start = datetime.datetime.now()
-
-		insert_join(cnx, cursor)
-
+		analysis = self.case.update_existing_files(self.cnx, run_id)
 		end = datetime.datetime.now()
 
-		join_times.append((end - start).total_seconds())
-
-		time.sleep(60 * 5)
-
-	print("join_times", join_times)
-
-	in_times = list()
-
-	for _ in range(10):
-		reset(cnx, cursor)
+		result.update_existing_duration = (end - start).total_seconds()
+		result.update_existing_analysis = analysis
 
 		start = datetime.datetime.now()
-
-		insert_in(cnx, cursor)
-
+		analysis = self.case.insert_new_files(self.cnx, run_id)
 		end = datetime.datetime.now()
 
-		in_times.append((end - start).total_seconds())
+		result.insert_new_duration = (end - start).total_seconds()
+		result.insert_new_analysis = analysis
 
-		time.sleep(60 * 5)
+		start = datetime.datetime.now()
+		analysis = self.case.delete_old_files(self.cnx, run_id)
+		end = datetime.datetime.now()
 
-	print("in_times", in_times)
+		result.delete_old_duration = (end - start).total_seconds()
+		result.delete_old_analysis = analysis
 
-	cnx.commit()
+		return result
 
-	cursor.close()
-	cnx.close()
+	def cleanup_bench(self):
+		pass
+
+	def cleanup(self):
+		pass
+
+	def _drop_table(self, name):
+		stmt = self.DROP_TABLE_STMT.format(name=name)
+
+		self._execute_stmt(stmt)
+
+	def _optimize_table(self, name):
+		stmt = self.OPTIMIZE_TABLE_STMT.format(name=name)
+
+		self._execute_stmt(stmt)
+
+	def _rename_table(self, src, dst):
+		stmt = self.RENAME_TABLE_STMT.format(src=src, dst=dst)
+
+		self._execute_stmt(stmt)
+
+	def _execute_stmt(self, stmt, isolation_level=None):
+		self.cnx.start_transaction(isolation_level=isolation_level)
+		cursor = self.cnx.cursor()
+
+		cursor.execute(stmt)
+		result = list(cursor)
+
+		self.cnx.commit()
+		cursor.close()
+
+		return result
 
 
-CREATE_INSERTS_ORIGINAL_STATEMENT = (
-	"CREATE TABLE IF NOT EXISTS `inserts_original` ("
-	"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
-	"	`rand` double NOT NULL,"
-	"	`path` varchar(4096) NOT NULL,"
-	"	`modification_time` datetime(6) NOT NULL,"
-	"	`file_size` bigint(20) unsigned NOT NULL,"
-	"	`last_seen` bigint(20) unsigned NOT NULL,"
-	"	PRIMARY KEY (`id`)"
-	") ENGINE=InnoDB DEFAULT CHARSET=utf8;"
+class EmptyScenario(Scenario):
+	name = "empty"
+
+	def setup(self):
+		self.case.create_inserts_table(self.cnx)
+		self.case.fast_populate_inserts(self.cnx, self.file_data_table, 1)
+		self.bench_run_id = 1
+
+	def setup_bench(self):
+		self.case.create_files_table(self.cnx)
+
+	def cleanup_bench(self):
+		self._drop_table("files")
+
+	def cleanup(self):
+		self._drop_table("inserts")
+
+
+class NoInsertsScenario(Scenario):
+	name = "no_inserts"
+
+	def setup(self):
+		self.case.create_inserts_table(self.cnx)
+		self.case.fast_populate_inserts(self.cnx, self.file_data_table, 1)
+
+		self._rename_table("inserts", "inserts_run_1")
+
+		self.case.create_inserts_table(self.cnx)
+		self.case.fast_populate_inserts(self.cnx, self.file_data_table, 2)
+		self.bench_run_id = 2
+
+	def setup_bench(self):
+		self.case.create_files_table(self.cnx)
+
+		self.case.fast_copy_to_files(self.cnx, "inserts_run_1", 1)
+
+		self._optimize_table("files")
+
+	def cleanup_bench(self):
+		self._drop_table("files")
+
+	def cleanup(self):
+		self._drop_table("inserts")
+
+		self._drop_table("inserts_run_1")
+
+
+class BenchException(Exception):
+	def __init__(self, msg, orig=None, scenario=None, case=None):
+		full_msg = msg
+
+		msg_bits = []
+
+		if scenario is not None:
+			try:
+				scenario_name = scenario.name
+			except AttributeError:
+				scenario_name = scenario.__class__.__name__
+
+			msg_bits.append("Scenario: {}".format(scenario_name))
+
+		if case is not None:
+			try:
+				case_name = case.name
+			except AttributeError:
+				case_name = case.__class__.__name__
+
+			msg_bits.append("Case: {}".format(case_name))
+
+		if orig is not None:
+			msg_bits.append("Original Exception: {}".format(orig))
+
+		if msg_bits:
+			full_msg += "\n" + (", ".join(msg_bits))
+
+		super(BenchException, self).__init__(full_msg)
+
+		self.msg = msg
+		self.orig = orig
+		self.full_msg = full_msg
+		self.scenario = scenario
+		self.case = case
+
+
+class Bencher(object):
+	def __init__(self, cnx, file_data_table="file_data"):
+		self.cnx = cnx
+		self.file_data_table = file_data_table
+
+	def cross(self, scenario_classes, cases, n):
+		results = []
+
+		for scenario_class in scenario_classes:
+			for case in cases:
+				scenario = scenario_class(
+					self.cnx,
+					case,
+					file_data_table=self.file_data_table,
+				)
+
+				try:
+					bench_results = self._bench_scenario(scenario, n)
+
+					results.extend(bench_results)
+				except Exception as e:
+					raise BenchException(
+						"Exception occurred during scenario - case evaluation",
+						orig=e,
+						scenario=scenario,
+						case=case,
+					)
+
+		return results
+
+	def _bench_scenario(self, scenario, n):
+		results = []
+
+		scenario.setup()
+
+		for _ in range(n):
+			scenario.setup_bench()
+
+			result = scenario.bench()
+			results.append(result)
+
+			scenario.cleanup_bench()
+
+		scenario.cleanup()
+
+		return results
+
+
+def print_csv(results, f=None):
+	f = f or sys.stdout
+
+	w = csv.writer(f)
+
+	w.writerow([
+		"scenario",
+		"case",
+		"operation",
+		"duration",
+		"analysis",
+	])
+
+	for result in results:
+		w.writerow([
+			result.scenario_name(),
+			result.case_name(),
+			"update_existing",
+			result.update_existing_duration,
+			result.update_existing_analysis,
+		])
+
+		w.writerow([
+			result.scenario_name(),
+			result.case_name(),
+			"delete_old",
+			result.delete_old_duration,
+			result.delete_old_analysis,
+		])
+
+		w.writerow([
+			result.scenario_name(),
+			result.case_name(),
+			"insert_new",
+			result.insert_new_duration,
+			result.insert_new_analysis,
+		])
+
+
+def compile_scenario_class_registry(classes):
+	def get_name(klass):
+		try:
+			return klass.name
+		except AttributeError:
+			return klass.__name__
+
+	return dict((get_name(klass), klass) for klass in classes)
+
+
+scenario_classes = compile_scenario_class_registry(
+	[
+		EmptyScenario,
+		NoInsertsScenario,
+	]
 )
 
-COPY_STATEMENT = (
-	"INSERT INTO inserts_original (rand, path, file_size, modification_time, last_seen)"
-	"	SELECT rand, path, file_size, modification_time, last_seen"
-	"	FROM inserts"
-	"	WHERE inserts.last_seen = %s"
-	";"
+
+def compile_cases_registry(classes):
+	def get_name(obj):
+		try:
+			return obj.name
+		except AttributeError:
+			return obj.__class__.__name__
+
+	return dict((get_name(obj), obj) for obj in (klass() for klass in classes))
+
+
+cases = compile_cases_registry(
+	[
+		TestCaseNoRand,
+		TestCaseInitial,
+		TestCaseInsertExists,
+		TestCaseDontUpdateRand,
+		TestCaseUpdateAllConditionsInOn,
+		TestCaseUpdateNoJoinConditions,
+		TestCaseUpdateIndexInsertsPath,
+		TestCaseUpdateNoInsertsConditions,
+		TestCaseUpdateNoInsertsConditionsAllInOn,
+		TestCaseUpdateNoInsertsConditionsAllInOnCompositeIndex,
+	]
 )
 
-UPDATE_INSERTS_STATEMENT = (
-	"UPDATE inserts"
-	"	SET last_seen = %s"
-	"	WHERE last_seen = %s"
-	";"
-)
+def initialise_bencher(
+	file_data_table='file_data',
+	user=None,
+	password=None,
+	host='127.0.0.1',
+	port=3306,
+	database='test_schema',
+):
+	cnx = mysql.connector.connect(
+		user=user,
+		password=password,
+		host=host,
+		port=port,
+		database=database
+	)
+	bencher = Bencher(cnx, file_data_table=file_data_table)
+
+	return bencher
+
+def list_cases():
+	for key in cases.keys():
+		print(key)
+
+def list_scenarios():
+	for key in scenario_classes.keys():
+		print(key)
+
+def bench_one(
+	scenario,
+	case,
+	n=10,
+	file_data_table='file_data',
+	# MySQL connection options
+	user=None,
+	password=None,
+	host='127.0.0.1',
+	port=3306,
+	database='test_schema',
+):
+	bencher = initialise_bencher(
+		file_data_table=file_data_table,
+		user=user,
+		password=password,
+		host=host,
+		port=port,
+		database=database,
+	)
+
+	scenario_class = scenario_classes[scenario]
+	case = cases[case]
+
+	results = bencher.cross(list(scenario_class), list(case), n)
+
+	print_csv(results)
 
 
-UPDATE_FILES_STATEMENT = (
-	"UPDATE files"
-	"	RIGHT JOIN inserts"
-	"		ON inserts.path = files.path AND inserts.last_seen = %s"
-	"	SET"
-	"		files.rand = inserts.rand,"
-	"		files.file_size = inserts.file_size,"
-	"		files.modification_time = inserts.modification_time,"
-	"		files.last_seen = inserts.last_seen,"
-	"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
-	";"
-)
+def bench_all(
+	n=10,
+	file_data_table='file_data',
+	# MySQL connection options
+	user=None,
+	password=None,
+	host='127.0.0.1',
+	port=3306,
+	database='test_schema',
+):
+	bencher = initialise_bencher(
+		file_data_table=file_data_table,
+		user=user,
+		password=password,
+		host=host,
+		port=port,
+		database=database,
+	)
 
-DELETE_FILES_STATEMENT = (
-	"DELETE FROM files"
-	"	WHERE last_seen != %s"
-	";"
-)
+	results = bencher.cross(scenario_classes.values(), cases.values(), n)
 
-def prepare_inserts(cnx, cursor):
-	cursor.execute(CREATE_INSERTS_ORIGINAL_STATEMENT)
-
-	cursor.execute(COPY_STATEMENT, (1,))
-
-	cursor.execute(UPDATE_INSERTS_STATEMENT, (2, 1))
-
-	cnx.commit()
-
-def restore_inserts(cnx, cursor):
-	drop_table(cnx, cursor, "inserts_original")
-
-	cursor.execute(UPDATE_INSERTS_STATEMENT, (1, 2))
-
-	cnx.commit()
-
-def update_files(cnx, cursor):
-	cursor.execute(UPDATE_FILES_STATEMENT, (2,))
-
-	cnx.commit()
-
-def delete_files(cnx, cursor):
-	cursor.execute(DELETE_FILES_STATEMENT, (2,))
-
-	cnx.commit()
-
-def bench_no_inserts():
-	cnx = mysql.connector.connect(user='root', database='test_schema')
-	cursor = cnx.cursor()
-
-	prepare_inserts(cnx, cursor)
-
-	update_times = list()
-	delete_times = list()
-
-	join_times = list()
-
-	for _ in range(10):
-		reset(cnx, cursor)
-		insert_join(cnx, cursor, src="inserts_original")
-
-		time.sleep(60 * 5)
-
-		start = datetime.datetime.now()
-		update_files(cnx, cursor)
-		end = datetime.datetime.now()
-
-		update_times.append((end - start).total_seconds())
-
-		start = datetime.datetime.now()
-		insert_join(cnx, cursor)
-		end = datetime.datetime.now()
-
-		join_times.append((end - start).total_seconds())
-
-		start = datetime.datetime.now()
-		delete_files(cnx, cursor)
-		end = datetime.datetime.now()
-
-		delete_times.append((end - start).total_seconds())
-
-		time.sleep(60 * 5)
-
-	print("join_times", join_times)
-
-	in_times = list()
-
-	for _ in range(10):
-		reset(cnx, cursor)
-		insert_join(cnx, cursor, src="inserts_original")
-
-		time.sleep(60 * 5)
-
-		start = datetime.datetime.now()
-		update_files(cnx, cursor)
-		end = datetime.datetime.now()
-
-		update_times.append((end - start).total_seconds())
-
-		start = datetime.datetime.now()
-		insert_in(cnx, cursor)
-		end = datetime.datetime.now()
-
-		in_times.append((end - start).total_seconds())
-
-		start = datetime.datetime.now()
-		delete_files(cnx, cursor)
-		end = datetime.datetime.now()
-
-		delete_times.append((end - start).total_seconds())
-
-		time.sleep(60 * 5)
-
-	print("in_times", in_times)
-
-	print("update_times", update_times)
-
-	print("delete_times", delete_times)
-
-	restore_inserts(cnx, cursor)
-
-	cnx.commit()
-
-	cursor.close()
-	cnx.close()
+	print_csv(results)
 
 
 parser = ArghParser()
-parser.add_commands([bench_empty, bench_no_inserts])
+parser.add_commands([list_cases, list_scenarios, bench_one, bench_all, bench_specific])
+
 
 def main():
 	parser.dispatch()
+
 
 if __name__ == '__main__':
 	main()
