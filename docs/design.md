@@ -2,8 +2,8 @@
 
 ## Goals
 
- * The primary goal is to set-up and maintain a database of file content
-    checksums.
+ * The primary goal of performing checksumming runs is to set-up and maintain a
+    database of file content checksums.
     The purpose of this database is to be able to compare current file content
     with the database and detect file content corruptions.
  * Each checksumming run has one of the following intended targets:
@@ -35,6 +35,10 @@ Each run consists of two phases:
  2. **Work queue / checksum calculation**. Checksums for files are calculated.
      The calculation of checksums takes place on an arbitrary number of worker
      nodes. The master node maintains a work queue containing *work packs*.
+
+A [schema of the architecture](./architecture.pdf) is available. The shapes
+labelled "Spectrum Scale ..." are interfaces provided by the IBM Spectrum Scale
+clustered file system.
 
 ### Meta data synchronisation
 
