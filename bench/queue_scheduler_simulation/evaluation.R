@@ -44,8 +44,8 @@ plot_time_series <- function(data, upper_limit=NA, ewma_factor=1) {
 		ggplot(data) +
 			geom_line(aes(x=time, y=consumption)) +
 			geom_line(aes(x=time, y=queue_length), colour="steelblue") +
-			geom_line(aes(x=time, y=consumption_ewma*ewma_factor), colour="green") +
-			geom_line(aes(x=time, y=deviation_ewma*ewma_factor), colour="violet") +
+			# geom_line(aes(x=time, y=consumption_ewma*ewma_factor), colour="green") +
+			# geom_line(aes(x=time, y=deviation_ewma*ewma_factor), colour="violet") +
 			# geom_line(aes(x=time, y=queue_length+enqueued), colour="grey") +
 			geom_vline(data = data %>% filter(exhausted == TRUE), mapping = aes(xintercept=time), colour="red") +
 			ylim(0, upper_limit)
@@ -111,7 +111,7 @@ function() {
 	}
 
 	data <- tibble(
-		test = "intervals",
+		test = "interval",
 		worker_num = 50,
 		deviation_n = 5,
 		interval = intervals,
