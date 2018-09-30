@@ -1,7 +1,7 @@
 module git.scc.kit.edu/sdm/lsdf-checksum
 
 require (
-	github.com/MasterOfBinary/gobatch v0.0.0-20170218122946-2b3e224bee5b
+	github.com/MasterOfBinary/gobatch v0.0.0-20180929163814-711b27aab3df
 	github.com/akutz/gofsutil v0.1.2
 	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
@@ -17,6 +17,7 @@ require (
 	github.com/hpcloud/tail v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.6
 	github.com/jmoiron/sqlx v0.0.0-20180614180643-0dae4fefe7c0
+	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515 // indirect
 	github.com/lib/pq v1.0.0 // indirect
 	github.com/mattn/go-sqlite3 v1.9.0 // indirect
 	github.com/onsi/ginkgo v1.6.0
@@ -47,5 +48,3 @@ require (
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	gopkg.in/yaml.v2 v2.2.1
 )
-
-replace github.com/MasterOfBinary/gobatch v0.0.0-20170218122946-2b3e224bee5b => github.com/seoester/gobatch v0.0.0-20180810141250-832bd9fb6396
