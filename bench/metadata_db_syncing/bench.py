@@ -256,21 +256,6 @@ class TestCaseInsertExists(TestCaseInitial):
 	)
 
 
-class TestCaseDontUpdateRand(TestCaseInitial):
-	UPDATE_EXISTING_FILES_STMT = (
-		"UPDATE files"
-		"	RIGHT JOIN inserts"
-		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
-		"	SET"
-		"		files.file_size = inserts.file_size,"
-		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
-		"	WHERE files.last_seen != {run}"
-		";"
-	)
-
-
 class TestCaseUpdateAllConditionsInOn(TestCaseInitial):
 	UPDATE_EXISTING_FILES_STMT = (
 		"UPDATE files"
@@ -348,6 +333,112 @@ class TestCaseUpdateNoInsertsConditionsAllInOn(TestCaseUpdateNoInsertsConditions
 
 
 class TestCaseUpdateNoInsertsConditionsAllInOnCompositeIndex(TestCaseUpdateNoInsertsConditionsAllInOn):
+	CREATE_FILES_TABLE_STMT = (
+		"CREATE TABLE `files` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`rand` double NOT NULL,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
+		"	`checksum` varbinary(256) DEFAULT NULL,"
+		"	`last_read` bigint(20) unsigned DEFAULT NULL,"
+		"	PRIMARY KEY (`id`),"
+		"	KEY `rand` (`rand`),"
+		"	KEY `path_last_seen` (`path`(2048),`last_seen`)"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+
+class TestCaseDontUpdateRand(TestCaseInitial):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"	SET"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"	WHERE files.last_seen != {run}"
+		";"
+	)
+
+
+class TestCaseDontUpdateRandUpdateAllConditionsInOn(TestCaseDontUpdateRand):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND inserts.last_seen = {run} AND files.last_seen != {run}"
+		"	SET"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		";"
+	)
+
+
+class TestCaseDontUpdateRandUpdateNoJoinConditions(TestCaseDontUpdateRand):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path"
+		"	SET"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		";"
+	)
+
+
+class TestCaseDontUpdateRandUpdateIndexInsertsPath(TestCaseDontUpdateRandUpdateNoJoinConditions):
+	CREATE_INSERTS_TABLE_STMT = (
+		"CREATE TABLE `inserts` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`rand` double NOT NULL,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	PRIMARY KEY (`id`),"
+		"	KEY `path` (`path`(2048))"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+
+class TestCaseDontUpdateRandUpdateNoInsertsConditions(TestCaseDontUpdateRand):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path"
+		"	SET"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"	WHERE files.last_seen != {run}"
+		";"
+	)
+
+
+class TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOn(TestCaseDontUpdateRandUpdateNoInsertsConditions):
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND files.last_seen != {run}"
+		"	SET"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		";"
+	)
+
+
+class TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOnCompositeIndex(TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOn):
 	CREATE_FILES_TABLE_STMT = (
 		"CREATE TABLE `files` ("
 		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
@@ -712,13 +803,19 @@ cases = compile_cases_registry(
 		TestCaseNoRand,
 		TestCaseInitial,
 		TestCaseInsertExists,
-		TestCaseDontUpdateRand,
 		TestCaseUpdateAllConditionsInOn,
 		TestCaseUpdateNoJoinConditions,
 		TestCaseUpdateIndexInsertsPath,
 		TestCaseUpdateNoInsertsConditions,
 		TestCaseUpdateNoInsertsConditionsAllInOn,
 		TestCaseUpdateNoInsertsConditionsAllInOnCompositeIndex,
+		TestCaseDontUpdateRand,
+		TestCaseDontUpdateRandUpdateAllConditionsInOn,
+		TestCaseDontUpdateRandUpdateNoJoinConditions,
+		TestCaseDontUpdateRandUpdateIndexInsertsPath,
+		TestCaseDontUpdateRandUpdateNoInsertsConditions,
+		TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOn,
+		TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOnCompositeIndex,
 	]
 )
 
@@ -779,6 +876,30 @@ def bench_one(
 
 
 def bench_all(
+	n=10,
+	file_data_table='file_data',
+	# MySQL connection options
+	user=None,
+	password=None,
+	host='127.0.0.1',
+	port=3306,
+	database='test_schema',
+):
+	bencher = initialise_bencher(
+		file_data_table=file_data_table,
+		user=user,
+		password=password,
+		host=host,
+		port=port,
+		database=database,
+	)
+
+	results = bencher.cross(scenario_classes.values(), cases.values(), n)
+
+	print_csv(results)
+
+
+def bench_specific(
 	n=10,
 	file_data_table='file_data',
 	# MySQL connection options
