@@ -40,7 +40,7 @@ type Config struct {
 	Subpath             string
 	Location            *time.Location `yaml:"-"`
 
-	// Invokation dependent params
+	// Invocation dependent params
 
 	SnapshotName string
 	RunId        uint64
@@ -124,13 +124,20 @@ func (s *Syncer) Run(ctx context.Context) error {
 		return err
 	}
 
+	err = s.cleanupDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (s *Syncer) prepareDatabase(ctx context.Context) error {
 	s.fieldLogger.Info("Starting preparing the meta data database")
 
-	res, err := s.execWithReadCommitted(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
+	res, err := s.execWithReadCommitted(
+		ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId,
+	)
 	if err != nil {
 		return err
 	}
@@ -138,6 +145,11 @@ func (s *Syncer) prepareDatabase(ctx context.Context) error {
 	s.fieldLogger.WithFields(logrus.Fields{
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed delete of invalid file data in inserts table of meta data database")
+
+	err = s.optimiseInsertsIfEmpty(ctx)
+	if err != nil {
+		return err
+	}
 
 	s.fieldLogger.Info("Finished preparing the meta data database")
 
@@ -375,7 +387,15 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed copying of new files in meta data database")
 
-	res, err = s.execWithReadCommitted(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
+	s.fieldLogger.Info("Finished syncing the meta data database")
+
+	return nil
+}
+
+func (s *Syncer) cleanupDatabase(ctx context.Context) error {
+	s.fieldLogger.Info("Starting cleaning up the meta data database")
+
+	res, err := s.execWithReadCommitted(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
 		return errors.Wrap(err, 0)
 	}
@@ -384,9 +404,59 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 		"affected": alwaysRowsAffected(res),
 	}).Info("Performed cleaning of the inserts table")
 
-	s.fieldLogger.Info("Finished syncing the meta data database")
+	s.optimiseInsertsIfEmpty(ctx)
+
+	s.fieldLogger.Info("Finished cleaning up the meta data database")
 
 	return nil
+}
+
+func (s *Syncer) optimiseInsertsIfEmpty(ctx context.Context) error {
+	_, err := s.Config.DB.ExecContext(ctx, lockInsertsQuery.SubstituteAll(s.Config.DB))
+	if err != nil {
+		return err
+	}
+
+	isEmpty, err := s.isInsertsEmpty(ctx)
+	if err != nil {
+		_, _ = s.Config.DB.ExecContext(ctx, unlockQuery.SubstituteAll(s.Config.DB))
+		return err
+	}
+
+	if isEmpty {
+		s.fieldLogger.Info(
+			"Starting performing optimisation of empty inserts table of meta data database",
+		)
+
+		err = s.queryExhaustRows(ctx, optimiseInsertsQuery.SubstituteAll(s.Config.DB))
+		if err != nil {
+			_, _ = s.Config.DB.ExecContext(ctx, unlockQuery.SubstituteAll(s.Config.DB))
+			return err
+		}
+
+		s.fieldLogger.Info(
+			"Finished performing optimisation of empty inserts table of meta data database",
+		)
+	}
+	_, err = s.Config.DB.ExecContext(ctx, unlockQuery.SubstituteAll(s.Config.DB))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Syncer) isInsertsEmpty(ctx context.Context) (bool, error) {
+	row := s.Config.DB.QueryRowxContext(ctx, rowExistsInsertsQuery.SubstituteAll(s.Config.DB))
+
+	var rowExists int
+
+	err := row.Scan(&rowExists)
+	if err != nil {
+		return false, err
+	}
+
+	return rowExists == 0, nil
 }
 
 func (s *Syncer) execWithReadCommitted(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
@@ -409,6 +479,30 @@ func (s *Syncer) execWithReadCommitted(ctx context.Context, query string, args .
 	}
 
 	return res, nil
+}
+
+func (s *Syncer) queryExhaustRows(ctx context.Context, query string, args ...interface{}) error {
+	rows, err := s.Config.DB.QueryxContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+
+	// Probably only requires a call to rows.Close().
+	// If Next() returns false, rows.Close() is called automatically (according to database/sql).
+
+	for rows.Next() {
+	}
+	if err = rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+
+	err = rows.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func alwaysRowsAffected(res sql.Result) int64 {
