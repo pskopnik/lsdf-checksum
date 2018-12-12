@@ -44,6 +44,7 @@ type Config struct {
 
 	SnapshotName string
 	RunId        uint64
+	SyncMode     meda.RunSyncMode
 
 	// Dynamic objects
 
@@ -360,7 +361,15 @@ func (s *Syncer) cleanPath(path string) (string, error) {
 func (s *Syncer) syncDatabase(ctx context.Context) error {
 	s.fieldLogger.Info("Starting syncing the meta data database")
 
-	res, err := s.execWithReadCommitted(ctx, updateQuery.SubstituteAll(s.Config.DB), s.Config.RunId, s.Config.RunId)
+	var incrementalMode int
+	if s.Config.SyncMode == meda.RSMIncremental {
+		incrementalMode = 1
+	}
+
+	res, err := s.execWithReadCommitted(
+		ctx, updateQuery.SubstituteAll(s.Config.DB), s.Config.RunId, incrementalMode,
+		s.Config.RunId,
+	)
 	if err != nil {
 		return errors.Wrap(err, 0)
 	}

@@ -10,6 +10,7 @@ func (c *Config) CopyFrom(other *Config) {
 
 	c.SnapshotName = other.SnapshotName
 	c.RunId = other.RunId
+	c.SyncMode = other.SyncMode
 
 	c.DB = other.DB
 	c.FileSystem = other.FileSystem
@@ -39,6 +40,9 @@ func (c *Config) Merge(other *Config) *Config {
 	}
 	if other.RunId != 0 {
 		c.RunId = other.RunId
+	}
+	if other.SyncMode.IsZero() {
+		c.SyncMode = other.SyncMode
 	}
 
 	if other.DB != nil {
