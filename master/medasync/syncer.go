@@ -56,6 +56,7 @@ type Config struct {
 var DefaultConfig = Config{
 	MaxTransactionSize: 10000,
 	Location:           time.UTC,
+	SyncMode:           meda.RSMFull,
 }
 
 type Syncer struct {
@@ -368,7 +369,7 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 
 	res, err := s.execWithReadCommitted(
 		ctx, updateQuery.SubstituteAll(s.Config.DB), s.Config.RunId, incrementalMode,
-		s.Config.RunId,
+		incrementalMode, s.Config.RunId,
 	)
 	if err != nil {
 		return errors.Wrap(err, 0)

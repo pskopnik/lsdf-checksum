@@ -67,6 +67,7 @@ class TestCaseBase(TestCase):
 		"	`file_size` bigint(20) unsigned NOT NULL,"
 		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
+		"   `to_be_compared` tinyint(3) unsigned NOT NULL DEFAULT 0,"
 		"	`checksum` varbinary(256) DEFAULT NULL,"
 		"	`last_read` bigint(20) unsigned DEFAULT NULL,"
 		"	PRIMARY KEY (`id`),"
@@ -167,6 +168,7 @@ class TestCaseBaseNoRand(TestCaseBase):
 		"	`file_size` bigint(20) unsigned NOT NULL,"
 		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
+		"   `to_be_compared` tinyint(3) unsigned NOT NULL DEFAULT 0,"
 		"	`checksum` varbinary(256) DEFAULT NULL,"
 		"	`last_read` bigint(20) unsigned DEFAULT NULL,"
 		"	PRIMARY KEY (`id`),"
@@ -184,7 +186,8 @@ class TestCaseNoRand(TestCaseBaseNoRand):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
 		";"
 	)
@@ -217,7 +220,8 @@ class TestCaseInitial(TestCaseBase):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
 		";"
 	)
@@ -266,7 +270,8 @@ class TestCaseUpdateAllConditionsInOn(TestCaseInitial):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
 	)
 
@@ -281,7 +286,8 @@ class TestCaseUpdateNoJoinConditions(TestCaseInitial):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
 	)
 
@@ -311,7 +317,8 @@ class TestCaseUpdateNoInsertsConditions(TestCaseInitial):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
 		";"
 	)
@@ -327,7 +334,8 @@ class TestCaseUpdateNoInsertsConditionsAllInOn(TestCaseUpdateNoInsertsConditions
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
 	)
 
@@ -342,6 +350,7 @@ class TestCaseUpdateNoInsertsConditionsAllInOnCompositeIndex(TestCaseUpdateNoIns
 		"	`file_size` bigint(20) unsigned NOT NULL,"
 		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
+		"   `to_be_compared` tinyint(3) unsigned NOT NULL DEFAULT 0,"
 		"	`checksum` varbinary(256) DEFAULT NULL,"
 		"	`last_read` bigint(20) unsigned DEFAULT NULL,"
 		"	PRIMARY KEY (`id`),"
@@ -360,7 +369,8 @@ class TestCaseDontUpdateRand(TestCaseInitial):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
 		";"
 	)
@@ -375,7 +385,8 @@ class TestCaseDontUpdateRandUpdateAllConditionsInOn(TestCaseDontUpdateRand):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
 	)
 
@@ -389,7 +400,8 @@ class TestCaseDontUpdateRandUpdateNoJoinConditions(TestCaseDontUpdateRand):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
 	)
 
@@ -418,7 +430,8 @@ class TestCaseDontUpdateRandUpdateNoInsertsConditions(TestCaseDontUpdateRand):
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
 		";"
 	)
@@ -433,7 +446,8 @@ class TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOn(TestCaseDontUpdateR
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
-		"		files.to_be_read = IF(files.modification_time = inserts.modification_time, 0, 1)"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
 	)
 
@@ -448,6 +462,7 @@ class TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOnCompositeIndex(TestC
 		"	`file_size` bigint(20) unsigned NOT NULL,"
 		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	`to_be_read` tinyint(3) unsigned NOT NULL DEFAULT 1,"
+		"   `to_be_compared` tinyint(3) unsigned NOT NULL DEFAULT 0,"
 		"	`checksum` varbinary(256) DEFAULT NULL,"
 		"	`last_read` bigint(20) unsigned DEFAULT NULL,"
 		"	PRIMARY KEY (`id`),"

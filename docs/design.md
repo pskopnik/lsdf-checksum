@@ -79,7 +79,7 @@ The meta data synchronisation has three steps:
 
 #### SQL Scheme
 
-Ensure that a proper UTF-8 encoding (utf8mb4) is used.
+The proper UTF-8 encoding (`utf8mb4`) is used for all tables.
 
 ##### Files (table `files`)
 
@@ -96,10 +96,10 @@ table.
 
 
  * `id` (`bigint(20) unsigned`) - Auto increment id, primary key.
- * `path` (`varbinary(4096)`) - The path of the file. The path must be relative
-    to the root of the checksumming process but begins with a slash. This column
-    is used as a `JOIN ON` column, thus a secondary index should be created on
-    this column.
+ * `path` (`varbinary(4096)`) - The path of the file. The path must be
+    relative to the root of the checksumming process but begins with a slash.
+    This column is used as a `JOIN ON` column, thus a secondary index should
+    be created on this column.
  * `modification_time` (`datetime(6)`) - The modification time of the file as
     seen by the file system. This column is used to detect file changes.
  * `file_size` (`bigint(20) unsigned`) - The file size of the file, as seen by
@@ -108,8 +108,13 @@ table.
     seen in. This field is updated for all files during every runs.
  * `to_be_read` (`tinyint(3) unsigned`) - This column is a bit (`0` or `1`)
     indicating whether the file should be re-read and its checksum calculated.
-    It is only ever `1` while a run is ongoing. The field is set to `0` when the
-    checksum is written.
+    It is only ever `1` while a run is ongoing. The field is set to `0` when
+    the checksum is written.
+ * `to_be_compared` (`tinyint(3) unsigned`) - This column is a bit (`0` or
+    `1`) indicating whether the calculated checksum should be compared to
+    `checksum` before updating the field. If set to `1` a checksum warning is
+    issued when the checksums don't match. It is only ever `1` while a run is
+    ongoing. The field is set to `0` when the checksum is written.
  * `checksum` (`varbinary(64)`) - The checksum of the file content. Whenever
     this column is updated, `last_read` is updated as well, i.e. `last_read` is
     the id of the run this checksum was last calculated in.

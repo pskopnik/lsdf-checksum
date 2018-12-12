@@ -28,6 +28,7 @@ const filesCreateTableQuery = GenericQuery(`
 		file_size bigint(20) unsigned NOT NULL,
 		last_seen bigint(20) unsigned NOT NULL,
 		to_be_read tinyint(3) unsigned NOT NULL DEFAULT 1,
+		to_be_compared tinyint(3) unsigned NOT NULL DEFAULT 0,
 		checksum varbinary(64) DEFAULT NULL,
 		last_read bigint(20) unsigned DEFAULT NULL,
 		PRIMARY KEY (id),
@@ -49,6 +50,7 @@ type File struct {
 	FileSize         uint64     `db:"file_size"`
 	LastSeen         uint64     `db:"last_seen"`
 	ToBeRead         uint8      `db:"to_be_read"`
+	ToBeCompared     uint8      `db:"to_be_compared"`
 	Checksum         []byte     `db:"checksum"`
 	LastRead         NullUint64 `db:"last_read"`
 }
@@ -83,7 +85,7 @@ func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.
 
 const filesQueryFilesByIdsForShareQuery = GenericQuery(`
 	SELECT
-		id, path, modification_time, file_size, last_seen, checksum, last_read
+		id, path, modification_time, file_size, last_seen, to_be_compared, checksum, last_read
 	FROM {FILES}
 		WHERE id IN (?)
 		LOCK IN SHARE MODE
@@ -112,7 +114,8 @@ const filesPrepareUpdateChecksumQuery = GenericQuery(`
 		SET
 			checksum = :checksum,
 			last_read = :last_read,
-			to_be_read = '0'
+			to_be_read = '0',
+			to_be_compared = '0'
 		WHERE id = :id
 	;
 `)
