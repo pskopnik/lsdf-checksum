@@ -550,18 +550,18 @@ class Scenario(object):
 		result.update_existing_analysis = analysis
 
 		start = datetime.datetime.now()
-		analysis = self.case.insert_new_files(self.cnx, run_id)
-		end = datetime.datetime.now()
-
-		result.insert_new_duration = (end - start).total_seconds()
-		result.insert_new_analysis = analysis
-
-		start = datetime.datetime.now()
 		analysis = self.case.delete_old_files(self.cnx, run_id)
 		end = datetime.datetime.now()
 
 		result.delete_old_duration = (end - start).total_seconds()
 		result.delete_old_analysis = analysis
+
+		start = datetime.datetime.now()
+		analysis = self.case.insert_new_files(self.cnx, run_id)
+		end = datetime.datetime.now()
+
+		result.insert_new_duration = (end - start).total_seconds()
+		result.insert_new_analysis = analysis
 
 		return result
 
