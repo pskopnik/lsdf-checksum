@@ -305,7 +305,8 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 			continue
 		}
 
-		if file.Checksum != nil && !bytes.Equal(calculatedChecksum, file.Checksum) {
+		if file.Checksum != nil && file.ToBeCompared == 1 &&
+			!bytes.Equal(calculatedChecksum, file.Checksum) {
 			err = w.issueChecksumWarning(
 				ctx,
 				warningsInsertPrepStmt,
