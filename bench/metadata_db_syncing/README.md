@@ -124,3 +124,42 @@ the time each operation took:
 In the `no_inserts` scenario only the updating operation results in changes of
 the data set and no file data is updated except the `last_seen` field, which is
 incremented for all files.
+
+## Helpers
+
+### Subset of file_data table
+
+The following queries copy a random subset of count 1000 of the `file_data`
+table into a new table named `file_data_small`:
+
+```sql
+# Create new table `file_data_small`:
+
+# Amend the AUTO_INCREMENT number, e.g. via SHOW CREATE TABLE `file_data`;
+CREATE TABLE `file_data_small` (
+    `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+    `path` varbinary(4096) NOT NULL,
+    `modification_time` datetime(6) NOT NULL,
+    `file_size` bigint(20) unsigned NOT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=<AUTO_INCREMENT_NUMBER_FROM_FILE_DATA> DEFAULT CHARSET=utf8mb4;
+
+# Or (does not set the AUTO_INCREMENT number):
+
+CREATE TABLE `file_data_small` LIKE `file_data`;
+
+INSERT INTO file_data_small (id, path, modification_time, file_size)
+    SELECT
+        file_data.id, file_data.path, file_data.modification_time, file_data.file_size
+    FROM file_data
+    RIGHT JOIN (
+        SELECT
+            FLOOR(
+                1 + RAND() * (
+                    SELECT MAX(id) FROM file_data
+                )
+            ) as id
+            FROM file_data LIMIT 1000
+    ) AS random_ids ON file_data.id = random_ids.id
+;
+```

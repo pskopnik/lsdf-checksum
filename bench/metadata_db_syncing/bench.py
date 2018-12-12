@@ -39,9 +39,9 @@ class TestCase(object):
 class TestCaseBase(TestCase):
 	POPULATE_INSERTS_STMT = (
 		"INSERT INTO `inserts`"
-		"	(`rand`, `path`, `modification_time`, `file_size`, `last_seen`)"
+		"	(`path`, `modification_time`, `file_size`, `last_seen`)"
 		"		SELECT"
-		"			RAND(), `path`, `modification_time`, `file_size`, '{run}'"
+		"			`path`, `modification_time`, `file_size`, '{run}'"
 		"		FROM `{src}`"
 		";"
 	)
@@ -49,7 +49,6 @@ class TestCaseBase(TestCase):
 	CREATE_INSERTS_TABLE_STMT = (
 		"CREATE TABLE `inserts` ("
 		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
-		"	`rand` double NOT NULL,"
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
@@ -216,7 +215,7 @@ class TestCaseInitial(TestCaseBase):
 		"	RIGHT JOIN inserts"
 		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
 		"	SET"
-		"		files.rand = inserts.rand,"
+		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
@@ -266,7 +265,7 @@ class TestCaseUpdateAllConditionsInOn(TestCaseInitial):
 		"	RIGHT JOIN inserts"
 		"		ON inserts.path = files.path AND inserts.last_seen = {run} AND files.last_seen != {run}"
 		"	SET"
-		"		files.rand = inserts.rand,"
+		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
@@ -282,7 +281,7 @@ class TestCaseUpdateNoJoinConditions(TestCaseInitial):
 		"	RIGHT JOIN inserts"
 		"		ON inserts.path = files.path"
 		"	SET"
-		"		files.rand = inserts.rand,"
+		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
@@ -296,7 +295,6 @@ class TestCaseUpdateIndexInsertsPath(TestCaseUpdateNoJoinConditions):
 	CREATE_INSERTS_TABLE_STMT = (
 		"CREATE TABLE `inserts` ("
 		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
-		"	`rand` double NOT NULL,"
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
@@ -313,7 +311,7 @@ class TestCaseUpdateNoInsertsConditions(TestCaseInitial):
 		"	RIGHT JOIN inserts"
 		"		ON inserts.path = files.path"
 		"	SET"
-		"		files.rand = inserts.rand,"
+		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
@@ -330,7 +328,7 @@ class TestCaseUpdateNoInsertsConditionsAllInOn(TestCaseUpdateNoInsertsConditions
 		"	RIGHT JOIN inserts"
 		"		ON inserts.path = files.path AND files.last_seen != {run}"
 		"	SET"
-		"		files.rand = inserts.rand,"
+		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
 		"		files.last_seen = inserts.last_seen,"
@@ -357,6 +355,55 @@ class TestCaseUpdateNoInsertsConditionsAllInOnCompositeIndex(TestCaseUpdateNoIns
 		"	KEY `rand` (`rand`),"
 		"	KEY `path_last_seen` (`path`(2048),`last_seen`)"
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+
+class TestCaseRandInInserts(TestCaseInitial):
+	CREATE_INSERTS_TABLE_STMT = (
+		"CREATE TABLE `inserts` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`rand` double NOT NULL,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	PRIMARY KEY (`id`)"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+	POPULATE_INSERTS_STMT = (
+		"INSERT INTO `inserts`"
+		"	(`rand`, `path`, `modification_time`, `file_size`, `last_seen`)"
+		"		SELECT"
+		"			RAND(), `path`, `modification_time`, `file_size`, '{run}'"
+		"		FROM `{src}`"
+		";"
+	)
+
+	UPDATE_EXISTING_FILES_STMT = (
+		"UPDATE files"
+		"	RIGHT JOIN inserts"
+		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"	SET"
+		"		files.rand = inserts.rand,"
+		"		files.file_size = inserts.file_size,"
+		"		files.modification_time = inserts.modification_time,"
+		"		files.last_seen = inserts.last_seen,"
+		"		files.to_be_read = 1,"
+		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
+		"	WHERE files.last_seen != {run}"
+		";"
+	)
+
+	INSERT_NEW_FILES_STMT = (
+		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
+		"	SELECT {src}.rand, {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	FROM {src}"
+		"	LEFT JOIN files ON {src}.path = files.path"
+		"	WHERE files.id IS NULL"
+		"		AND"
+		"			{src}.last_seen = {run}"
+		";"
 	)
 
 
@@ -410,7 +457,6 @@ class TestCaseDontUpdateRandUpdateIndexInsertsPath(TestCaseDontUpdateRandUpdateN
 	CREATE_INSERTS_TABLE_STMT = (
 		"CREATE TABLE `inserts` ("
 		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
-		"	`rand` double NOT NULL,"
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
@@ -469,6 +515,40 @@ class TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOnCompositeIndex(TestC
 		"	KEY `rand` (`rand`),"
 		"	KEY `path_last_seen` (`path`(2048),`last_seen`)"
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+
+class TestCaseDontUpdateRandRandInInserts(TestCaseDontUpdateRand):
+	CREATE_INSERTS_TABLE_STMT = (
+		"CREATE TABLE `inserts` ("
+		"	`id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,"
+		"	`rand` double NOT NULL,"
+		"	`path` varbinary(4096) NOT NULL,"
+		"	`modification_time` datetime(6) NOT NULL,"
+		"	`file_size` bigint(20) unsigned NOT NULL,"
+		"	`last_seen` bigint(20) unsigned NOT NULL,"
+		"	PRIMARY KEY (`id`)"
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	)
+
+	POPULATE_INSERTS_STMT = (
+		"INSERT INTO `inserts`"
+		"	(`rand`, `path`, `modification_time`, `file_size`, `last_seen`)"
+		"		SELECT"
+		"			RAND(), `path`, `modification_time`, `file_size`, '{run}'"
+		"		FROM `{src}`"
+		";"
+	)
+
+	INSERT_NEW_FILES_STMT = (
+		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
+		"	SELECT {src}.rand, {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	FROM {src}"
+		"	LEFT JOIN files ON {src}.path = files.path"
+		"	WHERE files.id IS NULL"
+		"		AND"
+		"			{src}.last_seen = {run}"
+		";"
 	)
 
 

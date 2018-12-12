@@ -96,6 +96,9 @@ table.
 
 
  * `id` (`bigint(20) unsigned`) - Auto increment id, primary key.
+ * `rand` (`double`) - Random double. Some queries use this for ordering to
+    ensure a uniform distribution of files (with regards to return order).
+    Thus, a secondary index should be created on this column.
  * `path` (`varbinary(4096)`) - The path of the file. The path must be
     relative to the root of the checksumming process but begins with a slash.
     This column is used as a `JOIN ON` column, thus a secondary index should
