@@ -243,6 +243,17 @@ class TestCaseInitial(TestCaseBase):
 	)
 
 
+class TestCaseInsertAllConditionsInOn(TestCaseInitial):
+	INSERT_NEW_FILES_STMT = (
+		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
+		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	FROM {src}"
+		"	LEFT JOIN files"
+		"		ON {src}.path = files.path AND files.id IS NULL AND {src}.last_seen = {run}"
+		";"
+	)
+
+
 class TestCaseInsertExists(TestCaseInitial):
 	INSERT_NEW_FILES_STMT = (
 		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
@@ -897,6 +908,7 @@ cases = compile_cases_registry(
 	[
 		TestCaseNoRand,
 		TestCaseInitial,
+		TestCaseInsertAllConditionsInOn,
 		TestCaseInsertExists,
 		TestCaseUpdateAllConditionsInOn,
 		TestCaseUpdateNoJoinConditions,
@@ -904,6 +916,7 @@ cases = compile_cases_registry(
 		TestCaseUpdateNoInsertsConditions,
 		TestCaseUpdateNoInsertsConditionsAllInOn,
 		TestCaseUpdateNoInsertsConditionsAllInOnCompositeIndex,
+		TestCaseRandInInserts,
 		TestCaseDontUpdateRand,
 		TestCaseDontUpdateRandUpdateAllConditionsInOn,
 		TestCaseDontUpdateRandUpdateNoJoinConditions,
@@ -911,6 +924,7 @@ cases = compile_cases_registry(
 		TestCaseDontUpdateRandUpdateNoInsertsConditions,
 		TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOn,
 		TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOnCompositeIndex,
+		TestCaseDontUpdateRandRandInInserts,
 	]
 )
 
