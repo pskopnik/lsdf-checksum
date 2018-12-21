@@ -2,10 +2,10 @@ module git.scc.kit.edu/sdm/lsdf-checksum
 
 require (
 	github.com/MasterOfBinary/gobatch v0.0.0-20180929163814-711b27aab3df
+	github.com/Masterminds/squirrel v1.1.0
 	github.com/akutz/gofsutil v0.1.2
 	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.4.7 // indirect
 	github.com/go-errors/errors v1.0.1
 	github.com/go-logfmt/logfmt v0.3.0
@@ -23,11 +23,9 @@ require (
 	github.com/onsi/ginkgo v1.6.0
 	github.com/onsi/gomega v1.4.1
 	github.com/philhofer/fwd v1.0.0 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967 // indirect
 	github.com/sirupsen/logrus v1.0.6
 	github.com/stretchr/objx v0.1.1
-	github.com/stretchr/testify v1.2.2 // indirect
 	github.com/thecodeteam/gofsutil v0.1.2 // indirect
 	github.com/tinylib/msgp v1.0.2
 	golang.org/x/crypto v0.0.0-20180820150726-614d502a4dac // indirect

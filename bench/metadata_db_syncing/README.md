@@ -148,18 +148,20 @@ CREATE TABLE `file_data_small` (
 
 CREATE TABLE `file_data_small` LIKE `file_data`;
 
-INSERT INTO file_data_small (id, path, modification_time, file_size)
+INSERT INTO file_data_medium (id, path, modification_time, file_size)
     SELECT
         file_data.id, file_data.path, file_data.modification_time, file_data.file_size
     FROM file_data
     RIGHT JOIN (
-        SELECT
-            FLOOR(
-                1 + RAND() * (
-                    SELECT MAX(id) FROM file_data
-                )
-            ) as id
-            FROM file_data LIMIT 1000
+        SELECT DISTINCT id FROM (
+            SELECT
+                FLOOR(
+                    1 + RAND() * (
+                        SELECT MAX(id) FROM file_data
+                    )
+                ) as id
+                FROM file_data LIMIT 2000
+        ) AS random_ids_source LIMIT 1000
     ) AS random_ids ON file_data.id = random_ids.id
 ;
 ```
