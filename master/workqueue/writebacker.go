@@ -331,6 +331,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 		file.Checksum = calculatedChecksums[file.Id]
 		file.LastRead.Uint64, file.LastRead.Valid = w.Config.RunId, true
 		file.ToBeRead = 0
+		file.ToBeCompared = 0
 
 		// TODO result
 		_, err = filesUpdatePrepStmt.ExecContext(ctx, file)
@@ -358,7 +359,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 				"action":        "ignoring",
 				"file_id":       id,
 				"file_checksum": checksum,
-			}).Warn("Database returned excess files")
+			}).Warn("Database returned insufficient files")
 		}
 	}
 
@@ -374,7 +375,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 	w.fieldLogger.Debug("Finished processing of batch")
 }
 
-func (w *writeBackerBatchProcessor) readBatchFiles(ps *batch.PipelineStage) (map[uint64][]byte, []uint64) {
+func (w writeBackerBatchProcessor) readBatchFiles(ps *batch.PipelineStage) (map[uint64][]byte, []uint64) {
 	calculatedChecksums := make(map[uint64][]byte)
 	fileIds := make([]uint64, 0, 32)
 
@@ -388,7 +389,7 @@ func (w *writeBackerBatchProcessor) readBatchFiles(ps *batch.PipelineStage) (map
 	return calculatedChecksums, fileIds
 }
 
-func (w *writeBackerBatchProcessor) fetchDBFiles(ctx context.Context, tx *sqlx.Tx, fileIds []uint64) ([]meda.File, error) {
+func (w writeBackerBatchProcessor) fetchDBFiles(ctx context.Context, tx *sqlx.Tx, fileIds []uint64) ([]meda.File, error) {
 	var file meda.File
 	files := make([]meda.File, 0, len(fileIds))
 
