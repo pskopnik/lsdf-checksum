@@ -8,6 +8,10 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// MaxPlaceholders is the maximum number of placeholders ('?') allowed in a
+// prepared statements for recent versions of MySQL and MariaDB.
+const MaxPlaceholders = 65535
+
 //go:generate confions config Config
 
 type Config struct {

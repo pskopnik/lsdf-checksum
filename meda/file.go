@@ -85,7 +85,16 @@ func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.
 
 const filesQueryFilesByIdsForShareQuery = GenericQuery(`
 	SELECT
-		id, path, modification_time, file_size, last_seen, to_be_compared, checksum, last_read
+		id,
+		rand,
+		path,
+		modification_time,
+		file_size,
+		last_seen,
+		to_be_read,
+		to_be_compared,
+		checksum,
+		last_read
 	FROM {FILES}
 		WHERE id IN (?)
 		LOCK IN SHARE MODE
@@ -107,6 +116,44 @@ func (d *DB) FilesQueryFilesByIdsForShare(ctx context.Context, querier RebindQue
 	query = querier.Rebind(query)
 
 	return querier.QueryxContext(ctx, query, args...)
+}
+
+func (d *DB) FilesFetchFilesByIdsForShare(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) ([]File, error) {
+	files := make([]File, 0, len(fileIds))
+
+	for i := 0; i < len(fileIds); {
+		var file File
+		rangeEnd := i + MaxPlaceholders
+		if rangeEnd >= len(fileIds) {
+			rangeEnd = len(fileIds)
+		}
+
+		rows, err := d.FilesQueryFilesByIdsForShare(ctx, querier, fileIds[i:rangeEnd])
+		if err != nil {
+			return []File{}, err
+		}
+
+		for rows.Next() {
+			err = rows.StructScan(&file)
+			if err != nil {
+				_ = rows.Close()
+				return []File{}, err
+			}
+
+			files = append(files, file)
+		}
+		if err = rows.Err(); err != nil {
+			_ = rows.Close()
+			return []File{}, err
+		}
+
+		if err = rows.Close(); err != nil {
+			return []File{}, err
+		}
+		i = rangeEnd
+	}
+
+	return files, nil
 }
 
 const filesPrepareUpdateChecksumQuery = GenericQuery(`
