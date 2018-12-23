@@ -103,7 +103,6 @@ const updateQuery = meda.GenericQuery(`
 		RIGHT JOIN {INSERTS}
 			ON {INSERTS}.path = {FILES}.path AND {INSERTS}.last_seen = ?
 		SET
-			{FILES}.rand = RAND(),
 			{FILES}.file_size = {INSERTS}.file_size,
 			{FILES}.modification_time = {INSERTS}.modification_time,
 			{FILES}.last_seen = {INSERTS}.last_seen,
