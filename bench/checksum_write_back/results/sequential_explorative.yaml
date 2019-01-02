@@ -1,0 +1,38 @@
+db:
+  driver: mysql
+  datasourcename: "root:@/test_schema"
+  tablesnamebase:
+    filedata: "file_data_medium"
+cross:
+  methods:
+    - basic
+    - onduplicate
+    - updatecase
+    - deleteinsert
+    - collectjoin
+  values:
+    concurrency:
+      - 0
+    batchsize:
+      - 1
+      - 100
+      - 200
+      - 500
+      - 1000
+      - 2000
+      - 5000
+      - 10000
+      - 20000
+      - 50000
+    transactionsize:
+      - 1
+      - 100
+      - 200
+      - 500
+      - 1000
+      - 2000
+      - 5000
+      - 10000
+      - 20000
+      - 50000
+      - 100000
