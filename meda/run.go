@@ -51,12 +51,24 @@ const runsInsertQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) RunsInsert(ctx context.Context, execer sqlx.ExecerContext, run *Run) (sql.Result, error) {
+func (d *DB) RunsInsertAndSetId(ctx context.Context, execer sqlx.ExecerContext, run *Run) (sql.Result, error) {
 	if execer == nil {
 		execer = &d.DB
 	}
 
-	return execer.ExecContext(ctx, runsInsertQuery.SubstituteAll(d), run)
+	result, err := execer.ExecContext(ctx, runsInsertQuery.SubstituteAll(d), run)
+	if err != nil {
+		return result, err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return result, err
+	}
+
+	run.Id = uint64(id)
+
+	return result, err
 }
 
 const runsUpdateQuery = GenericQuery(`
