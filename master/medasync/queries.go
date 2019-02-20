@@ -4,75 +4,13 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 )
 
-// cleanInsertsQuery is the SQL query removing files read during a specific
-// run from the inserts table. The query is meant to be run using exec and has
-// no output.
-//
-// The query requires one parameter:
-//
-//     run_id - The Id of the run for which the synchronisation takes place.
-//
-// After execution, the number of deleted rows can be retrieved using
-// RowsAffected().
-const cleanInsertsQuery = meda.GenericQuery(`
-	DELETE FROM {INSERTS}
-		WHERE last_seen = ?
-	;
-`)
-
-// lockInsertsQuery is the SQL query acquiring an exclusive write lock on the
-// inserts table for the transaction it is executed in. The query is meant to
-// be run using exec and has no output. This query should only be used as part
-// of a transaction due to the way database/sql handles connection pooling.
-//
-//     http://go-database-sql.org/surprises.html#connection-state-mismatch
+// truncateInsertsQuery is the SQL query performing an TRUNCATE TABLE
+// statement on the inserts table. The query is meant to be run using exec and
+// has no output.
 //
 // The query requires no parameters.
-const lockInsertsQuery = meda.GenericQuery(`
-	LOCK TABLES
-		{INSERTS} WRITE
-	;
-`)
-
-// unlockQuery is the SQL query releasing all locks acquired by the
-// transaction it is executed in. The query is meant to be run using exec and
-// has no output. This query should only be used as part of the transaction
-// SQL LOCK statements are run in due to the way database/sql handles
-// connection pooling.
-//
-//     http://go-database-sql.org/surprises.html#connection-state-mismatch
-//
-// The query requires no parameters.
-const unlockQuery = meda.GenericQuery(`
-	UNLOCK TABLES;
-`)
-
-// optimiseInsertsQuery is the SQL query performing an OPTIMIZE TABLE
-// statement on the inserts table. The query is meant to be run using query.
-//
-// The query requires no parameters.
-//
-// The query returns the complete output of the OPTIMIZE TABLE statement.
-//
-//     https://dev.mysql.com/doc/refman/8.0/en/optimize-table.html
-//     https://mariadb.com/kb/en/library/optimize-table/
-const optimiseInsertsQuery = meda.GenericQuery(`
-	OPTIMIZE TABLE {INSERTS};
-`)
-
-// rowExistsInsertsQuery is the SQL query returning whether there are any rows
-// in the inserts table. The query is meant to be run using query.
-//
-// The query requires no parameters.
-//
-// The query outputs a single row with one column:
-//
-//     row_exists - 1 if at least one row exists in the inserts table, 0
-//                  otherwise.
-const rowExistsInsertsQuery = meda.GenericQuery(`
-	SELECT
-		EXISTS (SELECT 1 FROM {INSERTS}) AS row_exists
-	;
+const truncateInsertsQuery = meda.GenericQuery(`
+	TRUNCATE TABLE {INSERTS};
 `)
 
 // updateQuery is the SQL query updating files in the files table with new

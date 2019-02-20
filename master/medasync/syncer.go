@@ -21,6 +21,12 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
+var (
+	txOptionsReadCommitted = &sql.TxOptions{
+		Isolation: sql.LevelReadCommitted,
+	}
+)
+
 //go:generate confions config Config
 
 type Config struct {
@@ -34,10 +40,10 @@ type Config struct {
 
 	// Static Params
 
+	Subpath             string
 	TemporaryDirectory  string
 	GlobalWorkDirectory string
 	NodeList            []string
-	Subpath             string
 	Location            *time.Location `yaml:"-"`
 
 	// Invocation dependent params
@@ -126,7 +132,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 		return err
 	}
 
-	err = s.cleanupDatabase(ctx)
+	err = s.cleanUpDatabase(ctx)
 	if err != nil {
 		return err
 	}
@@ -134,23 +140,16 @@ func (s *Syncer) Run(ctx context.Context) error {
 	return nil
 }
 
+func (s *Syncer) CleanUp(ctx context.Context) error {
+	return s.cleanUpDatabase(ctx)
+}
+
 func (s *Syncer) prepareDatabase(ctx context.Context) error {
 	s.fieldLogger.Info("Starting preparing the meta data database")
 
-	res, err := s.execWithReadCommitted(
-		ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId,
-	)
+	err := s.truncateInserts(ctx)
 	if err != nil {
-		return err
-	}
-
-	s.fieldLogger.WithFields(logrus.Fields{
-		"affected": alwaysRowsAffected(res),
-	}).Info("Performed delete of invalid file data in inserts table of meta data database")
-
-	err = s.optimiseInsertsIfEmpty(ctx)
-	if err != nil {
-		return err
+		return errors.Wrap(err, 0)
 	}
 
 	s.fieldLogger.Info("Finished preparing the meta data database")
@@ -402,77 +401,38 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 	return nil
 }
 
-func (s *Syncer) cleanupDatabase(ctx context.Context) error {
+func (s *Syncer) cleanUpDatabase(ctx context.Context) error {
 	s.fieldLogger.Info("Starting cleaning up the meta data database")
 
-	res, err := s.execWithReadCommitted(ctx, cleanInsertsQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
+	err := s.truncateInserts(ctx)
 	if err != nil {
 		return errors.Wrap(err, 0)
 	}
-
-	s.fieldLogger.WithFields(logrus.Fields{
-		"affected": alwaysRowsAffected(res),
-	}).Info("Performed cleaning of the inserts table")
-
-	s.optimiseInsertsIfEmpty(ctx)
 
 	s.fieldLogger.Info("Finished cleaning up the meta data database")
 
 	return nil
 }
 
-func (s *Syncer) optimiseInsertsIfEmpty(ctx context.Context) error {
-	_, err := s.Config.DB.ExecContext(ctx, lockInsertsQuery.SubstituteAll(s.Config.DB))
+func (s *Syncer) truncateInserts(ctx context.Context) error {
+	s.fieldLogger.Info(
+		"Starting truncating inserts table in meta data database",
+	)
+
+	_, err := s.execWithReadCommitted(ctx, truncateInsertsQuery.SubstituteAll(s.Config.DB))
 	if err != nil {
-		return err
+		return errors.Wrap(err, 0)
 	}
 
-	isEmpty, err := s.isInsertsEmpty(ctx)
-	if err != nil {
-		_, _ = s.Config.DB.ExecContext(ctx, unlockQuery.SubstituteAll(s.Config.DB))
-		return err
-	}
-
-	if isEmpty {
-		s.fieldLogger.Info(
-			"Starting performing optimisation of empty inserts table of meta data database",
-		)
-
-		err = s.queryExhaustRows(ctx, optimiseInsertsQuery.SubstituteAll(s.Config.DB))
-		if err != nil {
-			_, _ = s.Config.DB.ExecContext(ctx, unlockQuery.SubstituteAll(s.Config.DB))
-			return err
-		}
-
-		s.fieldLogger.Info(
-			"Finished performing optimisation of empty inserts table of meta data database",
-		)
-	}
-	_, err = s.Config.DB.ExecContext(ctx, unlockQuery.SubstituteAll(s.Config.DB))
-	if err != nil {
-		return err
-	}
+	s.fieldLogger.Info(
+		"Finished truncating inserts table in meta data database",
+	)
 
 	return nil
 }
 
-func (s *Syncer) isInsertsEmpty(ctx context.Context) (bool, error) {
-	row := s.Config.DB.QueryRowxContext(ctx, rowExistsInsertsQuery.SubstituteAll(s.Config.DB))
-
-	var rowExists int
-
-	err := row.Scan(&rowExists)
-	if err != nil {
-		return false, err
-	}
-
-	return rowExists == 0, nil
-}
-
 func (s *Syncer) execWithReadCommitted(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	tx, err := s.Config.DB.BeginTxx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelReadCommitted,
-	})
+	tx, err := s.Config.DB.BeginTxx(ctx, txOptionsReadCommitted)
 	if err != nil {
 		return nil, errors.Wrap(err, 0)
 	}
@@ -489,30 +449,6 @@ func (s *Syncer) execWithReadCommitted(ctx context.Context, query string, args .
 	}
 
 	return res, nil
-}
-
-func (s *Syncer) queryExhaustRows(ctx context.Context, query string, args ...interface{}) error {
-	rows, err := s.Config.DB.QueryxContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-
-	// Probably only requires a call to rows.Close().
-	// If Next() returns false, rows.Close() is called automatically (according to database/sql).
-
-	for rows.Next() {
-	}
-	if err = rows.Err(); err != nil {
-		_ = rows.Close()
-		return err
-	}
-
-	err = rows.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func alwaysRowsAffected(res sql.Result) int64 {
