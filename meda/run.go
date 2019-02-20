@@ -131,6 +131,7 @@ func (d *DB) RunsQueryAll(ctx context.Context, querier sqlx.QueryerContext) (*sq
 	return querier.QueryxContext(ctx, runsQueryAllQuery.SubstituteAll(d))
 }
 
+// Error variables related to RunSyncMode and RunState.
 var (
 	ErrInvalidRunSyncModeValueType = errors.New("invalid RunSyncMode value type")
 	ErrInvalidRunStateValueType    = errors.New("invalid RunState value type")
@@ -175,12 +176,12 @@ func (r *RunSyncMode) Scan(src interface{}) error {
 	}
 
 	switch strSrc {
+	case "default":
+		*r = RSMDefault
 	case "full":
 		*r = RSMFull
 	case "incremental":
 		*r = RSMIncremental
-	case "default":
-		*r = RSMDefault
 	case "invalid":
 		*r = RSMInvalid
 	default:
@@ -200,6 +201,9 @@ const (
 	RSWorkqueue
 	RSCleanup
 	RSFinished
+	RSAbortingMedasync
+	RSAbortingSnapshot
+	RSAborted
 	RSInvalid = -1
 )
 
@@ -219,6 +223,12 @@ func (r RunState) String() string {
 		return "cleanup"
 	case RSFinished:
 		return "finished"
+	case RSAbortingMedasync:
+		return "aborting-medasync"
+	case RSAbortingSnapshot:
+		return "aborting-snapshot"
+	case RSAborted:
+		return "aborted"
 	case RSInvalid:
 		return "invalid"
 	default:
@@ -251,6 +261,12 @@ func (r *RunState) Scan(src interface{}) error {
 		*r = RSCleanup
 	case "finished":
 		*r = RSFinished
+	case "aborting-medasync":
+		*r = RSAbortingMedasync
+	case "aborting-snapshot":
+		*r = RSAbortingSnapshot
+	case "aborted":
+		*r = RSAborted
 	case "invalid":
 		*r = RSInvalid
 	default:
