@@ -3,11 +3,8 @@ package workqueue
 
 import (
 	"context"
-	"errors"
-	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/pskopnik/rewledis"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
@@ -35,45 +32,19 @@ func (q queueSchedulerGetNodesNumer) GetNodesNum() (uint, error) {
 	return q.GetNodesNum()
 }
 
-// Error variables related to WorkQueue.
-var (
-	ErrUnsupportedRedisDialect = errors.New("specified redis dialect is not supported")
-)
-
-//go:generate confions config RedisConfig
-
-// RedisConfig contains configuration options for a connection pool to a redis
-// database.
-type RedisConfig struct {
-	Dialect           string
-	Network           string
-	Address           string
-	Database          int
-	Prefix            string
-	Password          string
-	MaxIdle           int
-	IdleTimeout       time.Duration
-	InternalMaxActive int
-}
-
-var RedisDefaultConfig = &RedisConfig{
-	Dialect:     "redis",
-	MaxIdle:     10,
-	IdleTimeout: 300 * time.Second,
-}
-
 //go:generate confions config Config
 
 type Config struct {
 	FileSystemName string
+	RedisPrefix    string
 
 	RunId        uint64
 	SnapshotName string
 
 	DB     *meda.DB           `yaml:"-"`
 	Logger logrus.FieldLogger `yaml:"-"`
+	Pool   *redis.Pool        `yaml:"-"`
 
-	Redis RedisConfig
 	// EWMAScheduler contains the configuration for the EWMAScheduler
 	// SchedulingController. Here only static configuration options should be
 	// set.
@@ -137,17 +108,6 @@ func (w *WorkQueue) Start(ctx context.Context) {
 	w.tomb, _ = tomb.WithContext(ctx)
 
 	w.tomb.Go(func() error {
-		pool, err := w.createRedisPool()
-		if err != nil {
-			return err
-		}
-		w.pool = pool
-
-		err = w.testRedis()
-		if err != nil {
-			return err
-		}
-
 		w.schedulingController = w.createEWMAScheduler()
 
 		w.producer = w.createProducer(w.schedulingController)
@@ -262,69 +222,6 @@ func (w *WorkQueue) performanceMonitorStopper() error {
 	}
 }
 
-func (w *WorkQueue) createRedisPool() (*redis.Pool, error) {
-	config := RedisDefaultConfig.
-		Clone().
-		Merge(&w.Config.Redis).
-		Merge(&RedisConfig{})
-
-	if config.Dialect == "redis" {
-		return &redis.Pool{
-			Dial: func() (redis.Conn, error) {
-				return redis.Dial(
-					config.Network,
-					config.Address,
-					redis.DialDatabase(config.Database),
-					redis.DialPassword(config.Password),
-				)
-			},
-			MaxIdle:     config.MaxIdle,
-			IdleTimeout: config.IdleTimeout,
-		}, nil
-	} else if config.Dialect == "ledis" {
-		return rewledis.NewPool(&rewledis.PoolConfig{
-			Dial: func() (redis.Conn, error) {
-				return redis.Dial(
-					config.Network,
-					config.Address,
-					redis.DialDatabase(config.Database),
-					redis.DialPassword(config.Password),
-				)
-			},
-			MaxIdle:     config.MaxIdle,
-			IdleTimeout: config.IdleTimeout,
-		}, config.InternalMaxActive), nil
-	} else {
-		return nil, ErrUnsupportedRedisDialect
-	}
-}
-
-func (w *WorkQueue) testRedis() error {
-	loggerFields := logrus.Fields{
-		"network":       w.Config.Redis.Network,
-		"address":       w.Config.Redis.Address,
-		"database":      w.Config.Redis.Database,
-		"authenticated": len(w.Config.Redis.Password) > 0,
-	}
-
-	conn := w.pool.Get()
-	_, err := conn.Do("PING")
-	_ = conn.Close()
-	if err != nil {
-		w.fieldLogger.
-			WithFields(loggerFields).
-			WithError(err).
-			Error("Connecting to redis failed")
-
-		return err
-	}
-	w.fieldLogger.
-		WithFields(loggerFields).
-		Info("Connected to redis")
-
-	return nil
-}
-
 func (w *WorkQueue) createEWMAScheduler() *EWMAScheduler {
 	config := EWMASchedulerDefaultConfig.
 		Clone().
@@ -340,7 +237,7 @@ func (w *WorkQueue) createProducer(controller SchedulingController) *Producer {
 		Merge(&w.Config.Producer).
 		Merge(&ProducerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      GocraftWorkNamespace(w.Config.Redis.Prefix),
+			Namespace:      GocraftWorkNamespace(w.Config.RedisPrefix),
 
 			SnapshotName: w.Config.SnapshotName,
 
@@ -360,7 +257,7 @@ func (w *WorkQueue) createWriteBacker() *WriteBacker {
 		Merge(&w.Config.WriteBacker).
 		Merge(&WriteBackerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      GocraftWorkNamespace(w.Config.Redis.Prefix),
+			Namespace:      GocraftWorkNamespace(w.Config.RedisPrefix),
 
 			RunId:        w.Config.RunId,
 			SnapshotName: w.Config.SnapshotName,
@@ -379,7 +276,7 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 		Merge(&w.Config.QueueWatcher).
 		Merge(&QueueWatcherConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      GocraftWorkNamespace(w.Config.Redis.Prefix),
+			Namespace:      GocraftWorkNamespace(w.Config.RedisPrefix),
 
 			RunId:        w.Config.RunId,
 			SnapshotName: w.Config.SnapshotName,
@@ -399,7 +296,7 @@ func (w *WorkQueue) createPerformanceMonitor(queueScheduler *QueueScheduler) *Pe
 		Clone().
 		Merge(&w.Config.PerformanceMonitor).
 		Merge(&PerformanceMonitorConfig{
-			Prefix: w.Config.Redis.Prefix,
+			Prefix: w.Config.RedisPrefix,
 
 			Unit: PerformanceMonitorUnit(w.Config.FileSystemName, w.Config.SnapshotName),
 
