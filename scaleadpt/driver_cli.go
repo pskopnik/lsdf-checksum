@@ -23,12 +23,14 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
+// Error variables related to CLIDriver.
 var (
-	ErrSnapshotDoesNotExist = errors.New("snapshot does not exist")
-	ErrUnexpectedFormat     = errors.New("unexpected format encountered")
-	ErrPrefixNotFound       = errors.New("prefix not found")
-	ErrHeaderNotFound       = errors.New("a header field was not found")
-	ErrFileSystemNotFound   = errors.New("the file system was not found")
+	ErrSnapshotDoesNotExist  = errors.New("snapshot does not exist")
+	ErrSnapshotAlreadyExists = errors.New("snapshot with the specified name already exists")
+	ErrUnexpectedFormat      = errors.New("unexpected format encountered")
+	ErrPrefixNotFound        = errors.New("prefix not found")
+	ErrHeaderNotFound        = errors.New("a header field was not found")
+	ErrFileSystemNotFound    = errors.New("the file system was not found")
 )
 
 const gpfsMountType = "gpfs"
@@ -163,8 +165,18 @@ func (c *CLIDriver) CreateSnapshot(filesystem DriverFileSystem, name string, opt
 	}
 
 	_, err := c.runOutput("mmcrsnapshot", cmdArgs(args...))
+	if err != nil {
+		if gpfsError, ok := err.(*CLIGPFSError); ok {
+			if gpfsError.MessageCode == "6027-2601" {
+				// https://www.ibm.com/support/knowledgecenter/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/6027-2601.htm
+				return ErrSnapshotAlreadyExists
+			}
+		}
 
-	return err
+		return err
+	}
+
+	return nil
 }
 
 func (c *CLIDriver) GetSnapshot(filesystem DriverFileSystem, name string) (*Snapshot, error) {
