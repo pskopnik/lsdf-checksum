@@ -102,9 +102,7 @@ type Config struct {
 	PerformanceMonitor PerformanceMonitorConfig
 }
 
-var DefaultConfig = &Config{
-	Redis: *RedisDefaultConfig,
-}
+var DefaultConfig = &Config{}
 
 type WorkQueue struct {
 	Config *Config

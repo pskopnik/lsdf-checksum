@@ -32,6 +32,8 @@ type ProductionRequest struct {
 	N uint
 }
 
+//go:generate confions config QueueSchedulerConfig
+
 type QueueSchedulerConfig struct {
 	Namespace string
 	JobName   string
@@ -268,6 +270,8 @@ func (q *QueueScheduler) Enqueue(args map[string]interface{}) (*work.Job, error)
 func (q *QueueScheduler) C() <-chan ProductionRequest {
 	return q.c
 }
+
+//go:generate confions config EWMASchedulerConfig
 
 type EWMASchedulerConfig struct {
 	ConsumptionLifetime time.Duration

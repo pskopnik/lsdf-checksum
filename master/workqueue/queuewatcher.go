@@ -13,6 +13,7 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 )
 
+// Error variables related to QueueWatcher.
 var (
 	ErrMaxChecksExceeded = errors.New("number of checks exceeded MaxRetryJobChecks")
 )
