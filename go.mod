@@ -1,11 +1,16 @@
 module git.scc.kit.edu/sdm/lsdf-checksum
 
+go 1.12
+
 require (
+	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/MasterOfBinary/gobatch v0.0.0-20180929163814-711b27aab3df
 	github.com/Masterminds/squirrel v1.1.0
 	github.com/akutz/gofsutil v0.1.2
 	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
+	github.com/alicebob/gopher-json v0.0.0-20180125190556-5a6b3ba71ee6 // indirect
+	github.com/alicebob/miniredis v2.5.0+incompatible // indirect
 	github.com/cupcake/rdb v0.0.0-20161107195141-43ba34106c76 // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/glendc/gopher-json v0.0.0-20170414221815-dc4743023d0c // indirect
@@ -24,6 +29,7 @@ require (
 	github.com/onsi/gomega v1.4.3
 	github.com/pelletier/go-toml v1.2.0 // indirect
 	github.com/philhofer/fwd v1.0.0 // indirect
+	github.com/pskopnik/rewledis v0.0.0-20190304181615-ee219303c138
 	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 // indirect
 	github.com/siddontang/goredis v0.0.0-20180423163523-0b4019cbd7b7 // indirect
@@ -37,16 +43,17 @@ require (
 	github.com/ugorji/go/codec v0.0.0-20190320090025-2dc34c0b8780 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20190206043414-8bfc7677f583 // indirect
 	golang.org/x/exp v0.0.0-20180807140117-3d87b88a115f
-	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
+	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
+	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
 	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
 	golang.org/x/time v0.0.0-20180412165947-fbb02b2291d2
-	golang.org/x/tools v0.0.0-20190401205534-4c644d7e323d // indirect
 	gonum.org/v1/gonum v0.0.0-20180823045727-3092bd257723
 	gonum.org/v1/netlib v0.0.0-20180816165226-ebcc3d2662d3 // indirect
 	google.golang.org/appengine v1.1.0 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
+	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	gopkg.in/yaml.v2 v2.2.1
 )

@@ -3,9 +3,11 @@ package workqueue
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
+	"github.com/pskopnik/rewledis"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
@@ -33,21 +35,29 @@ func (q queueSchedulerGetNodesNumer) GetNodesNum() (uint, error) {
 	return q.GetNodesNum()
 }
 
+// Error variables related to WorkQueue.
+var (
+	ErrUnsupportedRedisDialect = errors.New("specified redis dialect is not supported")
+)
+
 //go:generate confions config RedisConfig
 
 // RedisConfig contains configuration options for a connection pool to a redis
 // database.
 type RedisConfig struct {
-	Network     string
-	Address     string
-	Database    int
-	Prefix      string
-	Password    string
-	MaxIdle     int
-	IdleTimeout time.Duration
+	Dialect           string
+	Network           string
+	Address           string
+	Database          int
+	Prefix            string
+	Password          string
+	MaxIdle           int
+	IdleTimeout       time.Duration
+	InternalMaxActive int
 }
 
 var RedisDefaultConfig = &RedisConfig{
+	Dialect:     "redis",
 	MaxIdle:     10,
 	IdleTimeout: 300 * time.Second,
 }
@@ -65,13 +75,13 @@ type Config struct {
 
 	Redis RedisConfig
 	// EWMAScheduler contains the configuration for the EWMAScheduler
-	// SchedulingController. Here only static configuration options
-	// should be set. All known run time dependent options (database
-	// connections, RunId, etc.) will be overwritten when the final
-	// configuration is assembled.
+	// SchedulingController. Here only static configuration options should be
+	// set.
+	// All known run time dependent options (database connections, RunId, etc.)
+	// will be overwritten when the final configuration is assembled.
 	EWMAScheduler EWMASchedulerConfig
-	// Producer contains the configuration for the Producer. Here only
-	// static configuration options should be set.
+	// Producer contains the configuration for the Producer. Here only static
+	// configuration options should be set.
 	// All known run time dependent options (database connections, RunId, etc.)
 	// will be overwritten when the final configuration is assembled.
 	Producer ProducerConfig
@@ -85,9 +95,8 @@ type Config struct {
 	// All known run time dependent options (database connections, RunId, etc.)
 	// will be overwritten when the final configuration is assembled.
 	WriteBacker WriteBackerConfig
-	// PerformanceMonitor contains the configuration for the
-	// PerformanceMonitor. Here only static configuration options should be
-	// set.
+	// PerformanceMonitor contains the configuration for the PerformanceMonitor.
+	// Here only static configuration options should be set.
 	// All known run time dependent options (database connections, RunId, etc.)
 	// will be overwritten when the final configuration is assembled.
 	PerformanceMonitor PerformanceMonitorConfig
@@ -127,23 +136,16 @@ func (w *WorkQueue) Start(ctx context.Context) {
 		"component":  "WorkQueue",
 	})
 
-	w.pool = &redis.Pool{
-		Dial: func() (redis.Conn, error) {
-			return redis.Dial(
-				w.Config.Redis.Network,
-				w.Config.Redis.Address,
-				redis.DialDatabase(w.Config.Redis.Database),
-				redis.DialPassword(w.Config.Redis.Password),
-			)
-		},
-		MaxIdle:     w.Config.Redis.MaxIdle,
-		IdleTimeout: w.Config.Redis.IdleTimeout,
-	}
-
 	w.tomb, _ = tomb.WithContext(ctx)
 
 	w.tomb.Go(func() error {
-		err := w.testRedis()
+		pool, err := w.createRedisPool()
+		if err != nil {
+			return err
+		}
+		w.pool = pool
+
+		err = w.testRedis()
 		if err != nil {
 			return err
 		}
@@ -259,6 +261,43 @@ func (w *WorkQueue) performanceMonitorStopper() error {
 		return nil
 	case <-w.tomb.Dying():
 		return tomb.ErrDying
+	}
+}
+
+func (w *WorkQueue) createRedisPool() (*redis.Pool, error) {
+	config := RedisDefaultConfig.
+		Clone().
+		Merge(&w.Config.Redis).
+		Merge(&RedisConfig{})
+
+	if config.Dialect == "redis" {
+		return &redis.Pool{
+			Dial: func() (redis.Conn, error) {
+				return redis.Dial(
+					config.Network,
+					config.Address,
+					redis.DialDatabase(config.Database),
+					redis.DialPassword(config.Password),
+				)
+			},
+			MaxIdle:     config.MaxIdle,
+			IdleTimeout: config.IdleTimeout,
+		}, nil
+	} else if config.Dialect == "ledis" {
+		return rewledis.NewPool(&rewledis.PoolConfig{
+			Dial: func() (redis.Conn, error) {
+				return redis.Dial(
+					config.Network,
+					config.Address,
+					redis.DialDatabase(config.Database),
+					redis.DialPassword(config.Password),
+				)
+			},
+			MaxIdle:     config.MaxIdle,
+			IdleTimeout: config.IdleTimeout,
+		}, config.InternalMaxActive), nil
+	} else {
+		return nil, ErrUnsupportedRedisDialect
 	}
 }
 
