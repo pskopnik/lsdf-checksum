@@ -81,7 +81,6 @@ type WorkQueue struct {
 	tomb *tomb.Tomb
 
 	fieldLogger logrus.FieldLogger
-	pool        *redis.Pool
 
 	schedulingController SchedulingController
 	producer             *Producer
@@ -241,9 +240,9 @@ func (w *WorkQueue) createProducer(controller SchedulingController) *Producer {
 
 			SnapshotName: w.Config.SnapshotName,
 
-			Pool:   w.pool,
+			Pool:   w.Config.Pool,
 			DB:     w.Config.DB,
-			Logger: w.fieldLogger,
+			Logger: w.Config.Logger,
 
 			Controller: controller,
 		})
@@ -262,9 +261,9 @@ func (w *WorkQueue) createWriteBacker() *WriteBacker {
 			RunId:        w.Config.RunId,
 			SnapshotName: w.Config.SnapshotName,
 
-			Pool:   w.pool,
+			Pool:   w.Config.Pool,
 			DB:     w.Config.DB,
-			Logger: w.fieldLogger,
+			Logger: w.Config.Logger,
 		})
 
 	return NewWriteBacker(config)
@@ -281,7 +280,7 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 			RunId:        w.Config.RunId,
 			SnapshotName: w.Config.SnapshotName,
 
-			Pool:   w.pool,
+			Pool:   w.Config.Pool,
 			Logger: w.Config.Logger,
 
 			ProductionExhausted: productionExhausted,
@@ -300,7 +299,7 @@ func (w *WorkQueue) createPerformanceMonitor(queueScheduler *QueueScheduler) *Pe
 
 			Unit: PerformanceMonitorUnit(w.Config.FileSystemName, w.Config.SnapshotName),
 
-			Pool:   w.pool,
+			Pool:   w.Config.Pool,
 			Logger: w.Config.Logger,
 			GetNodesNumer: queueSchedulerGetNodesNumer{
 				QueueScheduler: queueScheduler,

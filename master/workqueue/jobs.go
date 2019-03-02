@@ -5,10 +5,11 @@ import (
 	"errors"
 )
 
+// Error variables related to workqueue jobs definitions and encoding.
 var (
-	ErrTailingBytes        error = errors.New("encoding format error: Unexpected tailing bytes")
-	ErrPackKeyNotFound           = errors.New("pack key not found in Job's Args")
-	ErrPackValueCastFailed       = errors.New("failed to cast value of pack key in Job's Args")
+	ErrTailingBytes        = errors.New("encoding format error: Unexpected tailing bytes")
+	ErrPackKeyNotFound     = errors.New("pack key not found in Job's Args")
+	ErrPackValueCastFailed = errors.New("failed to cast value of pack key in Job's Args")
 )
 
 const (

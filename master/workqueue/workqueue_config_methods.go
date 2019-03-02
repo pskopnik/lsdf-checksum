@@ -9,6 +9,7 @@ func (c *Config) CopyFrom(other *Config) {
 
 	c.DB = other.DB
 	c.Logger = other.Logger
+	c.Pool = other.Pool
 
 	c.EWMAScheduler.CopyFrom(&other.EWMAScheduler)
 	c.Producer.CopyFrom(&other.Producer)
@@ -37,6 +38,9 @@ func (c *Config) Merge(other *Config) *Config {
 	}
 	if other.Logger != nil {
 		c.Logger = other.Logger
+	}
+	if other.Pool != nil {
+		c.Pool = other.Pool
 	}
 
 	c.EWMAScheduler.Merge(&other.EWMAScheduler)
