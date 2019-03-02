@@ -8,16 +8,18 @@ import (
 	"path/filepath"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/time/rate"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/lengthsafe"
 	"git.scc.kit.edu/sdm/lsdf-checksum/master/workqueue"
 	"git.scc.kit.edu/sdm/lsdf-checksum/ratedreader"
+	commonRedis "git.scc.kit.edu/sdm/lsdf-checksum/redis"
 )
 
 const bufferSize int = 32 * 1024
@@ -28,13 +30,13 @@ type Config struct {
 
 	Logger logrus.FieldLogger `yaml:"-"`
 
-	Redis workqueue.RedisConfig
+	Redis       commonRedis.Config
+	RedisPrefix string
 }
 
 var DefaultConfig = &Config{
 	Concurrency:   1,
 	MaxThroughput: 10 * 1024 * 1024,
-	Redis:         *workqueue.RedisDefaultConfig,
 }
 
 type Worker struct {
@@ -69,19 +71,6 @@ func (w *Worker) Start(ctx context.Context) {
 		"component": "Worker",
 	})
 
-	w.pool = &redis.Pool{
-		Dial: func() (redis.Conn, error) {
-			return redis.Dial(
-				w.Config.Redis.Network,
-				w.Config.Redis.Address,
-				redis.DialDatabase(w.Config.Redis.Database),
-				redis.DialPassword(w.Config.Redis.Password),
-			)
-		},
-		MaxIdle:     w.Config.Redis.MaxIdle,
-		IdleTimeout: w.Config.Redis.IdleTimeout,
-	}
-
 	w.tomb, _ = tomb.WithContext(ctx)
 
 	w.prefixer = w.createPrefixer()
@@ -89,22 +78,18 @@ func (w *Worker) Start(ctx context.Context) {
 
 	w.initPools()
 
-	gocraftWorkNamespace := workqueue.GocraftWorkNamespace(w.Config.Redis.Prefix)
-	w.enqueuer = work.NewEnqueuer(gocraftWorkNamespace, w.pool)
+	w.tomb.Go(func() error {
+		pool, err := w.createRedisPool()
+		if err != nil {
+			return err
+		}
 
-	w.workerPool = work.NewWorkerPool(workerContext{}, uint(w.Config.Concurrency), gocraftWorkNamespace, w.pool)
-	w.workerPool.Middleware(
-		func(workerCtx *workerContext, job *work.Job, next work.NextMiddlewareFunc) error {
-			workerCtx.Worker = w
-			return next()
-		},
-	)
-	jobName := workqueue.CalculateChecksumJobName
-	w.workerPool.Job(jobName, (*workerContext).CalculateChecksum)
+		w.pool = pool
 
-	w.workerPool.Start()
+		w.tomb.Go(w.runWorkerPool)
 
-	w.tomb.Go(w.workerPoolStopper)
+		return nil
+	})
 }
 
 func (w *Worker) SignalStop() {
@@ -123,12 +108,41 @@ func (w *Worker) Err() error {
 	return w.tomb.Err()
 }
 
-func (w *Worker) workerPoolStopper() error {
+func (w *Worker) runWorkerPool() error {
+	gocraftWorkNamespace := workqueue.GocraftWorkNamespace(w.Config.RedisPrefix)
+	w.enqueuer = work.NewEnqueuer(gocraftWorkNamespace, w.pool)
+
+	w.workerPool = work.NewWorkerPool(workerContext{}, uint(w.Config.Concurrency), gocraftWorkNamespace, w.pool)
+	w.workerPool.Middleware(
+		func(workerCtx *workerContext, job *work.Job, next work.NextMiddlewareFunc) error {
+			workerCtx.Worker = w
+			return next()
+		},
+	)
+	jobName := workqueue.CalculateChecksumJobName
+	w.workerPool.Job(jobName, (*workerContext).CalculateChecksum)
+
+	w.workerPool.Start()
+
 	<-w.tomb.Dying()
 
 	w.workerPool.Stop()
 
 	return nil
+}
+
+func (w *Worker) createRedisPool() (*redis.Pool, error) {
+	config := commonRedis.DefaultConfig.
+		Clone().
+		Merge(&w.Config.Redis).
+		Merge(&commonRedis.Config{})
+
+	pool, err := commonRedis.CreatePool(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return pool, nil
 }
 
 func (w *Worker) createPrefixer() *Prefixer {

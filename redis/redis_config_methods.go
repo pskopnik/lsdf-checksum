@@ -1,10 +1,10 @@
-package master
+package redis
 
 import (
 	"time"
 )
 
-func (r *RedisConfig) CopyFrom(other *RedisConfig) {
+func (r *Config) CopyFrom(other *Config) {
 	r.Dialect = other.Dialect
 	r.Network = other.Network
 	r.Address = other.Address
@@ -15,7 +15,7 @@ func (r *RedisConfig) CopyFrom(other *RedisConfig) {
 	r.InternalMaxActive = other.InternalMaxActive
 }
 
-func (r *RedisConfig) Merge(other *RedisConfig) *RedisConfig {
+func (r *Config) Merge(other *Config) *Config {
 	if len(other.Dialect) > 0 {
 		r.Dialect = other.Dialect
 	}
@@ -44,8 +44,8 @@ func (r *RedisConfig) Merge(other *RedisConfig) *RedisConfig {
 	return r
 }
 
-func (r *RedisConfig) Clone() *RedisConfig {
-	config := &RedisConfig{}
+func (r *Config) Clone() *Config {
+	config := &Config{}
 	config.CopyFrom(r)
 	return config
 }

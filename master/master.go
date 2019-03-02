@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/pskopnik/rewledis"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
@@ -16,29 +15,9 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/master/medasync"
 	"git.scc.kit.edu/sdm/lsdf-checksum/master/workqueue"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
+	commonRedis "git.scc.kit.edu/sdm/lsdf-checksum/redis"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
 )
-
-//go:generate confions config RedisConfig
-
-// RedisConfig contains configuration options for a connection pool to a redis
-// database.
-type RedisConfig struct {
-	Dialect           string
-	Network           string
-	Address           string
-	Database          int
-	Password          string
-	MaxIdle           int
-	IdleTimeout       time.Duration
-	InternalMaxActive int
-}
-
-var RedisDefaultConfig = &RedisConfig{
-	Dialect:     "redis",
-	MaxIdle:     10,
-	IdleTimeout: 300 * time.Second,
-}
 
 const (
 	snapshotNameFormat = "lsdf-checksum-master-run-%d-%d"
@@ -63,7 +42,7 @@ type Config struct {
 	Logger logrus.FieldLogger `yaml:"-"`
 	DB     *meda.DB
 
-	Redis RedisConfig
+	Redis commonRedis.Config
 	// MedaSync contains the configuration for the medasync.Syncer. Here only
 	// static configuration options should be set.
 	// All known run time dependent options (database connections, RunId, etc.)
@@ -86,7 +65,6 @@ var (
 	ErrRunUpdateFailed         = errors.New("updating run data failed")
 	ErrFileSystemNil           = errors.New("file system is nil")
 	ErrPoolNil                 = errors.New("pool is nil")
-	ErrUnsupportedRedisDialect = errors.New("specified redis dialect is not supported")
 )
 
 type Master struct {
@@ -523,40 +501,17 @@ func (m *Master) testFileSystem() error {
 }
 
 func (m *Master) createRedisPool() (*redis.Pool, error) {
-	config := RedisDefaultConfig.
+	config := commonRedis.DefaultConfig.
 		Clone().
 		Merge(&m.Config.Redis).
-		Merge(&RedisConfig{})
+		Merge(&commonRedis.Config{})
 
-	if config.Dialect == "redis" {
-		return &redis.Pool{
-			Dial: func() (redis.Conn, error) {
-				return redis.Dial(
-					config.Network,
-					config.Address,
-					redis.DialDatabase(config.Database),
-					redis.DialPassword(config.Password),
-				)
-			},
-			MaxIdle:     config.MaxIdle,
-			IdleTimeout: config.IdleTimeout,
-		}, nil
-	} else if config.Dialect == "ledis" {
-		return rewledis.NewPool(&rewledis.PoolConfig{
-			Dial: func() (redis.Conn, error) {
-				return redis.Dial(
-					config.Network,
-					config.Address,
-					redis.DialDatabase(config.Database),
-					redis.DialPassword(config.Password),
-				)
-			},
-			MaxIdle:     config.MaxIdle,
-			IdleTimeout: config.IdleTimeout,
-		}, config.InternalMaxActive), nil
-	} else {
-		return nil, ErrUnsupportedRedisDialect
+	pool, err := commonRedis.CreatePool(config)
+	if err != nil {
+		return nil, err
 	}
+
+	return pool, nil
 }
 
 func (m *Master) testRedis() error {
@@ -567,31 +522,19 @@ func (m *Master) testRedis() error {
 		"authenticated": len(m.Config.Redis.Password) > 0,
 	}
 
-	ctx, cancel := context.WithCancel(m.tomb.Context(nil))
-	conn, err := m.pool.GetContext(ctx)
-	cancel()
+	err := commonRedis.TestPool(m.tomb.Context(nil), m.pool)
 	if err != nil {
 		m.fieldLogger.
 			WithFields(loggerFields).
 			WithError(err).
-			Error("Getting connection from pool failed")
+			Error("Testing redis connection pool failed")
 
 		return err
 	}
 
-	_, err = conn.Do("PING")
-	_ = conn.Close()
-	if err != nil {
-		m.fieldLogger.
-			WithFields(loggerFields).
-			WithError(err).
-			Error("Connecting to redis failed")
-
-		return err
-	}
 	m.fieldLogger.
 		WithFields(loggerFields).
-		Info("Connected to redis")
+		Info("Testing redis connection pool succeeded")
 
 	return nil
 }
