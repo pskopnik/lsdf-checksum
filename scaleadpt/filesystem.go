@@ -3,7 +3,7 @@ package scaleadpt
 import (
 	"strings"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/internal/utils"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/osutils"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
@@ -84,7 +84,7 @@ func (f *FileSystem) ApplyListPolicy(policy *Policy, listPath string, opts ...op
 		tempListPath = listPath
 	} else {
 		requiresMove = true
-		tempListPath = utils.TouchNonExistingTempFile(
+		tempListPath = osutils.TouchNonExistingTempFile(
 			"scaleadpt-applylistpolicy-",
 			".list.files",
 			tempDir,
@@ -104,7 +104,7 @@ func (f *FileSystem) ApplyListPolicy(policy *Policy, listPath string, opts ...op
 	}
 
 	if requiresMove {
-		return utils.MoveFile(fileListPrefix+".list.files", listPath)
+		return osutils.MoveFile(fileListPrefix+".list.files", listPath)
 	} else {
 		return nil
 	}

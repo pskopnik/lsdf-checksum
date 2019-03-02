@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"os"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/internal/utils"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/osutils"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
@@ -59,7 +59,7 @@ func ApplyPolicy(fs *scaleadpt.FileSystem, opts ...options.PolicyOptioner) (*Clo
 	// Extract TempDir from opts
 	tempDir := (&options.PolicyOptions{}).Apply(opts).TempDir
 
-	listPath := utils.TouchNonExistingTempFile("scaleadpt-filelist-", ".list.files", tempDir)
+	listPath := osutils.TouchNonExistingTempFile("scaleadpt-filelist-", ".list.files", tempDir)
 
 	err := fs.ApplyListPolicy(FileListPolicy, listPath, opts...)
 	if err != nil {

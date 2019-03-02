@@ -19,7 +19,7 @@ import (
 
 	"github.com/akutz/gofsutil"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/internal/utils"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/osutils"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
@@ -351,7 +351,7 @@ func (c *CLIDriver) writePolicyFile(policy *Policy, tmpDir string) (string, erro
 
 	policyFileContent := strings.Join(rulesContent, "\n\n")
 
-	fileName := utils.TouchNonExistingTempFile("scaleadpt-policy-file-", "", tmpDir)
+	fileName := osutils.TouchNonExistingTempFile("scaleadpt-policy-file-", "", tmpDir)
 	f, err := os.Create(fileName)
 	if err != nil {
 		return "", err
@@ -373,7 +373,7 @@ func (c *CLIDriver) GetMountRoot(filesystem DriverFileSystem) (string, error) {
 	} else if err == ErrFileSystemNotFound {
 		// If the file system could not be found return the error
 		return "", err
-	} else if utils.IsExecNotFound(err) || err == ErrPrefixNotFound {
+	} else if osutils.IsExecNotFound(err) || err == ErrPrefixNotFound {
 		// If the lsfs executable could not be found or the output did not
 		// match the expected format go on to try getMountRootMountinfo
 	} else if cliError, ok := err.(*CLIError); ok && cliError.ExitStatus != 0 {

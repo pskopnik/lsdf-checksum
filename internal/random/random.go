@@ -1,4 +1,4 @@
-package utils
+package random
 
 import (
 	"math/rand"
@@ -15,7 +15,7 @@ func prepareRand() {
 	}
 }
 
-func RandomString(length int) string {
+func String(length int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 	prepareRand()

@@ -18,7 +18,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/internal/utils"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/osutils"
 )
 
 const lengthsafePrefix = "lsdf-checksum-lengthsafe-"
@@ -113,7 +113,7 @@ func (l *LengthSafeFile) prepareSymlinks() error {
 			break
 		}
 
-		symlinkPath, err := utils.CreateTempSymlink(dir, lengthsafePrefix, "", "")
+		symlinkPath, err := osutils.CreateTempSymlink(dir, lengthsafePrefix, "", "")
 		if err != nil {
 			_ = l.removeSymlinks()
 			return err

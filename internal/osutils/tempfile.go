@@ -1,8 +1,10 @@
-package utils
+package osutils
 
 import (
 	"os"
 	"path/filepath"
+
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/random"
 )
 
 const touchPermissions = 0666
@@ -21,7 +23,7 @@ func NonExistingTempFile(prefix, suffix, dir string) string {
 	}
 
 	for !os.IsNotExist(err) {
-		name = prefix + RandomString(10)
+		name = prefix + random.String(10)
 		path = filepath.Join(os.TempDir(), name+suffix)
 		_, err = os.Stat(path)
 	}
@@ -45,7 +47,7 @@ func TouchNonExistingTempFile(prefix, suffix, dir string) string {
 
 	err = os.ErrExist
 	for os.IsExist(err) {
-		name = prefix + RandomString(10)
+		name = prefix + random.String(10)
 		path = filepath.Join(dir, name+suffix)
 		f, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, touchPermissions)
 	}
@@ -72,7 +74,7 @@ func CreateTempSymlink(oldname, prefix, suffix, dir string) (string, error) {
 
 	err = os.ErrExist
 	for os.IsExist(err) {
-		name = prefix + RandomString(10)
+		name = prefix + random.String(10)
 		path = filepath.Join(dir, name+suffix)
 		err = os.Symlink(oldname, path)
 	}

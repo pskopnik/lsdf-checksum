@@ -8,6 +8,7 @@ import (
 	"errors"
 )
 
+// Error variables related to AutonmousComponent.
 var (
 	ErrStopSignalled = errors.New("stop signalled")
 )

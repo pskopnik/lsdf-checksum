@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/internal/utils"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/osutils"
 )
 
 const (
@@ -171,7 +171,7 @@ func trySymlinkLength(length uint) (bool, error) {
 	// The length calculation is: ceil(length / |sampleStr|)
 	oldname := strings.Repeat(sampleStr, ((int(length)-1)/len(sampleStr))+1)[:int(length)]
 
-	name, err := utils.CreateTempSymlink(oldname, lengthsafePrefix, "", "")
+	name, err := osutils.CreateTempSymlink(oldname, lengthsafePrefix, "", "")
 	if err != nil {
 		if isNameTooLong(err) {
 			return false, nil
