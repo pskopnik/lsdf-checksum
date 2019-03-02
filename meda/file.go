@@ -121,6 +121,12 @@ func (d *DB) FilesQueryFilesByIdsForShare(ctx context.Context, querier RebindQue
 func (d *DB) FilesFetchFilesByIdsForShare(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) ([]File, error) {
 	files := make([]File, 0, len(fileIds))
 
+	return d.FilesAppendFilesByIdsForShare(files, ctx, querier, fileIds)
+}
+
+func (d *DB) FilesAppendFilesByIdsForShare(files []File, ctx context.Context, querier RebindQueryerContext, fileIds []uint64) ([]File, error) {
+	baseInd := len(files)
+
 	for i := 0; i < len(fileIds); {
 		var file File
 		rangeEnd := i + MaxPlaceholders
@@ -130,25 +136,25 @@ func (d *DB) FilesFetchFilesByIdsForShare(ctx context.Context, querier RebindQue
 
 		rows, err := d.FilesQueryFilesByIdsForShare(ctx, querier, fileIds[i:rangeEnd])
 		if err != nil {
-			return []File{}, err
+			return files[:baseInd], err
 		}
 
 		for rows.Next() {
 			err = rows.StructScan(&file)
 			if err != nil {
 				_ = rows.Close()
-				return []File{}, err
+				return files[:baseInd], err
 			}
 
 			files = append(files, file)
 		}
 		if err = rows.Err(); err != nil {
 			_ = rows.Close()
-			return []File{}, err
+			return files[:baseInd], err
 		}
 
 		if err = rows.Close(); err != nil {
-			return []File{}, err
+			return files[:baseInd], err
 		}
 		i = rangeEnd
 	}
