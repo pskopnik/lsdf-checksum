@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/MasterOfBinary/gobatch/batch"
-	"github.com/go-errors/errors"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
@@ -161,18 +161,19 @@ func (w *WriteBacker) endOfQueueHandler() error {
 	return nil
 }
 
+type stackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
 func (w *WriteBacker) batchErrorsHandler() error {
 	var err error
 
 	for err = range w.batchErrors {
-		entry := w.fieldLogger.WithError(err)
+		entry := w.fieldLogger.WithError(err).
+			WithField("cause", errors.Cause(err))
 
-		if processorError, ok := err.(*batch.ProcessorError); ok {
-			err = processorError.Original()
-		}
-
-		if errorsErr, ok := err.(*errors.Error); ok {
-			entry = entry.WithField("stack_trace", errorsErr.ErrorStack())
+		if stackTracer, ok := err.(stackTracer); ok {
+			entry = entry.WithField("stack_trace", stackTracer.StackTrace())
 		}
 
 		entry.Warn("Encountered error during batch processing")
@@ -268,7 +269,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 	tx, filesUpdatePrepStmt, warningsInsertPrepStmt, err := w.openTxAndStmts(ctx)
 	if err != nil {
 		// TODO Error
-		ps.Errors <- errors.Wrap(err, 0)
+		ps.Errors <- errors.Wrap(err, "(writeBackerBatchProcessor).Process: open tx and stmts")
 
 		w.fieldLogger.WithError(err).Warn("a")
 
@@ -279,7 +280,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 	if err != nil {
 		_ = w.closeTxAndStmts(tx, filesUpdatePrepStmt, warningsInsertPrepStmt)
 		// TODO Error
-		ps.Errors <- errors.Wrap(err, 0)
+		ps.Errors <- errors.Wrap(err, "(writeBackerBatchProcessor).Process: fetch files from db")
 
 		w.fieldLogger.WithError(err).Warn("b")
 
@@ -315,7 +316,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 			)
 			if err != nil {
 				// TODO Error
-				ps.Errors <- errors.Wrap(err, 0)
+				ps.Errors <- errors.Wrap(err, "(writeBackerBatchProcessor).Process: issuing checksum warning")
 				w.fieldLogger.WithError(err).WithFields(logrus.Fields{
 					"action":            "skipping",
 					"file_id":           file.Id,
@@ -337,7 +338,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 		_, err = filesUpdatePrepStmt.ExecContext(ctx, file)
 		if err != nil {
 			// TODO Error
-			ps.Errors <- errors.Wrap(err, 0)
+			ps.Errors <- errors.Wrap(err, "(writeBackerBatchProcessor).Process: update files in db")
 
 			w.fieldLogger.WithError(err).WithFields(logrus.Fields{
 				"action":        "ignoring",
@@ -366,7 +367,7 @@ func (w writeBackerBatchProcessor) Process(ctx context.Context, ps *batch.Pipeli
 	err = w.closeTxAndStmts(tx, filesUpdatePrepStmt, warningsInsertPrepStmt)
 	if err != nil {
 		// TODO Error
-		ps.Errors <- errors.Wrap(err, 0)
+		ps.Errors <- errors.Wrap(err, "(writeBackerBatchProcessor).Process: close tx and stmts")
 		w.fieldLogger.WithError(err).Warn("f")
 
 		return
@@ -397,7 +398,7 @@ func (w writeBackerBatchProcessor) fetchDBFiles(ctx context.Context, tx *sqlx.Tx
 	if err != nil {
 		// TODO Error
 		w.fieldLogger.WithError(err).Warn(".a")
-		return nil, errors.Wrap(err, 0)
+		return nil, errors.Wrap(err, "(writeBackerBatchProcessor).fetchDBFiles: query files")
 	}
 	defer rows.Close()
 
@@ -422,7 +423,7 @@ func (w writeBackerBatchProcessor) fetchDBFiles(ctx context.Context, tx *sqlx.Tx
 	if err = rows.Err(); err != nil {
 		// TODO Error
 		w.fieldLogger.WithError(err).Warn(".b")
-		return nil, errors.Wrap(err, 0)
+		return nil, errors.Wrap(err, "(writeBackerBatchProcessor).fetchDBFiles: scan rows")
 	}
 
 	return files, nil

@@ -11,8 +11,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/go-errors/errors"
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
@@ -149,7 +149,7 @@ func (s *Syncer) prepareDatabase(ctx context.Context) error {
 
 	err := s.truncateInserts(ctx)
 	if err != nil {
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).prepareDatabase")
 	}
 
 	s.fieldLogger.Info("Finished preparing the meta data database")
@@ -185,12 +185,12 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 
 	parser, err := filelist.ApplyPolicy(s.Config.FileSystem, options...)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "(*Syncer).applyPolicy: applying policy on file system")
 	}
 
 	s.fieldLogger.WithFields(fields).Info("Finished applying list policy")
 
-	return parser, err
+	return parser, nil
 }
 
 func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) error {
@@ -202,16 +202,12 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 
 	err := s.fetchFileSystemPathInfo()
 	if err != nil {
-		// TODO
-		// ERRORS
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
 
 	tx, prepStmt, err := s.openWriteInsertsTx(ctx)
 	if err != nil {
-		// TODO
-		// ERRORS
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
 	defer prepStmt.Close()
 	defer tx.Rollback()
@@ -221,16 +217,12 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			// TODO
-			// ERRORS
-			return errors.Wrap(err, 0)
+			return errors.Wrap(err, "(*Syncer).writeInserts: parse file list line")
 		}
 
 		cleanPath, err := s.cleanPath(fileData.Path)
 		if err != nil {
-			// TODO
-			// ERRORS
-			return errors.Wrap(err, 0)
+			return errors.Wrap(err, "(*Syncer).writeInserts")
 		}
 
 		if len(cleanPath) > meda.FilesMaxPathLength {
@@ -255,9 +247,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 
 		_, err = prepStmt.ExecContext(ctx, &medaInsert)
 		if err != nil {
-			// TODO
-			// ERRORS
-			return errors.Wrap(err, 0)
+			return errors.Wrap(err, "(*Syncer).writeInserts: exec write insert statement")
 		}
 
 		count += 1
@@ -266,16 +256,12 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		if txCount >= s.Config.MaxTransactionSize {
 			err = s.closeInsertsInsertTx(tx, prepStmt)
 			if err != nil {
-				// TODO
-				// ERRORS
-				return errors.Wrap(err, 0)
+				return errors.Wrap(err, "(*Syncer).writeInserts")
 			}
 
 			tx, prepStmt, err = s.openWriteInsertsTx(ctx)
 			if err != nil {
-				// TODO
-				// ERRORS
-				return errors.Wrap(err, 0)
+				return errors.Wrap(err, "(*Syncer).writeInserts")
 			}
 
 			txCount = 0
@@ -284,9 +270,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 
 	err = s.closeInsertsInsertTx(tx, prepStmt)
 	if err != nil {
-		// TODO
-		// ERRORS
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
@@ -299,13 +283,13 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 func (s *Syncer) openWriteInsertsTx(ctx context.Context) (*sqlx.Tx, *sqlx.NamedStmt, error) {
 	tx, err := s.Config.DB.BeginTxx(ctx, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "(*Syncer).openWriteInsertsTx: begin transaction")
 	}
 
 	prepStmt, err := s.Config.DB.InsertsPrepareInsert(ctx, tx)
 	if err != nil {
 		_ = tx.Rollback()
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "(*Syncer).openWriteInsertsTx: prepare inserts statement")
 	}
 
 	return tx, prepStmt, nil
@@ -316,12 +300,12 @@ func (s *Syncer) closeInsertsInsertTx(tx *sqlx.Tx, prepStmt *sqlx.NamedStmt) err
 	if err != nil {
 		// Try to commit
 		_ = tx.Commit()
-		return err
+		return errors.Wrap(err, "(*Syncer).closeInsertsInsertTx: close prepared statement")
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*Syncer).closeInsertsInsertTx: commit transaction")
 	}
 
 	return nil
@@ -330,18 +314,18 @@ func (s *Syncer) closeInsertsInsertTx(tx *sqlx.Tx, prepStmt *sqlx.NamedStmt) err
 func (s *Syncer) fetchFileSystemPathInfo() error {
 	mountRoot, err := s.Config.FileSystem.GetMountRoot()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*Syncer).fetchFileSystemPathInfo: get mount root")
 	}
 	snapshotDirsInfo, err := s.Config.FileSystem.GetSnapshotDirsInfo()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*Syncer).fetchFileSystemPathInfo: get snapshot dirs info")
 	}
 
 	basePath, err := filepath.Abs(
 		filepath.Join(mountRoot, snapshotDirsInfo.Global, s.Config.SnapshotName),
 	)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*Syncer).fetchFileSystemPathInfo: compute abs path")
 	}
 
 	s.basePath = basePath
@@ -371,7 +355,7 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 		incrementalMode, s.Config.RunId,
 	)
 	if err != nil {
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).syncDatabase: exec update")
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
@@ -380,7 +364,7 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 
 	res, err = s.execWithReadCommitted(ctx, deleteQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).syncDatabase: exec delete")
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
@@ -389,7 +373,7 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 
 	res, err = s.execWithReadCommitted(ctx, insertQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
 	if err != nil {
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).syncDatabase: exec insert")
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
@@ -406,7 +390,7 @@ func (s *Syncer) cleanUpDatabase(ctx context.Context) error {
 
 	err := s.truncateInserts(ctx)
 	if err != nil {
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).cleanUpDatabase")
 	}
 
 	s.fieldLogger.Info("Finished cleaning up the meta data database")
@@ -421,7 +405,7 @@ func (s *Syncer) truncateInserts(ctx context.Context) error {
 
 	_, err := s.execWithReadCommitted(ctx, truncateInsertsQuery.SubstituteAll(s.Config.DB))
 	if err != nil {
-		return errors.Wrap(err, 0)
+		return errors.Wrap(err, "(*Syncer).truncateInserts: exec truncate query")
 	}
 
 	s.fieldLogger.Info(
@@ -434,18 +418,18 @@ func (s *Syncer) truncateInserts(ctx context.Context) error {
 func (s *Syncer) execWithReadCommitted(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	tx, err := s.Config.DB.BeginTxx(ctx, txOptionsReadCommitted)
 	if err != nil {
-		return nil, errors.Wrap(err, 0)
+		return nil, errors.Wrap(err, "(*Syncer).execWithReadCommitted: begin transaction")
 	}
 
 	res, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		_ = tx.Commit()
-		return nil, errors.Wrap(err, 0)
+		return nil, errors.Wrap(err, "(*Syncer).execWithReadCommitted: exec query")
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return nil, errors.Wrap(err, 0)
+		return nil, errors.Wrap(err, "(*Syncer).execWithReadCommitted: commit transaction")
 	}
 
 	return res, nil

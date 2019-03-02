@@ -14,7 +14,6 @@ require (
 	github.com/cupcake/rdb v0.0.0-20161107195141-43ba34106c76 // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/glendc/gopher-json v0.0.0-20170414221815-dc4743023d0c // indirect
-	github.com/go-errors/errors v1.0.1
 	github.com/go-logfmt/logfmt v0.3.0
 	github.com/go-sql-driver/mysql v1.4.0
 	github.com/gocraft/work v0.5.1
@@ -29,6 +28,7 @@ require (
 	github.com/onsi/gomega v1.4.3
 	github.com/pelletier/go-toml v1.2.0 // indirect
 	github.com/philhofer/fwd v1.0.0 // indirect
+	github.com/pkg/errors v0.8.1
 	github.com/pskopnik/rewledis v0.0.0-20190304181615-ee219303c138
 	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726 // indirect
@@ -42,14 +42,14 @@ require (
 	github.com/tinylib/msgp v1.0.2
 	github.com/ugorji/go/codec v0.0.0-20190320090025-2dc34c0b8780 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20190206043414-8bfc7677f583 // indirect
-	golang.org/x/exp v0.0.0-20180807140117-3d87b88a115f
+	golang.org/x/exp v0.0.0-20190121172915-509febef88a4
 	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
 	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
 	golang.org/x/time v0.0.0-20180412165947-fbb02b2291d2
 	gonum.org/v1/gonum v0.0.0-20180823045727-3092bd257723
 	gonum.org/v1/netlib v0.0.0-20180816165226-ebcc3d2662d3 // indirect
-	google.golang.org/appengine v1.1.0 // indirect
+	google.golang.org/appengine v1.4.0 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
