@@ -11,7 +11,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -82,9 +81,10 @@ func (s *Syncer) Run(ctx context.Context) error {
 	var err error
 
 	s.fieldLogger = s.Config.Logger.WithFields(logrus.Fields{
+		"sync_mode":  s.Config.SyncMode,
+		"filesystem": s.Config.FileSystem.GetName(),
 		"run":        s.Config.RunId,
 		"snapshot":   s.Config.SnapshotName,
-		"filesystem": s.Config.FileSystem.GetName(),
 		"subpath":    s.Config.Subpath,
 		"package":    "medasync",
 		"component":  "Syncer",
@@ -185,7 +185,7 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 
 	parser, err := filelist.ApplyPolicy(s.Config.FileSystem, options...)
 	if err != nil {
-		return nil, errors.Wrap(err, "(*Syncer).applyPolicy: applying policy on file system")
+		return nil, errors.Wrap(err, "(*Syncer).applyPolicy: apply policy on file system")
 	}
 
 	s.fieldLogger.WithFields(fields).Info("Finished applying list policy")
@@ -195,22 +195,19 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 
 func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) error {
 	var fileData *filelist.FileData
-	var medaInsert meda.Insert
-	var count, txCount int
 
 	s.fieldLogger.Info("Starting meta data database inserts")
+
+	inserter := newInsertsInserter(ctx, &insertsInserterConfig{
+		DB:                 s.Config.DB,
+		MaxTransactionSize: s.Config.MaxTransactionSize,
+	})
+	defer inserter.Close()
 
 	err := s.fetchFileSystemPathInfo()
 	if err != nil {
 		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
-
-	tx, prepStmt, err := s.openWriteInsertsTx(ctx)
-	if err != nil {
-		return errors.Wrap(err, "(*Syncer).writeInserts")
-	}
-	defer prepStmt.Close()
-	defer tx.Rollback()
 
 	for {
 		fileData, err = parser.ParseLine()
@@ -238,75 +235,25 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 			continue
 		}
 
-		medaInsert = meda.Insert{
+		err = inserter.Insert(ctx, &meda.Insert{
 			Path:             cleanPath,
 			ModificationTime: meda.Time(fileData.ModificationTime),
 			FileSize:         fileData.FileSize,
 			LastSeen:         s.Config.RunId,
-		}
-
-		_, err = prepStmt.ExecContext(ctx, &medaInsert)
+		})
 		if err != nil {
-			return errors.Wrap(err, "(*Syncer).writeInserts: exec write insert statement")
-		}
-
-		count += 1
-		txCount += 1
-
-		if txCount >= s.Config.MaxTransactionSize {
-			err = s.closeInsertsInsertTx(tx, prepStmt)
-			if err != nil {
-				return errors.Wrap(err, "(*Syncer).writeInserts")
-			}
-
-			tx, prepStmt, err = s.openWriteInsertsTx(ctx)
-			if err != nil {
-				return errors.Wrap(err, "(*Syncer).writeInserts")
-			}
-
-			txCount = 0
+			return errors.Wrap(err, "(*Syncer).writeInserts")
 		}
 	}
 
-	err = s.closeInsertsInsertTx(tx, prepStmt)
+	err = inserter.Commit()
 	if err != nil {
 		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
 
 	s.fieldLogger.WithFields(logrus.Fields{
-		"count": count,
+		"count": inserter.InsertsCount(),
 	}).Info("Finished meta data database inserts")
-
-	return nil
-}
-
-func (s *Syncer) openWriteInsertsTx(ctx context.Context) (*sqlx.Tx, *sqlx.NamedStmt, error) {
-	tx, err := s.Config.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "(*Syncer).openWriteInsertsTx: begin transaction")
-	}
-
-	prepStmt, err := s.Config.DB.InsertsPrepareInsert(ctx, tx)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, nil, errors.Wrap(err, "(*Syncer).openWriteInsertsTx: prepare inserts statement")
-	}
-
-	return tx, prepStmt, nil
-}
-
-func (s *Syncer) closeInsertsInsertTx(tx *sqlx.Tx, prepStmt *sqlx.NamedStmt) error {
-	err := prepStmt.Close()
-	if err != nil {
-		// Try to commit
-		_ = tx.Commit()
-		return errors.Wrap(err, "(*Syncer).closeInsertsInsertTx: close prepared statement")
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return errors.Wrap(err, "(*Syncer).closeInsertsInsertTx: commit transaction")
-	}
 
 	return nil
 }
