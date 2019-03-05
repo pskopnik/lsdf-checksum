@@ -13,9 +13,70 @@ const truncateInsertsQuery = meda.GenericQuery(`
 	TRUNCATE TABLE {INSERTS};
 `)
 
-// updateQuery is the SQL query updating files in the files table with new
-// data written into the inserts table. The query is meant to be run using
-// exec and has no output.
+// nextInsertsChunkQuery is the SQL query searching for the last row to be
+// included in the next fixed-size chunk of rows of the inserts table. Each
+// chunk consists of a number of rows whose Ids are in between two values.
+// This allows chunked execution of queries on the inserts table. The query is
+// meant to be run using query.
+//
+// The query requires several parameters:
+//
+//     previous_id - The Id previously returned by the query, i.e. the last Id
+//                   of the previous chunk. For the first query, this should be
+//                   set to 0.
+//     chunk_size  - Number of records to be included in the chunk.
+//
+// The query outputs zero or a single row with one column. After the query has
+// returned the last chunk, subsequent queries (with previous_id = last row Id
+// of last chunk) return no rows.
+//
+//     id - The Id of the last row included in the chunk.
+const nextInsertsChunkQuery = meda.GenericQuery(`
+	(
+		SELECT
+			id
+		FROM {INSERTS}
+			WHERE id > ?
+			ORDER BY id ASC
+			LIMIT ?
+	)
+		ORDER BY id DESC LIMIT 1;
+`)
+
+// nextFilesChunkQuery is the SQL query searching for the last row to be
+// included in the next fixed-size chunk of rows of the files table. Each
+// chunk consists of a number of rows whose Ids are in between two values.
+// This allows chunked execution of queries on the files table. The query is
+// meant to be run using query.
+//
+// The query requires several parameters:
+//
+//     previous_id - The Id previously returned by the query, i.e. the last Id
+//                   of the previous chunk. For the first query, this should be
+//                   set to 0.
+//     chunk_size  - Number of records to be included in the chunk.
+//
+// The query outputs zero or a single row with one column. After the query has
+// returned the last chunk, subsequent queries (with previous_id = last row Id
+// of last chunk) return no rows.
+//
+//     id - The Id of the last row included in the chunk.
+const nextFilesChunkQuery = meda.GenericQuery(`
+	(
+		SELECT
+			id
+		FROM {FILES}
+			WHERE id > ?
+			ORDER BY id ASC
+			LIMIT ?
+	)
+		ORDER BY id DESC LIMIT 1;
+`)
+
+// updateQuery is the SQL query updating files in the files table with new data
+// written into the inserts table. The query is chunked on the inserts table
+// (see nextInsertsChunkQuery). The query is meant to be run using exec and has
+// no output.
 //
 // The query requires several parameters:
 //
@@ -25,8 +86,10 @@ const truncateInsertsQuery = meda.GenericQuery(`
 //                        mode, 0 otherwise.
 //     incremental_mode - 1 if the synchronisation takes place in incremental
 //                        mode, 0 otherwise.
-//     run_id           - The Id of the run for which the synchronisation
-//                        takes place.
+//     prev_inserts_id  - The last Id of the inserts table included in the
+//                        previous chunk.
+//     last_inserts_id  - The last Id of the inserts table included in the
+//                        current chunk.
 //
 // The to_be_read field is set to 1 if not running in incremental mode. In
 // incremental mode the field is set to 1 if the modification_time differs.
@@ -46,17 +109,28 @@ const updateQuery = meda.GenericQuery(`
 			{FILES}.last_seen = ?,
 			{FILES}.to_be_read = IF(?, IF({FILES}.modification_time = {INSERTS}.modification_time, 0, 1), 1),
 			{FILES}.to_be_compared = IF(?, 0, IF({FILES}.modification_time = {INSERTS}.modification_time, 1, 0))
-		WHERE {FILES}.last_seen != ?
+		WHERE
+				{FILES}.last_seen != ?
+			AND
+				{INSERTS}.id > ?
+			AND
+				{INSERTS}.id <= ?
 	;
 `)
 
-// insertQuery is the SQL query inserting new files from the inserts table
-// into the files table. The query is meant to be run using exec and has no
+// insertQuery is the SQL query inserting new files from the inserts table into
+// the files table. The query is chunked on the inserts table (see
+// nextInsertsChunkQuery). The query is meant to be run using exec and has no
 // output.
 //
 // The query requires one parameter:
 //
-//     run_id - The Id of the run for which the synchronisation takes place.
+//     run_id          - The Id of the run for which the synchronisation takes
+//                       place.
+//     prev_inserts_id - The last Id of the inserts table included in the
+//                       previous chunk.
+//     last_inserts_id - The last Id of the inserts table included in the
+//                        current chunk.
 //
 // After execution, the number of inserted / copied rows can be retrieved
 // using RowsAffected().
@@ -65,22 +139,38 @@ const insertQuery = meda.GenericQuery(`
 		SELECT RAND(), {INSERTS}.path, {INSERTS}.file_size, {INSERTS}.modification_time, ?
 		FROM {INSERTS}
 		LEFT JOIN {FILES} ON {INSERTS}.path = {FILES}.path
-		WHERE {FILES}.id IS NULL
+		WHERE
+				{FILES}.id IS NULL
+			AND
+				{INSERTS}.id > ?
+			AND
+				{INSERTS}.id <= ?
 	;
 `)
 
 // deleteQuery is the SQL query deleting old files, i.e. files which no longer
-// exist in the file system, from the files table. The query is meant to be
-// run using exec and has no output.
+// exist in the file system, from the files table. The query is chunked on the
+// files table (see nextFilesChunkQuery). The query is meant to be run using
+// exec and has no output.
 //
 // The query requires one parameter:
 //
-//     run_id - The Id of the run for which the synchronisation takes place.
+//     run_id        - The Id of the run for which the synchronisation takes
+//                     place.
+//     prev_files_id - The last Id of the files table included in the previous
+//                     chunk.
+//     last_files_id - The last Id of the files table included in the current
+//                     chunk.
 //
 // After execution, the number of deleted rows can be retrieved using
 // RowsAffected().
 const deleteQuery = meda.GenericQuery(`
 	DELETE FROM {FILES}
-		WHERE last_seen != ?
+		WHERE
+				last_seen != ?
+			AND
+				id > ?
+			AND
+				id <= ?
 	;
 `)

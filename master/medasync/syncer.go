@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
@@ -26,6 +27,15 @@ var (
 	}
 )
 
+func beginTxWithReadCommitted(ctx context.Context, db *meda.DB) (*sqlx.Tx, error) {
+	tx, err := db.BeginTxx(ctx, txOptionsReadCommitted)
+	if err != nil {
+		return nil, errors.Wrap(err, "beginTxWithReadCommitted")
+	}
+
+	return tx, nil
+}
+
 //go:generate confions config Config
 
 type Config struct {
@@ -35,7 +45,8 @@ type Config struct {
 	// transaction.
 	// After this number of commands, the transaction will be committed
 	// and a new one will be begun.
-	MaxTransactionSize int
+	MaxTransactionSize       int
+	SynchronisationChunkSize uint64
 
 	// Static Params
 
@@ -59,9 +70,10 @@ type Config struct {
 }
 
 var DefaultConfig = Config{
-	MaxTransactionSize: 10000,
-	Location:           time.UTC,
-	SyncMode:           meda.RSMFull,
+	MaxTransactionSize:       10000,
+	SynchronisationChunkSize: 100000,
+	Location:                 time.UTC,
+	SyncMode:                 meda.RSMFull,
 }
 
 type Syncer struct {
@@ -296,37 +308,133 @@ func (s *Syncer) syncDatabase(ctx context.Context) error {
 		incrementalMode = 1
 	}
 
-	res, err := s.execWithReadCommitted(
-		ctx, updateQuery.SubstituteAll(s.Config.DB), s.Config.RunId, incrementalMode,
-		incrementalMode, s.Config.RunId,
-	)
-	if err != nil {
-		return errors.Wrap(err, "(*Syncer).syncDatabase: exec update")
-	}
+	s.syncDatabaseUpdate(ctx, incrementalMode)
 
-	s.fieldLogger.WithFields(logrus.Fields{
-		"affected": alwaysRowsAffected(res),
-	}).Info("Performed update of existing files in meta data database")
+	s.syncDatabaseDelete(ctx, incrementalMode)
 
-	res, err = s.execWithReadCommitted(ctx, deleteQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
-	if err != nil {
-		return errors.Wrap(err, "(*Syncer).syncDatabase: exec delete")
-	}
-
-	s.fieldLogger.WithFields(logrus.Fields{
-		"affected": alwaysRowsAffected(res),
-	}).Info("Performed deleting of old files in meta data database")
-
-	res, err = s.execWithReadCommitted(ctx, insertQuery.SubstituteAll(s.Config.DB), s.Config.RunId)
-	if err != nil {
-		return errors.Wrap(err, "(*Syncer).syncDatabase: exec insert")
-	}
-
-	s.fieldLogger.WithFields(logrus.Fields{
-		"affected": alwaysRowsAffected(res),
-	}).Info("Performed copying of new files in meta data database")
+	s.syncDatabaseInsert(ctx, incrementalMode)
 
 	s.fieldLogger.Info("Finished syncing the meta data database")
+
+	return nil
+}
+
+func (s *Syncer) syncDatabaseUpdate(ctx context.Context, incrementalMode int) error {
+	var affectedRows int64
+
+	chunker := chunker{
+		ChunkSize:      s.Config.SynchronisationChunkSize,
+		NextChunkQuery: nextInsertsChunkQuery.SubstituteAll(s.Config.DB),
+		DB:             s.Config.DB,
+		BeginTx:        beginTxWithReadCommitted,
+		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevId, lastId uint64) error {
+			res, err := tx.ExecContext(
+				ctx,
+				updateQuery.SubstituteAll(s.Config.DB),
+				s.Config.RunId,
+				incrementalMode,
+				incrementalMode,
+				s.Config.RunId,
+				prevId,
+				lastId,
+			)
+			if err != nil {
+				return err
+			}
+			num, err := res.RowsAffected()
+			if err != nil {
+				return err
+			}
+			affectedRows += num
+			return nil
+		},
+	}
+	err := chunker.Run(ctx)
+	if err != nil {
+		return errors.Wrap(err, "(*Syncer).syncDatabaseUpdate")
+	}
+
+	s.fieldLogger.WithFields(logrus.Fields{
+		"affected": affectedRows,
+	}).Info("Performed update of existing files in meta data database")
+
+	return nil
+}
+
+func (s *Syncer) syncDatabaseDelete(ctx context.Context, incrementalMode int) error {
+	var affectedRows int64
+
+	chunker := chunker{
+		ChunkSize:      s.Config.SynchronisationChunkSize,
+		NextChunkQuery: nextFilesChunkQuery.SubstituteAll(s.Config.DB),
+		DB:             s.Config.DB,
+		BeginTx:        beginTxWithReadCommitted,
+		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevId, lastId uint64) error {
+			res, err := tx.ExecContext(
+				ctx,
+				deleteQuery.SubstituteAll(s.Config.DB),
+				s.Config.RunId,
+				prevId,
+				lastId,
+			)
+			if err != nil {
+				return err
+			}
+			num, err := res.RowsAffected()
+			if err != nil {
+				return err
+			}
+			affectedRows += num
+			return nil
+		},
+	}
+	err := chunker.Run(ctx)
+	if err != nil {
+		return errors.Wrap(err, "(*Syncer).syncDatabaseDelete")
+	}
+
+	s.fieldLogger.WithFields(logrus.Fields{
+		"affected": affectedRows,
+	}).Info("Performed deleting of old files in meta data database")
+
+	return nil
+}
+
+func (s *Syncer) syncDatabaseInsert(ctx context.Context, incrementalMode int) error {
+	var affectedRows int64
+
+	chunker := chunker{
+		ChunkSize:      s.Config.SynchronisationChunkSize,
+		NextChunkQuery: nextInsertsChunkQuery.SubstituteAll(s.Config.DB),
+		DB:             s.Config.DB,
+		BeginTx:        beginTxWithReadCommitted,
+		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevId, lastId uint64) error {
+			res, err := tx.ExecContext(
+				ctx,
+				insertQuery.SubstituteAll(s.Config.DB),
+				s.Config.RunId,
+				prevId,
+				lastId,
+			)
+			if err != nil {
+				return err
+			}
+			num, err := res.RowsAffected()
+			if err != nil {
+				return err
+			}
+			affectedRows += num
+			return nil
+		},
+	}
+	err := chunker.Run(ctx)
+	if err != nil {
+		return errors.Wrap(err, "(*Syncer).syncDatabaseInsert")
+	}
+
+	s.fieldLogger.WithFields(logrus.Fields{
+		"affected": affectedRows,
+	}).Info("Performed inserting of new files in meta data database")
 
 	return nil
 }
@@ -345,31 +453,27 @@ func (s *Syncer) cleanUpDatabase(ctx context.Context) error {
 }
 
 func (s *Syncer) truncateInserts(ctx context.Context) error {
-	s.fieldLogger.Info(
-		"Starting truncating inserts table in meta data database",
-	)
-
 	_, err := s.execWithReadCommitted(ctx, truncateInsertsQuery.SubstituteAll(s.Config.DB))
 	if err != nil {
-		return errors.Wrap(err, "(*Syncer).truncateInserts: exec truncate query")
+		return errors.Wrap(err, "(*Syncer).truncateInserts")
 	}
 
 	s.fieldLogger.Info(
-		"Finished truncating inserts table in meta data database",
+		"Performed truncating of inserts table in meta data database",
 	)
 
 	return nil
 }
 
 func (s *Syncer) execWithReadCommitted(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	tx, err := s.Config.DB.BeginTxx(ctx, txOptionsReadCommitted)
+	tx, err := beginTxWithReadCommitted(ctx, s.Config.DB)
 	if err != nil {
 		return nil, errors.Wrap(err, "(*Syncer).execWithReadCommitted: begin transaction")
 	}
 
 	res, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
-		_ = tx.Commit()
+		_ = tx.Rollback()
 		return nil, errors.Wrap(err, "(*Syncer).execWithReadCommitted: exec query")
 	}
 
