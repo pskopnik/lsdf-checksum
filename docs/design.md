@@ -140,9 +140,6 @@ deleted from the Inserts table.
     column is copied over to the Files table.
  * `file_size` (`bigint(20) unsigned`) - The file size of the file. This column
     is copied over to the Files table.
- * `last_seen` (`bigint(20) unsigned`) - The id of the run this file was
-    retrieved in, i.e. the current (ongoing) run. This column is copied over to
-    the Files table.
 
 ##### Runs (table `runs`)
 

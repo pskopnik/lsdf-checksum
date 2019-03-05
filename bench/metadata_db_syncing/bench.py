@@ -15,11 +15,10 @@ class TestCase(object):
 	def create_files_table(self, cnx):
 		raise NotImplemented
 
-	def fast_populate_inserts(self, cnx, src_table, run_id):
+	def fast_populate_inserts(self, cnx, src_table):
 		"""Populates the inserts table with data from src_table.
 
 		src_table has the fields (path, modification_time, file_size).
-		The last_seen field in the inserts table should be set to run_id.
 		"""
 		raise NotImplemented
 
@@ -39,9 +38,9 @@ class TestCase(object):
 class TestCaseBase(TestCase):
 	POPULATE_INSERTS_STMT = (
 		"INSERT INTO `inserts`"
-		"	(`path`, `modification_time`, `file_size`, `last_seen`)"
+		"	(`path`, `modification_time`, `file_size`)"
 		"		SELECT"
-		"			`path`, `modification_time`, `file_size`, '{run}'"
+		"			`path`, `modification_time`, `file_size`"
 		"		FROM `{src}`"
 		";"
 	)
@@ -52,7 +51,6 @@ class TestCaseBase(TestCase):
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
-		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	PRIMARY KEY (`id`)"
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
 	)
@@ -85,8 +83,8 @@ class TestCaseBase(TestCase):
 	def create_files_table(self, cnx):
 		self._execute_stmt(cnx, self.CREATE_FILES_TABLE_STMT)
 
-	def fast_populate_inserts(self, cnx, src_table, run_id):
-		stmt = self.POPULATE_INSERTS_STMT.format(src=src_table, run=run_id)
+	def fast_populate_inserts(self, cnx, src_table):
+		stmt = self.POPULATE_INSERTS_STMT.format(src=src_table)
 
 		self._execute_stmt(cnx, stmt)
 
@@ -141,9 +139,9 @@ class TestCaseBase(TestCase):
 class TestCaseBaseNoRand(TestCaseBase):
 	POPULATE_INSERTS_STMT = (
 		"INSERT INTO `inserts`"
-		"	(`path`, `modification_time`, `file_size`, `last_seen`)"
+		"	(`path`, `modification_time`, `file_size`)"
 		"		SELECT"
-		"			`path`, `modification_time`, `file_size`, '{run}'"
+		"			`path`, `modification_time`, `file_size`"
 		"		FROM `{src}`"
 		";"
 	)
@@ -154,7 +152,6 @@ class TestCaseBaseNoRand(TestCaseBase):
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
-		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	PRIMARY KEY (`id`)"
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
 	)
@@ -180,11 +177,11 @@ class TestCaseNoRand(TestCaseBaseNoRand):
 	UPDATE_EXISTING_FILES_STMT = (
 		"UPDATE files"
 		"	RIGHT JOIN inserts"
-		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"		ON inserts.path = files.path"
 		"	SET"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
@@ -193,12 +190,10 @@ class TestCaseNoRand(TestCaseBaseNoRand):
 
 	INSERT_NEW_FILES_STMT = (
 		"INSERT INTO files (path, file_size, modification_time, last_seen)"
-		"	SELECT {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	SELECT {src}.path, {src}.file_size, {src}.modification_time, {run}"
 		"	FROM {src}"
 		"	LEFT JOIN files ON {src}.path = files.path"
 		"	WHERE files.id IS NULL"
-		"		AND"
-		"			{src}.last_seen = {run}"
 		";"
 	)
 
@@ -213,12 +208,12 @@ class TestCaseInitial(TestCaseBase):
 	UPDATE_EXISTING_FILES_STMT = (
 		"UPDATE files"
 		"	RIGHT JOIN inserts"
-		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"		ON inserts.path = files.path"
 		"	SET"
 		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
@@ -227,12 +222,10 @@ class TestCaseInitial(TestCaseBase):
 
 	INSERT_NEW_FILES_STMT = (
 		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
-		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {run}"
 		"	FROM {src}"
 		"	LEFT JOIN files ON {src}.path = files.path"
 		"	WHERE files.id IS NULL"
-		"		AND"
-		"			{src}.last_seen = {run}"
 		";"
 	)
 
@@ -246,10 +239,10 @@ class TestCaseInitial(TestCaseBase):
 class TestCaseInsertAllConditionsInOn(TestCaseInitial):
 	INSERT_NEW_FILES_STMT = (
 		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
-		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {run}"
 		"	FROM {src}"
 		"	LEFT JOIN files"
-		"		ON {src}.path = files.path AND files.id IS NULL AND {src}.last_seen = {run}"
+		"		ON {src}.path = files.path AND files.id IS NULL"
 		";"
 	)
 
@@ -257,15 +250,13 @@ class TestCaseInsertAllConditionsInOn(TestCaseInitial):
 class TestCaseInsertExists(TestCaseInitial):
 	INSERT_NEW_FILES_STMT = (
 		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
-		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	SELECT RAND(), {src}.path, {src}.file_size, {src}.modification_time, {run}"
 		"	FROM {src}"
 		"	WHERE"
 		"			NOT EXISTS ("
 		"				SELECT 1 FROM files"
 		"					WHERE files.path = {src}.path"
 		"			)"
-		"		AND"
-		"			{src}.last_seen = {run}"
 		";"
 	)
 
@@ -274,12 +265,12 @@ class TestCaseUpdateAllConditionsInOn(TestCaseInitial):
 	UPDATE_EXISTING_FILES_STMT = (
 		"UPDATE files"
 		"	RIGHT JOIN inserts"
-		"		ON inserts.path = files.path AND inserts.last_seen = {run} AND files.last_seen != {run}"
+		"		ON inserts.path = files.path AND files.last_seen != {run}"
 		"	SET"
 		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
@@ -295,7 +286,7 @@ class TestCaseUpdateNoJoinConditions(TestCaseInitial):
 		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
@@ -309,7 +300,6 @@ class TestCaseUpdateIndexInsertsPath(TestCaseUpdateNoJoinConditions):
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
-		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	PRIMARY KEY (`id`),"
 		"	KEY `path` (`path`(2048))"
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
@@ -325,7 +315,7 @@ class TestCaseUpdateNoInsertsConditions(TestCaseInitial):
 		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
@@ -342,7 +332,7 @@ class TestCaseUpdateNoInsertsConditionsAllInOn(TestCaseUpdateNoInsertsConditions
 		"		files.rand = RAND(),"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
@@ -377,16 +367,15 @@ class TestCaseRandInInserts(TestCaseInitial):
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
-		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	PRIMARY KEY (`id`)"
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
 	)
 
 	POPULATE_INSERTS_STMT = (
 		"INSERT INTO `inserts`"
-		"	(`rand`, `path`, `modification_time`, `file_size`, `last_seen`)"
+		"	(`rand`, `path`, `modification_time`, `file_size`)"
 		"		SELECT"
-		"			RAND(), `path`, `modification_time`, `file_size`, '{run}'"
+		"			RAND(), `path`, `modification_time`, `file_size`"
 		"		FROM `{src}`"
 		";"
 	)
@@ -394,12 +383,12 @@ class TestCaseRandInInserts(TestCaseInitial):
 	UPDATE_EXISTING_FILES_STMT = (
 		"UPDATE files"
 		"	RIGHT JOIN inserts"
-		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"		ON inserts.path = files.path"
 		"	SET"
 		"		files.rand = inserts.rand,"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
@@ -408,12 +397,10 @@ class TestCaseRandInInserts(TestCaseInitial):
 
 	INSERT_NEW_FILES_STMT = (
 		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
-		"	SELECT {src}.rand, {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	SELECT {src}.rand, {src}.path, {src}.file_size, {src}.modification_time, {run}"
 		"	FROM {src}"
 		"	LEFT JOIN files ON {src}.path = files.path"
 		"	WHERE files.id IS NULL"
-		"		AND"
-		"			{src}.last_seen = {run}"
 		";"
 	)
 
@@ -422,11 +409,11 @@ class TestCaseDontUpdateRand(TestCaseInitial):
 	UPDATE_EXISTING_FILES_STMT = (
 		"UPDATE files"
 		"	RIGHT JOIN inserts"
-		"		ON inserts.path = files.path AND inserts.last_seen = {run}"
+		"		ON inserts.path = files.path"
 		"	SET"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
@@ -438,11 +425,11 @@ class TestCaseDontUpdateRandUpdateAllConditionsInOn(TestCaseDontUpdateRand):
 	UPDATE_EXISTING_FILES_STMT = (
 		"UPDATE files"
 		"	RIGHT JOIN inserts"
-		"		ON inserts.path = files.path AND inserts.last_seen = {run} AND files.last_seen != {run}"
+		"		ON inserts.path = files.path AND files.last_seen != {run}"
 		"	SET"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
@@ -457,7 +444,7 @@ class TestCaseDontUpdateRandUpdateNoJoinConditions(TestCaseDontUpdateRand):
 		"	SET"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
@@ -471,7 +458,6 @@ class TestCaseDontUpdateRandUpdateIndexInsertsPath(TestCaseDontUpdateRandUpdateN
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
-		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	PRIMARY KEY (`id`),"
 		"	KEY `path` (`path`(2048))"
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
@@ -486,7 +472,7 @@ class TestCaseDontUpdateRandUpdateNoInsertsConditions(TestCaseDontUpdateRand):
 		"	SET"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		"	WHERE files.last_seen != {run}"
@@ -502,7 +488,7 @@ class TestCaseDontUpdateRandUpdateNoInsertsConditionsAllInOn(TestCaseDontUpdateR
 		"	SET"
 		"		files.file_size = inserts.file_size,"
 		"		files.modification_time = inserts.modification_time,"
-		"		files.last_seen = inserts.last_seen,"
+		"		files.last_seen = {run},"
 		"		files.to_be_read = 1,"
 		"		files.to_be_compared = IF(files.modification_time = inserts.modification_time, 1, 0)"
 		";"
@@ -537,28 +523,25 @@ class TestCaseDontUpdateRandRandInInserts(TestCaseDontUpdateRand):
 		"	`path` varbinary(4096) NOT NULL,"
 		"	`modification_time` datetime(6) NOT NULL,"
 		"	`file_size` bigint(20) unsigned NOT NULL,"
-		"	`last_seen` bigint(20) unsigned NOT NULL,"
 		"	PRIMARY KEY (`id`)"
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
 	)
 
 	POPULATE_INSERTS_STMT = (
 		"INSERT INTO `inserts`"
-		"	(`rand`, `path`, `modification_time`, `file_size`, `last_seen`)"
+		"	(`rand`, `path`, `modification_time`, `file_size`)"
 		"		SELECT"
-		"			RAND(), `path`, `modification_time`, `file_size`, '{run}'"
+		"			RAND(), `path`, `modification_time`, `file_size`"
 		"		FROM `{src}`"
 		";"
 	)
 
 	INSERT_NEW_FILES_STMT = (
 		"INSERT INTO files (rand, path, file_size, modification_time, last_seen)"
-		"	SELECT {src}.rand, {src}.path, {src}.file_size, {src}.modification_time, {src}.last_seen"
+		"	SELECT {src}.rand, {src}.path, {src}.file_size, {src}.modification_time, {run}"
 		"	FROM {src}"
 		"	LEFT JOIN files ON {src}.path = files.path"
 		"	WHERE files.id IS NULL"
-		"		AND"
-		"			{src}.last_seen = {run}"
 		";"
 	)
 
@@ -710,7 +693,7 @@ class EmptyScenario(Scenario):
 
 	def setup(self):
 		self.case.create_inserts_table(self.cnx)
-		self.case.fast_populate_inserts(self.cnx, self.file_data_table, 1)
+		self.case.fast_populate_inserts(self.cnx, self.file_data_table)
 		self.bench_run_id = 1
 
 	def setup_bench(self):
@@ -728,12 +711,12 @@ class NoInsertsScenario(Scenario):
 
 	def setup(self):
 		self.case.create_inserts_table(self.cnx)
-		self.case.fast_populate_inserts(self.cnx, self.file_data_table, 1)
+		self.case.fast_populate_inserts(self.cnx, self.file_data_table)
 
 		self._rename_table("inserts", "inserts_run_1")
 
 		self.case.create_inserts_table(self.cnx)
-		self.case.fast_populate_inserts(self.cnx, self.file_data_table, 2)
+		self.case.fast_populate_inserts(self.cnx, self.file_data_table)
 		self.bench_run_id = 2
 
 	def setup_bench(self):

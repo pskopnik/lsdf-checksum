@@ -18,7 +18,6 @@ const insertsCreateTableQuery = GenericQuery(`
 		path varbinary(4096) NOT NULL,
 		modification_time datetime(6) NOT NULL,
 		file_size bigint(20) unsigned NOT NULL,
-		last_seen bigint(20) unsigned NOT NULL,
 		PRIMARY KEY (id)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
@@ -33,14 +32,13 @@ type Insert struct {
 	Path             string `db:"path"`
 	ModificationTime Time   `db:"modification_time"`
 	FileSize         uint64 `db:"file_size"`
-	LastSeen         uint64 `db:"last_seen"`
 }
 
 const insertsPrepareInsertQuery = GenericQuery(`
 	INSERT INTO {INSERTS} (
-			path, modification_time, file_size, last_seen
+			path, modification_time, file_size
 		) VALUES (
-			:path, :modification_time, :file_size, :last_seen
+			:path, :modification_time, :file_size
 		)
 	;
 `)

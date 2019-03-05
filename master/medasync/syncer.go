@@ -239,7 +239,6 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 			Path:             cleanPath,
 			ModificationTime: meda.Time(fileData.ModificationTime),
 			FileSize:         fileData.FileSize,
-			LastSeen:         s.Config.RunId,
 		})
 		if err != nil {
 			return errors.Wrap(err, "(*Syncer).writeInserts")

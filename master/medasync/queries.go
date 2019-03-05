@@ -39,11 +39,11 @@ const truncateInsertsQuery = meda.GenericQuery(`
 const updateQuery = meda.GenericQuery(`
 	UPDATE {FILES}
 		RIGHT JOIN {INSERTS}
-			ON {INSERTS}.path = {FILES}.path AND {INSERTS}.last_seen = ?
+			ON {INSERTS}.path = {FILES}.path
 		SET
 			{FILES}.file_size = {INSERTS}.file_size,
 			{FILES}.modification_time = {INSERTS}.modification_time,
-			{FILES}.last_seen = {INSERTS}.last_seen,
+			{FILES}.last_seen = ?,
 			{FILES}.to_be_read = IF(?, IF({FILES}.modification_time = {INSERTS}.modification_time, 0, 1), 1),
 			{FILES}.to_be_compared = IF(?, 0, IF({FILES}.modification_time = {INSERTS}.modification_time, 1, 0))
 		WHERE {FILES}.last_seen != ?
@@ -62,12 +62,10 @@ const updateQuery = meda.GenericQuery(`
 // using RowsAffected().
 const insertQuery = meda.GenericQuery(`
 	INSERT INTO {FILES} (rand, path, file_size, modification_time, last_seen)
-		SELECT RAND(), {INSERTS}.path, {INSERTS}.file_size, {INSERTS}.modification_time, {INSERTS}.last_seen
+		SELECT RAND(), {INSERTS}.path, {INSERTS}.file_size, {INSERTS}.modification_time, ?
 		FROM {INSERTS}
 		LEFT JOIN {FILES} ON {INSERTS}.path = {FILES}.path
 		WHERE {FILES}.id IS NULL
-			AND
-				{INSERTS}.last_seen = ?
 	;
 `)
 
