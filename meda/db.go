@@ -67,6 +67,22 @@ func (m *DB) createReplacer() *strings.Replacer {
 	)
 }
 
+const getVersionQuery = `
+	SELECT VERSION();
+`
+
+// GetVersion queries the MySQL / MariaDB version from the server.
+func (d *DB) GetVersion(ctx context.Context) (string, error) {
+	var version string
+
+	err := d.QueryRow(getVersionQuery).Scan(&version)
+	if err != nil {
+		return "", err
+	}
+
+	return version, nil
+}
+
 // Migrate performs database schema migrations to ensure the database is in the
 // state expected by the meda package.
 //
