@@ -51,12 +51,12 @@ const runsInsertQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) RunsInsertAndSetId(ctx context.Context, execer sqlx.ExecerContext, run *Run) (sql.Result, error) {
+func (d *DB) RunsInsertAndSetId(ctx context.Context, execer NamedExecerContext, run *Run) (sql.Result, error) {
 	if execer == nil {
 		execer = &d.DB
 	}
 
-	result, err := execer.ExecContext(ctx, runsInsertQuery.SubstituteAll(d), run)
+	result, err := execer.NamedExecContext(ctx, runsInsertQuery.SubstituteAll(d), run)
 	if err != nil {
 		return result, err
 	}
@@ -84,12 +84,12 @@ const runsUpdateQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) RunsUpdate(ctx context.Context, execer sqlx.ExecerContext, run *Run) (sql.Result, error) {
+func (d *DB) RunsUpdate(ctx context.Context, execer NamedExecerContext, run *Run) (sql.Result, error) {
 	if execer == nil {
 		execer = &d.DB
 	}
 
-	return execer.ExecContext(ctx, runsUpdateQuery.SubstituteAll(d), run)
+	return execer.NamedExecContext(ctx, runsUpdateQuery.SubstituteAll(d), run)
 }
 
 const runsQueryLatestQuery = GenericQuery(`
@@ -170,9 +170,15 @@ func (r RunSyncMode) Value() (driver.Value, error) {
 }
 
 func (r *RunSyncMode) Scan(src interface{}) error {
-	strSrc, ok := src.(string)
-	if !ok {
-		return ErrInvalidRunSyncModeValueType
+	var strSrc string
+
+	switch typedSrc := src.(type) {
+	case string:
+		strSrc = typedSrc
+	case []byte:
+		strSrc = string(typedSrc)
+	default:
+		return ErrInvalidRunStateValueType
 	}
 
 	switch strSrc {
@@ -241,8 +247,14 @@ func (r RunState) Value() (driver.Value, error) {
 }
 
 func (r *RunState) Scan(src interface{}) error {
-	strSrc, ok := src.(string)
-	if !ok {
+	var strSrc string
+
+	switch typedSrc := src.(type) {
+	case string:
+		strSrc = typedSrc
+	case []byte:
+		strSrc = string(typedSrc)
+	default:
 		return ErrInvalidRunStateValueType
 	}
 

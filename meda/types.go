@@ -17,6 +17,13 @@ type NamedPreparer interface {
 	PrepareNamed(query string) (*sqlx.NamedStmt, error)
 }
 
+var _ NamedExecerContext = &sqlx.DB{}
+var _ NamedExecerContext = &sqlx.Tx{}
+
+type NamedExecerContext interface {
+	NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error)
+}
+
 var _ NamedPreparerContext = &sqlx.DB{}
 var _ NamedPreparerContext = &sqlx.Tx{}
 
