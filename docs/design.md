@@ -162,6 +162,18 @@ the `last_seen`, `last_read`, ... columns of other tables.
     state of the data in the database. This information is sufficient to
     resume aborted (or failed) runs.
 
+##### Lock (table `db_lock`)
+
+The Lock table allows locking of the database while a run is performed by the
+master. An exclusive `WRITE` lock is acquired on the table whenever a run is
+about to start. After the process has acquired the lock, it may write to the
+Runs table (insert new rows or change existing) as well as write data to the
+Inserts, Files and Checksum Warnings tables.
+
+The Lock table contains no content.
+
+ * `id` (`bigint(20) unsigned`) - Auto increment id, primary key.
+
 ##### Checksum Warnings (table `checksum_warnings`)
 
 The Checksum Warnings table is used to write warnings about corrupted files.

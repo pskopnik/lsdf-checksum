@@ -63,6 +63,7 @@ func (m *DB) createReplacer() *strings.Replacer {
 		"{INSERTS}", m.InsertsTableName(),
 		"{FILES}", m.FilesTableName(),
 		"{RUNS}", m.RunsTableName(),
+		"{LOCK}", m.LockTableName(),
 	)
 }
 
@@ -91,6 +92,11 @@ func (d *DB) Migrate(ctx context.Context) error {
 	}
 
 	err = d.runsCreateTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = d.lockCreateTable(ctx)
 	if err != nil {
 		return err
 	}
