@@ -45,7 +45,7 @@ func (c *Config) Merge(other *Config) *Config {
 	if other.RunId != 0 {
 		c.RunId = other.RunId
 	}
-	if other.SyncMode.IsZero() {
+	if other.SyncMode != 0 {
 		c.SyncMode = other.SyncMode
 	}
 

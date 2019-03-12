@@ -73,7 +73,6 @@ var DefaultConfig = Config{
 	MaxTransactionSize:       10000,
 	SynchronisationChunkSize: 100000,
 	Location:                 time.UTC,
-	SyncMode:                 meda.RSMFull,
 }
 
 type Syncer struct {

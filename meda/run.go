@@ -161,10 +161,6 @@ func (r RunSyncMode) String() string {
 	}
 }
 
-func (r RunSyncMode) IsZero() bool {
-	return r == RSMDefault
-}
-
 func (r RunSyncMode) Value() (driver.Value, error) {
 	return driver.Value(r.String()), nil
 }
