@@ -86,6 +86,8 @@ const nextFilesChunkQuery = meda.GenericQuery(`
 //                        mode, 0 otherwise.
 //     incremental_mode - 1 if the synchronisation takes place in incremental
 //                        mode, 0 otherwise.
+//     run_id           - The Id of the run for which the synchronisation
+//                        takes place.
 //     prev_inserts_id  - The last Id of the inserts table included in the
 //                        previous chunk.
 //     last_inserts_id  - The last Id of the inserts table included in the
@@ -107,11 +109,35 @@ const updateQuery = meda.GenericQuery(`
 			{FILES}.file_size = {INSERTS}.file_size,
 			{FILES}.modification_time = {INSERTS}.modification_time,
 			{FILES}.last_seen = ?,
-			{FILES}.to_be_read = IF(?, IF({FILES}.modification_time = {INSERTS}.modification_time, 0, 1), 1),
-			{FILES}.to_be_compared = IF(?, 0, IF({FILES}.modification_time = {INSERTS}.modification_time, 1, 0))
+			{FILES}.to_be_read = IF(?,
+					-- incremental mode
+					IF(to_be_read AND !to_be_compared,
+							-- special case: file modified in aborted run
+							1
+						,
+							-- only set to_be_read if the file was modified
+							{FILES}.modification_time != {INSERTS}.modification_time
+					)
+				,
+					-- full mode
+					1
+			),
+			{FILES}.to_be_compared = IF(?,
+					-- incremental mode
+					0
+				,
+					-- full mode
+					IF(to_be_read AND !to_be_compared,
+							-- special case: file modified in aborted run
+							0
+						,
+							-- only set to_be_compared if the file was not modified
+							{FILES}.modification_time = {INSERTS}.modification_time
+					)
+			)
 		WHERE
 				{FILES}.last_seen != ?
-			AND
+			AND -- only process chunk
 				{INSERTS}.id > ?
 			AND
 				{INSERTS}.id <= ?
@@ -141,7 +167,7 @@ const insertQuery = meda.GenericQuery(`
 		LEFT JOIN {FILES} ON {INSERTS}.path = {FILES}.path
 		WHERE
 				{FILES}.id IS NULL
-			AND
+			AND -- only process chunk
 				{INSERTS}.id > ?
 			AND
 				{INSERTS}.id <= ?
@@ -168,7 +194,7 @@ const deleteQuery = meda.GenericQuery(`
 	DELETE FROM {FILES}
 		WHERE
 				last_seen != ?
-			AND
+			AND -- only process chunk
 				id > ?
 			AND
 				id <= ?
