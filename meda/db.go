@@ -58,13 +58,13 @@ func Open(config *Config) (*DB, error) {
 	return db, nil
 }
 
-func (m *DB) createReplacer() *strings.Replacer {
+func (d *DB) createReplacer() *strings.Replacer {
 	return strings.NewReplacer(
-		"{CHECKSUM_WARNINGS}", m.ChecksumWarningsTableName(),
-		"{INSERTS}", m.InsertsTableName(),
-		"{FILES}", m.FilesTableName(),
-		"{RUNS}", m.RunsTableName(),
-		"{LOCK}", m.LockTableName(),
+		"{CHECKSUM_WARNINGS}", d.ChecksumWarningsTableName(),
+		"{INSERTS}", d.InsertsTableName(),
+		"{FILES}", d.FilesTableName(),
+		"{RUNS}", d.RunsTableName(),
+		"{DBLOCK}", d.DBLockTableName(),
 	)
 }
 
@@ -124,7 +124,7 @@ func (d *DB) Migrate(ctx context.Context) error {
 		return err
 	}
 
-	err = d.lockCreateTable(ctx)
+	err = d.dbLockCreateTable(ctx)
 	if err != nil {
 		return err
 	}

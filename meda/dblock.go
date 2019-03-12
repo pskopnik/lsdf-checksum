@@ -7,47 +7,47 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-const lockTableNameBase = "db_lock"
+const dbLockTableNameBase = "db_lock"
 
-func (d *DB) LockTableName() string {
-	return d.Config.TablePrefix + lockTableNameBase
+func (d *DB) DBLockTableName() string {
+	return d.Config.TablePrefix + dbLockTableNameBase
 }
 
-const lockCreateTableQuery = GenericQuery(`
-	CREATE TABLE IF NOT EXISTS {LOCK} (
+const dbLockCreateTableQuery = GenericQuery(`
+	CREATE TABLE IF NOT EXISTS {DBLOCK} (
 		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 		PRIMARY KEY (id)
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 `)
 
-func (d *DB) lockCreateTable(ctx context.Context) error {
-	_, err := d.ExecContext(ctx, lockCreateTableQuery.SubstituteAll(d))
+func (d *DB) dbLockCreateTable(ctx context.Context) error {
+	_, err := d.ExecContext(ctx, dbLockCreateTableQuery.SubstituteAll(d))
 	return err
 }
 
-// Error variables related to LockLocker.
+// Error variables related to DBLockLocker.
 var (
-	ErrAlreadyLocked = errors.New("locker already holds lock")
-	ErrNotLocked     = errors.New("locker does not hold lock")
+	ErrAlreadyLocked = errors.New("locker already holds db lock")
+	ErrNotLocked     = errors.New("locker does not hold db lock")
 )
 
-type LockLocker struct {
+type DBLockLocker struct {
 	ctx context.Context
 	db  *DB
 	tx  *sqlx.Tx
 }
 
-func (l *LockLocker) IsLocked() bool {
+func (l *DBLockLocker) IsLocked() bool {
 	return l.tx != nil
 }
 
 var lockLockTableQuery = GenericQuery(`
 	LOCK TABLES
-		{LOCK} WRITE
+		{DBLOCK} WRITE
 	;
 `)
 
-func (l *LockLocker) Lock(ctx context.Context) error {
+func (l *DBLockLocker) Lock(ctx context.Context) error {
 	if l.IsLocked() {
 		return ErrAlreadyLocked
 	}
@@ -72,7 +72,7 @@ var lockUnlockTablesQuery = GenericQuery(`
 	UNLOCK TABLES;
 `)
 
-func (l *LockLocker) Unlock(ctx context.Context) error {
+func (l *DBLockLocker) Unlock(ctx context.Context) error {
 	if !l.IsLocked() {
 		return ErrNotLocked
 	}
@@ -94,8 +94,8 @@ func (l *LockLocker) Unlock(ctx context.Context) error {
 	return nil
 }
 
-func (d *DB) LockLocker(ctx context.Context) LockLocker {
-	return LockLocker{
+func (d *DB) DBLockLocker(ctx context.Context) DBLockLocker {
+	return DBLockLocker{
 		ctx: ctx,
 		db:  d,
 	}
