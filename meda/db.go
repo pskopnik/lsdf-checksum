@@ -15,12 +15,13 @@ const MaxPlaceholders = 65535
 //go:generate confions config Config
 
 type Config struct {
-	Driver          string
-	DataSourceName  string
-	TablePrefix     string
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
+	Driver                string
+	DataSourceName        string
+	TablePrefix           string
+	MaxOpenConns          int
+	MaxIdleConns          int
+	ConnMaxLifetime       time.Duration
+	ServerConcurrencyHint int
 }
 
 var DefaultConfig = &Config{
@@ -65,6 +66,17 @@ func (m *DB) createReplacer() *strings.Replacer {
 		"{RUNS}", m.RunsTableName(),
 		"{LOCK}", m.LockTableName(),
 	)
+}
+
+// ServerConcurrency returns an estimated concurrency value of the MySQL /
+// MariaDB server. This value is well suited for the number of threads used
+// for performing CPU intensive queries.
+func (d *DB) ServerConcurrency() (int, error) {
+	if d.Config.ServerConcurrencyHint > 0 {
+		return d.Config.ServerConcurrencyHint, nil
+	}
+
+	return 1, nil
 }
 
 const getVersionQuery = `

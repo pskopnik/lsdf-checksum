@@ -11,6 +11,7 @@ func (c *Config) CopyFrom(other *Config) {
 	c.MaxOpenConns = other.MaxOpenConns
 	c.MaxIdleConns = other.MaxIdleConns
 	c.ConnMaxLifetime = other.ConnMaxLifetime
+	c.ServerConcurrencyHint = other.ServerConcurrencyHint
 }
 
 func (c *Config) Merge(other *Config) *Config {
@@ -31,6 +32,9 @@ func (c *Config) Merge(other *Config) *Config {
 	}
 	if other.ConnMaxLifetime != time.Duration(0) {
 		c.ConnMaxLifetime = other.ConnMaxLifetime
+	}
+	if other.ServerConcurrencyHint != 0 {
+		c.ServerConcurrencyHint = other.ServerConcurrencyHint
 	}
 
 	return c
