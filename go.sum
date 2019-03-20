@@ -1,7 +1,5 @@
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/MasterOfBinary/gobatch v0.0.0-20180929163814-711b27aab3df h1:sesZGh6ZRstqxr3tBmNOGwrHOWgQgESqayAzbN+JRWA=
-github.com/MasterOfBinary/gobatch v0.0.0-20180929163814-711b27aab3df/go.mod h1:o51aaaWRbtoLR5pjfXQO15Bo66gUZd9CUH6+DNQiCZ4=
 github.com/Masterminds/squirrel v1.1.0 h1:baP1qLdoQCeTw3ifCdOq2dkYc6vGcmRdaociKLbEJXs=
 github.com/Masterminds/squirrel v1.1.0/go.mod h1:yaPeOnPG5ZRwL9oKdTsO/prlkPbXWZlRVMQ/gGlzIuA=
 github.com/akutz/gofsutil v0.1.2 h1:aCdWrZdxajx8kllNQSKaMDpRJWSE2wcyKNy7eDMXkrI=

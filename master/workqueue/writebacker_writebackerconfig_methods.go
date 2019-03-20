@@ -1,14 +1,12 @@
 package workqueue
 
-import (
-	"time"
-)
-
 func (w *WriteBackerConfig) CopyFrom(other *WriteBackerConfig) {
-	w.Batch.MinTime = other.Batch.MinTime
-	w.Batch.MinItems = other.Batch.MinItems
-	w.Batch.MaxTime = other.Batch.MaxTime
-	w.Batch.MaxItems = other.Batch.MaxItems
+	w.Batcher.MaxItems = other.Batcher.MaxItems
+	w.Batcher.MaxWaitTime = other.Batcher.MaxWaitTime
+	w.Batcher.BatchBufferSize = other.Batcher.BatchBufferSize
+
+	w.Transactioner.DB = other.Transactioner.DB
+	w.Transactioner.MaxTransactionSize = other.Transactioner.MaxTransactionSize
 
 	w.FileSystemName = other.FileSystemName
 	w.Namespace = other.Namespace
@@ -22,17 +20,21 @@ func (w *WriteBackerConfig) CopyFrom(other *WriteBackerConfig) {
 }
 
 func (w *WriteBackerConfig) Merge(other *WriteBackerConfig) *WriteBackerConfig {
-	if other.Batch.MinTime != time.Duration(0) {
-		w.Batch.MinTime = other.Batch.MinTime
+	if other.Batcher.MaxItems != 0 {
+		w.Batcher.MaxItems = other.Batcher.MaxItems
 	}
-	if other.Batch.MinItems != 0 {
-		w.Batch.MinItems = other.Batch.MinItems
+	if other.Batcher.MaxWaitTime != 0 {
+		w.Batcher.MaxWaitTime = other.Batcher.MaxWaitTime
 	}
-	if other.Batch.MaxTime != time.Duration(0) {
-		w.Batch.MaxTime = other.Batch.MaxTime
+	if other.Batcher.BatchBufferSize != 0 {
+		w.Batcher.BatchBufferSize = other.Batcher.BatchBufferSize
 	}
-	if other.Batch.MaxItems != 0 {
-		w.Batch.MaxItems = other.Batch.MaxItems
+
+	if other.Transactioner.DB != nil {
+		w.Transactioner.DB = other.Transactioner.DB
+	}
+	if other.Transactioner.MaxTransactionSize != 0 {
+		w.Transactioner.MaxTransactionSize = other.Transactioner.MaxTransactionSize
 	}
 
 	if len(other.FileSystemName) > 0 {

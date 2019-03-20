@@ -15,7 +15,7 @@ type insertsInserterConfig struct {
 }
 
 type insertsInserter struct {
-	config *insertsInserterConfig
+	Config *insertsInserterConfig
 	ctx    context.Context
 
 	insertsCount int
@@ -31,7 +31,7 @@ type insertsInserter struct {
 // transactioner.
 func newInsertsInserter(ctx context.Context, config *insertsInserterConfig) *insertsInserter {
 	return &insertsInserter{
-		config: config,
+		Config: config,
 		ctx:    ctx,
 	}
 }
@@ -52,7 +52,7 @@ func (i *insertsInserter) Insert(ctx context.Context, insert *meda.Insert) error
 	i.insertsCount += 1
 	i.txQueryCount += 1
 
-	if i.txQueryCount >= i.config.MaxTransactionSize {
+	if i.txQueryCount >= i.Config.MaxTransactionSize {
 		err := i.commitTx()
 		if err != nil {
 			return errors.Wrap(err, "(*insertsInserter).Insert")
@@ -71,28 +71,25 @@ func (i *insertsInserter) Commit() error {
 }
 
 func (i *insertsInserter) Close() error {
+	var retErr error
+
 	if i.insertPrepStmt != nil {
 		err := i.insertPrepStmt.Close()
 		i.insertPrepStmt = nil
-		if err != nil {
-			if i.tx != nil {
-				// Rollback transaction before returning
-				_ = i.tx.Rollback()
-				i.tx = nil
-			}
-			return errors.Wrap(err, "(*insertsInserter).Close: close prepared statement")
+		if err != nil && retErr == nil {
+			retErr = errors.Wrap(err, "(*insertsInserter).Close: close insert statement")
 		}
 	}
 
 	if i.tx != nil {
 		err := i.tx.Rollback()
-		i.tx = nil
-		if err != nil {
-			return errors.Wrap(err, "(*insertsInserter).Close: rollback transaction")
+		i.tx, i.txQueryCount = nil, 0
+		if err != nil && retErr == nil {
+			retErr = errors.Wrap(err, "(*insertsInserter).Close: rollback transaction")
 		}
 	}
 
-	return nil
+	return retErr
 
 }
 
@@ -107,20 +104,19 @@ func (i *insertsInserter) Close() error {
 func (i *insertsInserter) beginTx(ctx context.Context) error {
 	var err error
 
-	i.tx, err = i.config.DB.BeginTxx(i.ctx, nil)
+	i.tx, err = i.Config.DB.BeginTxx(i.ctx, nil)
+	i.txQueryCount = 0
 	if err != nil {
 		i.tx = nil
 		return errors.Wrap(err, "(*insertsInserter).beginTx: begin transaction")
 	}
 
-	i.insertPrepStmt, err = i.config.DB.InsertsPrepareInsert(ctx, i.tx)
+	i.insertPrepStmt, err = i.Config.DB.InsertsPrepareInsert(ctx, i.tx)
 	if err != nil {
 		_ = i.tx.Rollback()
 		i.tx, i.insertPrepStmt = nil, nil
 		return errors.Wrap(err, "(*insertsInserter).beginTx: prepare inserts statement")
 	}
-
-	i.txQueryCount = 0
 
 	return nil
 }
@@ -130,23 +126,26 @@ func (i *insertsInserter) beginTx(ctx context.Context) error {
 // of whether an error is returned.
 // commitTx always sets i.tx and i.insertPrepStmt == nil.
 func (i *insertsInserter) commitTx() error {
-	i.txQueryCount = 0
+	var retErr error
 
-	err := i.insertPrepStmt.Close()
-	i.insertPrepStmt = nil
-	if err != nil {
-		// Try to commit
-		_ = i.tx.Commit()
-		i.tx = nil
-		return errors.Wrap(err, "(*insertsInserter).commitTx: close prepared statement")
+	if i.insertPrepStmt != nil {
+		err := i.insertPrepStmt.Close()
+		i.insertPrepStmt = nil
+		if err != nil && retErr == nil {
+			retErr = errors.Wrap(err, "(*insertsInserter).commitTx: close prepared statement")
+		}
 	}
 
-	err = i.tx.Commit()
-	i.tx = nil
-	if err != nil {
-		// TODO check for conflicts, re-perform transaction
-		return errors.Wrap(err, "(*insertsInserter).commitTx: commit transaction")
+	if i.tx != nil {
+		err := i.tx.Commit()
+		i.tx, i.txQueryCount = nil, 0
+		if err != nil {
+			// TODO check for conflicts, re-perform transaction
+			if retErr == nil {
+				retErr = errors.Wrap(err, "(*insertsInserter).commitTx: commit transaction")
+			}
+		}
 	}
 
-	return nil
+	return retErr
 }

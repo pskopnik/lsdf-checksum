@@ -89,6 +89,11 @@ type WriteBackPackFile struct {
 	Checksum []byte
 }
 
+func (w *WriteBackPackFile) DeepCopyFrom(other *WriteBackPackFile) {
+	w.Id = other.Id
+	w.Checksum = append(w.Checksum[:0], other.Checksum...)
+}
+
 type WriteBackPack struct {
 	Files []WriteBackPackFile
 }
