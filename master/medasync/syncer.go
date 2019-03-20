@@ -1,4 +1,4 @@
-// Package medasync contains the Syncer component for synchronising the file
+// Package medasync contains the Syncer component for synchronising file
 // system data with the meta data database.
 package medasync
 
