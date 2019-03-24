@@ -63,8 +63,7 @@ func (p *Producer) Start(ctx context.Context) {
 		"snapshot":   p.Config.SnapshotName,
 		"filesystem": p.Config.FileSystemName,
 		"namespace":  p.Config.Namespace,
-		"package":    "workqueue",
-		"component":  "Producer",
+		"component":  "workqueue.Producer",
 	})
 
 	queueSchedulerConfig := &QueueSchedulerConfig{

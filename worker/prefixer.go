@@ -51,8 +51,7 @@ func NewPrefixer(config *PrefixerConfig) *Prefixer {
 
 func (p *Prefixer) Start(ctx context.Context) {
 	p.fieldLogger = p.Config.Logger.WithFields(log.Fields{
-		"package":   "worker",
-		"component": "Prefixer",
+		"component": "worker.Prefixer",
 	})
 
 	p.tomb, _ = tomb.WithContext(ctx)

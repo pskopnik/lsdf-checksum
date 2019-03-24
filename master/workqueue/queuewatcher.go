@@ -65,8 +65,7 @@ func (q *QueueWatcher) Start(ctx context.Context) {
 		"snapshot":   q.Config.SnapshotName,
 		"filesystem": q.Config.FileSystemName,
 		"namespace":  q.Config.Namespace,
-		"package":    "workqueue",
-		"component":  "QueueWatcher",
+		"component":  "workqueue.QueueWatcher",
 	})
 
 	q.tomb, _ = tomb.WithContext(ctx)

@@ -67,8 +67,7 @@ func NewLedisDB(config *LedisDBConfig) *LedisDB {
 
 func (l *LedisDB) Start(ctx context.Context) {
 	l.fieldLogger = l.Config.Logger.WithFields(log.Fields{
-		"package":   "ledis",
-		"component": "LedisDB",
+		"component": "ledis.LedisDB",
 	})
 
 	l.tomb, _ = tomb.WithContext(ctx)

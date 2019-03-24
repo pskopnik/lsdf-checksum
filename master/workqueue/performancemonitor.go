@@ -62,8 +62,7 @@ func (p *PerformanceMonitor) Start(ctx context.Context) {
 	p.fieldLogger = p.Config.Logger.WithFields(log.Fields{
 		"unit":      p.Config.Unit,
 		"prefix":    p.Config.Prefix,
-		"package":   "workqueue",
-		"component": "PerformanceMonitor",
+		"component": "workqueue.PerformanceMonitor",
 	})
 
 	p.tomb, _ = tomb.WithContext(ctx)

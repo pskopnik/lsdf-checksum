@@ -142,8 +142,7 @@ func (m *Master) Start(ctx context.Context) {
 		"run":          m.Config.Run.Id,
 		"sync_mode":    m.Config.Run.SyncMode,
 		"target_state": m.Config.TargetState,
-		"package":      "master",
-		"component":    "Master",
+		"component":    "master.Master",
 	})
 
 	m.tomb, _ = tomb.WithContext(ctx)

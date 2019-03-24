@@ -84,8 +84,7 @@ func (w *WriteBacker) Start(ctx context.Context) {
 		"snapshot":   w.Config.SnapshotName,
 		"filesystem": w.Config.FileSystemName,
 		"namespace":  w.Config.Namespace,
-		"package":    "workqueue",
-		"component":  "WriteBacker",
+		"component":  "workqueue.WriteBacker",
 	})
 
 	w.endOfQueueSignal = make(chan struct{})

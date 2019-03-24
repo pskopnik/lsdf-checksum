@@ -75,8 +75,7 @@ func (q *QueueScheduler) Start(ctx context.Context) {
 	q.fieldLogger = q.Config.Logger.WithFields(log.Fields{
 		"namespace": q.Config.Namespace,
 		"jobname":   q.Config.JobName,
-		"package":   "workqueue",
-		"component": "QueueScheduler",
+		"component": "workqueue.QueueScheduler",
 	})
 
 	q.tomb, _ = tomb.WithContext(ctx)
@@ -340,8 +339,7 @@ func NewEWMAScheduler(config *EWMASchedulerConfig) *EWMAScheduler {
 func (e *EWMAScheduler) Init(queueScheduler *QueueScheduler) {
 	e.queueScheduler = queueScheduler
 	e.fieldLogger = queueScheduler.Config.Logger.WithFields(log.Fields{
-		"package":   "workqueue",
-		"component": "EWMAScheduler",
+		"component": "workqueue.EWMAScheduler",
 	})
 
 	// Initialise state

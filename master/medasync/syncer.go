@@ -97,8 +97,7 @@ func (s *Syncer) Run(ctx context.Context) error {
 		"run":        s.Config.RunId,
 		"snapshot":   s.Config.SnapshotName,
 		"subpath":    s.Config.Subpath,
-		"package":    "medasync",
-		"component":  "Syncer",
+		"component":  "medasync.Syncer",
 	})
 
 	// Perform the first step of the Syncer in parallel

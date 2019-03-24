@@ -100,8 +100,7 @@ func (w *WorkQueue) Start(ctx context.Context) {
 		"run":        w.Config.RunId,
 		"snapshot":   w.Config.SnapshotName,
 		"filesystem": w.Config.FileSystemName,
-		"package":    "workqueue",
-		"component":  "WorkQueue",
+		"component":  "workqueue.WorkQueue",
 	})
 
 	w.tomb, _ = tomb.WithContext(ctx)

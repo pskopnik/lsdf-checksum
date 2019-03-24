@@ -67,8 +67,7 @@ func New(config *Config) *Worker {
 
 func (w *Worker) Start(ctx context.Context) {
 	w.fieldLogger = w.Config.Logger.WithFields(log.Fields{
-		"package":   "worker",
-		"component": "Worker",
+		"component": "worker.Worker",
 	})
 
 	w.tomb, _ = tomb.WithContext(ctx)
