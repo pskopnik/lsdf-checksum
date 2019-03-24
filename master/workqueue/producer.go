@@ -3,8 +3,8 @@ package workqueue
 import (
 	"context"
 
+	"github.com/apex/log"
 	"github.com/gomodule/redigo/redis"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -24,9 +24,9 @@ type ProducerConfig struct {
 
 	SnapshotName string
 
-	Pool   *redis.Pool        `yaml:"-"`
-	DB     *meda.DB           `yaml:"-"`
-	Logger logrus.FieldLogger `yaml:"-"`
+	Pool   *redis.Pool   `yaml:"-"`
+	DB     *meda.DB      `yaml:"-"`
+	Logger log.Interface `yaml:"-"`
 
 	Controller SchedulingController `yaml:"-"`
 }
@@ -47,7 +47,7 @@ type Producer struct {
 	lastRand       float64
 	lastId         uint64
 	queueScheduler *QueueScheduler
-	fieldLogger    logrus.FieldLogger
+	fieldLogger    log.Interface
 }
 
 func NewProducer(config *ProducerConfig) *Producer {
@@ -59,7 +59,7 @@ func NewProducer(config *ProducerConfig) *Producer {
 func (p *Producer) Start(ctx context.Context) {
 	p.tomb, _ = tomb.WithContext(ctx)
 
-	p.fieldLogger = p.Config.Logger.WithFields(logrus.Fields{
+	p.fieldLogger = p.Config.Logger.WithFields(log.Fields{
 		"snapshot":   p.Config.SnapshotName,
 		"filesystem": p.Config.FileSystemName,
 		"namespace":  p.Config.Namespace,
@@ -137,12 +137,12 @@ L:
 	}
 
 	if err != nil {
-		p.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		p.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"exhausted": exhausted,
 		}).Error("Encountered error while producing")
 	} else {
-		p.fieldLogger.WithFields(logrus.Fields{
+		p.fieldLogger.WithFields(log.Fields{
 			"action":    "stopping",
 			"exhausted": exhausted,
 		}).Info("Finished listening to production requests")
@@ -171,7 +171,7 @@ func (p *Producer) rowFetcher() error {
 	for !exhausted {
 		files, err = p.fetchNextBatch(files)
 		if err != nil {
-			p.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			p.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action": "stopping",
 			}).Error("Encountered error while fetching next batch of File rows")
 

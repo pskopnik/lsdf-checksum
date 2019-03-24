@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/apex/log"
 	"github.com/gomodule/redigo/redis"
 	pkgErrors "github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -39,7 +39,7 @@ type Config struct {
 	// are three states supported: RSFinished, RSAborted and RSMedasync.
 	TargetState meda.RunState
 
-	Logger logrus.FieldLogger `yaml:"-"`
+	Logger log.Interface `yaml:"-"`
 	DB     *meda.DB
 
 	// Redis contains the configuration for the redis.CreatePool function.
@@ -75,7 +75,7 @@ type Master struct {
 
 	tomb *tomb.Tomb
 
-	fieldLogger      logrus.FieldLogger
+	fieldLogger      log.Interface
 	pool             *redis.Pool
 	poolStored       sync.WaitGroup
 	fileSystem       *scaleadpt.FileSystem
@@ -137,7 +137,7 @@ func NewWithExistingRun(ctx context.Context, config *Config, runId uint64) (*med
 }
 
 func (m *Master) Start(ctx context.Context) {
-	m.fieldLogger = m.Config.Logger.WithFields(logrus.Fields{
+	m.fieldLogger = m.Config.Logger.WithFields(log.Fields{
 		"filesystem":   m.Config.FileSystemName,
 		"run":          m.Config.Run.Id,
 		"sync_mode":    m.Config.Run.SyncMode,
@@ -210,7 +210,7 @@ func (m *Master) initialiseFileSystem() error {
 		m.fileSystem = nil
 		m.fileSystemStored.Done()
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Run is in finished state, cannot abort")
@@ -231,7 +231,7 @@ func (m *Master) run() error {
 		return m.runFinishing(m.Config.TargetState)
 	case meda.RSAborted:
 		if m.Config.Run.State == meda.RSFinished {
-			m.fieldLogger.WithFields(logrus.Fields{
+			m.fieldLogger.WithFields(log.Fields{
 				"action":    "skipping",
 				"run_state": m.Config.Run.State,
 			}).Warn("Cannot abort a finished run, skipping all processing")
@@ -243,7 +243,7 @@ func (m *Master) run() error {
 	default:
 		err := pkgErrors.Wrap(ErrNonSupportedTargetState, "(*Master).run")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "stopping",
 			// target_state is already set in m.fieldLogger
 			"run_state": m.Config.Run.State,
@@ -304,7 +304,7 @@ func (m *Master) runFinishing(targetState meda.RunState) error {
 		case meda.RSAbortingSnapshot:
 			fallthrough
 		case meda.RSAborted:
-			m.fieldLogger.WithFields(logrus.Fields{
+			m.fieldLogger.WithFields(log.Fields{
 				"action": "continuing",
 				// target_state is already set in m.fieldLogger
 				"run_state": m.Config.Run.State,
@@ -317,7 +317,7 @@ func (m *Master) runFinishing(targetState meda.RunState) error {
 		if err != nil {
 			err = pkgErrors.Wrap(err, "(*Master).runFinishing")
 
-			m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			m.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":    "stopping",
 				"run_state": m.Config.Run.State,
 			}).Error("Encountered error while updating run in database")
@@ -361,7 +361,7 @@ func (m *Master) runAborting() error {
 		case meda.RSFinished:
 			err = pkgErrors.Wrap(ErrFinishedNotAbortable, "(*Master).runAborting")
 
-			m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			m.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":    "stopping",
 				"run_state": m.Config.Run.State,
 			}).Error("Run is in finished state, cannot abort")
@@ -373,7 +373,7 @@ func (m *Master) runAborting() error {
 		if err != nil {
 			err = pkgErrors.Wrap(err, "(*Master).runAborting")
 
-			m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			m.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":    "stopping",
 				"run_state": m.Config.Run.State,
 			}).Error("Encountered error while updating run in database")
@@ -408,7 +408,7 @@ func (m *Master) updateRun() error {
 		_ = tx.Rollback()
 		err = pkgErrors.Wrapf(ErrRunUpdateFailed, "(*Master).updateRun: unexpected number of rows affected = %d", rowsAffected)
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":        "escalating",
 			"rows_affected": rowsAffected,
 		}).Error("More than 1 row affected by update run statement")
@@ -442,7 +442,7 @@ func (m *Master) ensureFileSystem() (*scaleadpt.FileSystem, error) {
 	if m.fileSystem == nil {
 		err := pkgErrors.Wrap(ErrFileSystemNil, "(*Master).ensureFileSystem")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "escalating",
 		}).Error("File system is nil but tomb is not dying (yet)")
 
@@ -464,7 +464,7 @@ func (m *Master) ensurePool() (*redis.Pool, error) {
 	if m.pool == nil {
 		err := pkgErrors.Wrap(ErrPoolNil, "(*Master).ensurePool")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "escalating",
 		}).Error("Pool is nil but tomb is not dying (yet)")
 
@@ -478,7 +478,7 @@ func (m *Master) runSnapshotState() error {
 	if _, err := m.ensureFileSystem(); err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runSnapshotState")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "stopping",
 		}).Error("Encountered error while retrieving the file system")
 
@@ -488,7 +488,7 @@ func (m *Master) runSnapshotState() error {
 	if !m.Config.Run.SnapshotName.Valid {
 		err := pkgErrors.Wrap(ErrMissingSnapshotName, "(*Master).runSnapshotState")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Cannot perform snapshot state processing, run is missing SnapshotName value")
@@ -496,7 +496,7 @@ func (m *Master) runSnapshotState() error {
 		return err
 	}
 
-	m.fieldLogger.WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(log.Fields{
 		"snapshot":  m.Config.Run.SnapshotName.String,
 		"run_state": m.Config.Run.State,
 	}).Info("Creating snapshot in Spectrum Scale file system")
@@ -504,7 +504,7 @@ func (m *Master) runSnapshotState() error {
 	snapshot, err := m.fileSystem.CreateSnapshot(m.Config.Run.SnapshotName.String)
 	if err == scaleadpt.ErrSnapshotAlreadyExists {
 
-		m.fieldLogger.WithFields(logrus.Fields{
+		m.fieldLogger.WithFields(log.Fields{
 			"snapshot":  m.Config.Run.SnapshotName.String,
 			"run_state": m.Config.Run.State,
 		}).Info("Snapshot already exists, retrieving data instead of creating")
@@ -513,7 +513,7 @@ func (m *Master) runSnapshotState() error {
 		if err != nil {
 			err = pkgErrors.Wrap(err, "(*Master).runSnapshotState: GetSnapshot from file system")
 
-			m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			m.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":    "stopping",
 				"run_state": m.Config.Run.State,
 			}).Error("Encountered error while getting snapshot data")
@@ -523,20 +523,20 @@ func (m *Master) runSnapshotState() error {
 	} else if err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runSnapshotState: CreateSnapshot in file system")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Encountered error while creating snapshot")
 
 		return err
 	} else {
-		m.fieldLogger.WithFields(logrus.Fields{
+		m.fieldLogger.WithFields(log.Fields{
 			"snapshot":  m.Config.Run.SnapshotName.String,
 			"run_state": m.Config.Run.State,
 		}).Info("Created snapshot in Spectrum Scale file system")
 	}
 
-	m.fieldLogger.WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(log.Fields{
 		"run_state":           m.Config.Run.State,
 		"snapshot":            m.Config.Run.SnapshotName.String,
 		"snapshot_id":         snapshot.Id,
@@ -556,7 +556,7 @@ func (m *Master) runMedasyncState() error {
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runMedasyncState")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Encountered error while creating Syncer instance")
@@ -572,7 +572,7 @@ func (m *Master) runMedasyncState() error {
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runMedasyncState: run Syncer")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Encountered error while performing medasync")
@@ -590,7 +590,7 @@ func (m *Master) runWorkqueueState() error {
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runWorkqueueState")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Encountered error while creating WorkQueue instance")
@@ -598,7 +598,7 @@ func (m *Master) runWorkqueueState() error {
 		return err
 	}
 
-	m.fieldLogger.WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(log.Fields{
 		"run_state": m.Config.Run.State,
 	}).Info("Starting workqueue")
 
@@ -617,12 +617,12 @@ func (m *Master) runWorkqueueState() error {
 			// TODO should errors be filtered out? lifecycle.ErrStopSignalled, context.Canceled
 			err = pkgErrors.Wrap(err, "(*Master).runWorkqueueState: run WorkQueue")
 
-			m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			m.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":    "stopping",
 				"run_state": m.Config.Run.State,
 			}).Error("Encountered error while performing workqueue")
 		} else {
-			m.fieldLogger.WithFields(logrus.Fields{
+			m.fieldLogger.WithFields(log.Fields{
 				"run_state": m.Config.Run.State,
 			}).Info("Finished workqueue")
 		}
@@ -635,7 +635,7 @@ func (m *Master) runCleanupState() error {
 	if _, err := m.ensureFileSystem(); err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runCleanupState")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "stopping",
 		}).Error("Encountered error while retrieving the file system")
 
@@ -645,7 +645,7 @@ func (m *Master) runCleanupState() error {
 	if !m.Config.Run.SnapshotName.Valid {
 		err := pkgErrors.Wrap(ErrMissingSnapshotName, "(*Master).runCleanupState")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Cannot perform snapshot deletion, run is missing SnapshotName value")
@@ -653,28 +653,28 @@ func (m *Master) runCleanupState() error {
 		return err
 	}
 
-	m.fieldLogger.WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(log.Fields{
 		"snapshot":  m.Config.Run.SnapshotName.String,
 		"run_state": m.Config.Run.State,
 	}).Info("Deleting snapshot in Spectrum Scale file system")
 
 	err := m.fileSystem.DeleteSnapshot(m.Config.Run.SnapshotName.String)
 	if err == scaleadpt.ErrSnapshotDoesNotExist {
-		m.fieldLogger.WithFields(logrus.Fields{
+		m.fieldLogger.WithFields(log.Fields{
 			"snapshot":  m.Config.Run.SnapshotName.String,
 			"run_state": m.Config.Run.State,
 		}).Info("Snapshot does not exists, presuming that it has already been deleted")
 	} else if err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runCleanupState: DeleteSnapshot in file system")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Encountered error while deleting snapshot")
 
 		return err
 	} else {
-		m.fieldLogger.WithFields(logrus.Fields{
+		m.fieldLogger.WithFields(log.Fields{
 			"snapshot":  m.Config.Run.SnapshotName.String,
 			"run_state": m.Config.Run.State,
 		}).Info("Deleted snapshot in Spectrum Scale file system")
@@ -688,7 +688,7 @@ func (m *Master) runAbortingMedasyncState() error {
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runAbortingMedasyncState")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Encountered error while creating Syncer instance")
@@ -696,7 +696,7 @@ func (m *Master) runAbortingMedasyncState() error {
 		return err
 	}
 
-	m.fieldLogger.WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(log.Fields{
 		"run_state": m.Config.Run.State,
 	}).Info("Starting running CleanUp on Syncer")
 
@@ -706,7 +706,7 @@ func (m *Master) runAbortingMedasyncState() error {
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runAbortingMedasyncState: run CleanUp on Syncer")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Encountered error while performing CleanUp on Syncer")
@@ -714,7 +714,7 @@ func (m *Master) runAbortingMedasyncState() error {
 		return err
 	}
 
-	m.fieldLogger.WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(log.Fields{
 		"run_state": m.Config.Run.State,
 	}).Info("Finished running CleanUp on Syncer")
 
@@ -722,7 +722,7 @@ func (m *Master) runAbortingMedasyncState() error {
 }
 
 func (m *Master) runAbortingSnapshotState() error {
-	m.fieldLogger.WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(log.Fields{
 		"run_state": m.Config.Run.State,
 	}).Info("Starting running cleanup state procedure")
 
@@ -730,7 +730,7 @@ func (m *Master) runAbortingSnapshotState() error {
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*Master).runAbortingSnapshotState")
 
-		m.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		m.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":    "stopping",
 			"run_state": m.Config.Run.State,
 		}).Error("Encountered error while running the cleanup state procedure")
@@ -738,7 +738,7 @@ func (m *Master) runAbortingSnapshotState() error {
 		return err
 	}
 
-	m.fieldLogger.WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(log.Fields{
 		"run_state": m.Config.Run.State,
 	}).Info("Finished running cleanup state procedure")
 
@@ -750,7 +750,7 @@ func (m *Master) createFileSystem() *scaleadpt.FileSystem {
 }
 
 func (m *Master) testFileSystem() error {
-	loggerFields := logrus.Fields{
+	loggerFields := log.Fields{
 		"filesystem": m.fileSystem.GetName(),
 	}
 
@@ -764,7 +764,7 @@ func (m *Master) testFileSystem() error {
 		return err
 	}
 
-	m.fieldLogger.WithFields(loggerFields).WithFields(logrus.Fields{
+	m.fieldLogger.WithFields(loggerFields).WithFields(log.Fields{
 		"version": version,
 	}).Info("Retrieved version from Spectrum Scale file system")
 
@@ -786,7 +786,7 @@ func (m *Master) createRedisPool() (*redis.Pool, error) {
 }
 
 func (m *Master) testRedis() error {
-	loggerFields := logrus.Fields{
+	loggerFields := log.Fields{
 		"network":       m.Config.Redis.Network,
 		"address":       m.Config.Redis.Address,
 		"database":      m.Config.Redis.Database,

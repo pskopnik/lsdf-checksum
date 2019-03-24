@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -30,8 +30,8 @@ type QueueWatcherConfig struct {
 	RunId        uint64
 	SnapshotName string
 
-	Pool   *redis.Pool        `yaml:"-"`
-	Logger logrus.FieldLogger `yaml:"-"`
+	Pool   *redis.Pool   `yaml:"-"`
+	Logger log.Interface `yaml:"-"`
 
 	// ProductionExhausted is a channel which must be closed as soon as all
 	// items have been enqueued, i.e. production is exhausted.
@@ -50,7 +50,7 @@ type QueueWatcher struct {
 
 	client *work.Client
 
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 }
 
 func NewQueueWatcher(config *QueueWatcherConfig) *QueueWatcher {
@@ -60,7 +60,7 @@ func NewQueueWatcher(config *QueueWatcherConfig) *QueueWatcher {
 }
 
 func (q *QueueWatcher) Start(ctx context.Context) {
-	q.fieldLogger = q.Config.Logger.WithFields(logrus.Fields{
+	q.fieldLogger = q.Config.Logger.WithFields(log.Fields{
 		"run":        q.Config.RunId,
 		"snapshot":   q.Config.SnapshotName,
 		"filesystem": q.Config.FileSystemName,
@@ -191,7 +191,7 @@ L:
 		if err != nil {
 			return err
 		}
-		q.fieldLogger.WithFields(logrus.Fields{
+		q.fieldLogger.WithFields(log.Fields{
 			"method":  "waitForJobsFinished",
 			"jobname": jobName,
 			"empty":   empty,
@@ -207,7 +207,7 @@ L:
 			if err != nil {
 				return err
 			}
-			q.fieldLogger.WithFields(logrus.Fields{
+			q.fieldLogger.WithFields(log.Fields{
 				"method":  "waitForJobsFinished",
 				"jobname": jobName,
 				"empty":   empty,
@@ -220,7 +220,7 @@ L:
 			if err != nil {
 				return err
 			}
-			q.fieldLogger.WithFields(logrus.Fields{
+			q.fieldLogger.WithFields(log.Fields{
 				"method":  "waitForJobsFinished",
 				"jobname": jobName,
 				"empty":   empty,

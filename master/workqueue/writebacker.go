@@ -6,10 +6,10 @@ import (
 	"errors"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
 	pkgErrors "github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -34,9 +34,9 @@ type WriteBackerConfig struct {
 	RunId        uint64
 	SnapshotName string
 
-	Pool   *redis.Pool        `yaml:"-"`
-	DB     *meda.DB           `yaml:"-"`
-	Logger logrus.FieldLogger `yaml:"-"`
+	Pool   *redis.Pool   `yaml:"-"`
+	DB     *meda.DB      `yaml:"-"`
+	Logger log.Interface `yaml:"-"`
 }
 
 var WriteBackerDefaultConfig = &WriteBackerConfig{
@@ -67,7 +67,7 @@ type WriteBacker struct {
 	workerPool        *work.WorkerPool
 	workerPoolStopped chan struct{}
 
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 }
 
 func NewWriteBacker(config *WriteBackerConfig) *WriteBacker {
@@ -79,7 +79,7 @@ func NewWriteBacker(config *WriteBackerConfig) *WriteBacker {
 func (w *WriteBacker) Start(ctx context.Context) {
 	w.tomb, _ = tomb.WithContext(ctx)
 
-	w.fieldLogger = w.Config.Logger.WithFields(logrus.Fields{
+	w.fieldLogger = w.Config.Logger.WithFields(log.Fields{
 		"run":        w.Config.RunId,
 		"snapshot":   w.Config.SnapshotName,
 		"filesystem": w.Config.FileSystemName,
@@ -151,7 +151,7 @@ func (w *WriteBacker) endOfQueueHandler() error {
 		err := w.batcher.Close(w.tomb.Context(nil))
 		if err != nil {
 			err = pkgErrors.Wrap(err, "(*WriteBacker).endOfQueueHandler")
-			w.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			w.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action": "stopping",
 			}).Error("Encountered error while closing batcher")
 			return err
@@ -182,7 +182,7 @@ func (w *WriteBacker) batcherManager() error {
 			return nil
 		} else if err != nil {
 			err = pkgErrors.Wrap(err, "(*WriteBacker).batcherManager")
-			w.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			w.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action": "stopping",
 			}).Error("Batcher died")
 			return err
@@ -244,7 +244,7 @@ func (w *WriteBacker) processor() error {
 			batch.Return()
 			if err != nil {
 				err = pkgErrors.Wrap(err, "(*WriteBacker).processor")
-				w.fieldLogger.WithError(err).WithFields(logrus.Fields{
+				w.fieldLogger.WithError(err).WithFields(log.Fields{
 					"action": "stopping",
 				}).Error("Encountered error while processing batch")
 				transactioner.Close()
@@ -323,7 +323,7 @@ func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte,
 		file := &batch.Files[i]
 
 		if checksum, ok := checksums[file.Id]; ok {
-			w.fieldLogger.WithFields(logrus.Fields{
+			w.fieldLogger.WithFields(log.Fields{
 				"action":              "skipping",
 				"file_id":             file.Id,
 				"first_checksum":      checksum,
@@ -340,7 +340,7 @@ func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte,
 }
 
 func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File, checksum []byte, transactioner *transactioner) error {
-	w.fieldLogger.WithFields(logrus.Fields{
+	w.fieldLogger.WithFields(log.Fields{
 		"file_id":                file.Id,
 		"file_path":              file.Path,
 		"file_modification_time": file.ModificationTime,
@@ -365,7 +365,7 @@ func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File,
 	err := transactioner.InsertChecksumWarning(ctx, &checksumWarning)
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*WriteBacker).issueChecksumWarning")
-		w.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		w.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":                 "escalating",
 			"file_id":                file.Id,
 			"file_path":              file.Path,
@@ -392,7 +392,7 @@ func (w *writeBackerContext) Process(job *work.Job) error {
 	err := writeBackPack.FromJobArgs(job.Args)
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*writeBackerContext).Process: unmarshal WriteBackPack from job")
-		w.WriteBacker.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		w.WriteBacker.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":   "stopping",
 			"args":     job.Args,
 			"job_name": job.Name,
@@ -403,7 +403,7 @@ func (w *writeBackerContext) Process(job *work.Job) error {
 		return nil
 	}
 
-	w.WriteBacker.fieldLogger.WithFields(logrus.Fields{
+	w.WriteBacker.fieldLogger.WithFields(log.Fields{
 		"write_back_pack": writeBackPack,
 	}).Debug("Received and unmarshaled WriteBackPack")
 
@@ -414,7 +414,7 @@ func (w *writeBackerContext) Process(job *work.Job) error {
 		err := w.WriteBacker.batcher.Add(ctx, file)
 		if err != nil {
 			err = pkgErrors.Wrap(err, "(*writeBackerContext).Process: add received file to batcher")
-			w.WriteBacker.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			w.WriteBacker.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":        "stopping",
 				"file_id":       file.Id,
 				"file_checksum": file.Checksum,

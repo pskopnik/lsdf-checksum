@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/apex/log"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
@@ -66,7 +66,7 @@ type Config struct {
 
 	DB         *meda.DB              `yaml:"-"`
 	FileSystem *scaleadpt.FileSystem `yaml:"-"`
-	Logger     logrus.FieldLogger    `yaml:"-"`
+	Logger     log.Interface         `yaml:"-"`
 }
 
 var DefaultConfig = Config{
@@ -78,7 +78,7 @@ var DefaultConfig = Config{
 type Syncer struct {
 	Config *Config
 
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 	basePath    string
 }
 
@@ -91,7 +91,7 @@ func New(config *Config) *Syncer {
 func (s *Syncer) Run(ctx context.Context) error {
 	var err error
 
-	s.fieldLogger = s.Config.Logger.WithFields(logrus.Fields{
+	s.fieldLogger = s.Config.Logger.WithFields(log.Fields{
 		"sync_mode":  s.Config.SyncMode,
 		"filesystem": s.Config.FileSystem.GetName(),
 		"run":        s.Config.RunId,
@@ -175,7 +175,7 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 		scaleadpt.PolicyOpt.TempDir(s.Config.TemporaryDirectory),
 	}
 
-	fields := logrus.Fields{
+	fields := log.Fields{
 		"distributed_execution": false,
 		"temporary_directory":   s.Config.TemporaryDirectory,
 	}
@@ -234,7 +234,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		}
 
 		if len(cleanPath) > meda.FilesMaxPathLength {
-			s.fieldLogger.WithFields(logrus.Fields{
+			s.fieldLogger.WithFields(log.Fields{
 				"action":                  "skipping",
 				"path":                    cleanPath,
 				"path_length":             len(cleanPath),
@@ -261,7 +261,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
 
-	s.fieldLogger.WithFields(logrus.Fields{
+	s.fieldLogger.WithFields(log.Fields{
 		"count": inserter.InsertsCount(),
 	}).Info("Finished meta data database inserts")
 
@@ -353,7 +353,7 @@ func (s *Syncer) syncDatabaseUpdate(ctx context.Context, incrementalMode int) er
 		return errors.Wrap(err, "(*Syncer).syncDatabaseUpdate")
 	}
 
-	s.fieldLogger.WithFields(logrus.Fields{
+	s.fieldLogger.WithFields(log.Fields{
 		"affected": affectedRows,
 	}).Info("Performed update of existing files in meta data database")
 
@@ -392,7 +392,7 @@ func (s *Syncer) syncDatabaseDelete(ctx context.Context, incrementalMode int) er
 		return errors.Wrap(err, "(*Syncer).syncDatabaseDelete")
 	}
 
-	s.fieldLogger.WithFields(logrus.Fields{
+	s.fieldLogger.WithFields(log.Fields{
 		"affected": affectedRows,
 	}).Info("Performed deleting of old files in meta data database")
 
@@ -431,7 +431,7 @@ func (s *Syncer) syncDatabaseInsert(ctx context.Context, incrementalMode int) er
 		return errors.Wrap(err, "(*Syncer).syncDatabaseInsert")
 	}
 
-	s.fieldLogger.WithFields(logrus.Fields{
+	s.fieldLogger.WithFields(log.Fields{
 		"affected": affectedRows,
 	}).Info("Performed inserting of new files in meta data database")
 

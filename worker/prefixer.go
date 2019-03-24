@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/apex/log"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/cache"
@@ -18,7 +18,7 @@ type PrefixerConfig struct {
 	TTL             time.Duration
 	ReapingInterval time.Duration
 
-	Logger logrus.FieldLogger
+	Logger log.Interface
 }
 
 type Prefixer struct {
@@ -29,7 +29,7 @@ type Prefixer struct {
 	mountRootCache        cache.ExpiringCache
 	snapshotDirsInfoCache cache.ExpiringCache
 
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 }
 
 func NewPrefixer(config *PrefixerConfig) *Prefixer {
@@ -50,7 +50,7 @@ func NewPrefixer(config *PrefixerConfig) *Prefixer {
 }
 
 func (p *Prefixer) Start(ctx context.Context) {
-	p.fieldLogger = p.Config.Logger.WithFields(logrus.Fields{
+	p.fieldLogger = p.Config.Logger.WithFields(log.Fields{
 		"package":   "worker",
 		"component": "Prefixer",
 	})

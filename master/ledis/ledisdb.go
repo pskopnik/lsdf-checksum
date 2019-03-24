@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/apex/log"
 	"gopkg.in/tomb.v2"
 
 	"github.com/siddontang/ledisdb/config"
@@ -36,7 +36,7 @@ type LedisDBConfig struct {
 	WriteBufferSize int
 	CacheSize       int
 
-	Logger logrus.FieldLogger `yaml:"-"`
+	Logger log.Interface `yaml:"-"`
 }
 
 var LedisDBDefaultConfig = &LedisDBConfig{
@@ -56,7 +56,7 @@ type LedisDB struct {
 
 	tomb *tomb.Tomb
 
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 }
 
 func NewLedisDB(config *LedisDBConfig) *LedisDB {
@@ -66,7 +66,7 @@ func NewLedisDB(config *LedisDBConfig) *LedisDB {
 }
 
 func (l *LedisDB) Start(ctx context.Context) {
-	l.fieldLogger = l.Config.Logger.WithFields(logrus.Fields{
+	l.fieldLogger = l.Config.Logger.WithFields(log.Fields{
 		"package":   "ledis",
 		"component": "LedisDB",
 	})

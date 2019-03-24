@@ -10,6 +10,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/alicebob/gopher-json v0.0.0-20180125190556-5a6b3ba71ee6 // indirect
 	github.com/alicebob/miniredis v2.5.0+incompatible // indirect
+	github.com/apex/log v1.1.0
 	github.com/cupcake/rdb v0.0.0-20161107195141-43ba34106c76 // indirect
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/glendc/gopher-json v0.0.0-20170414221815-dc4743023d0c // indirect
@@ -34,7 +35,7 @@ require (
 	github.com/siddontang/goredis v0.0.0-20180423163523-0b4019cbd7b7 // indirect
 	github.com/siddontang/ledisdb v0.0.0-20190202134119-8ceb77e66a92
 	github.com/siddontang/rdb v0.0.0-20150307021120-fc89ed2e418d // indirect
-	github.com/sirupsen/logrus v1.0.6
+	github.com/sirupsen/logrus v1.0.6 // indirect
 	github.com/stretchr/objx v0.1.1
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/thecodeteam/gofsutil v0.1.2 // indirect

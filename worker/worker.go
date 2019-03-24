@@ -10,9 +10,9 @@ import (
 
 	"golang.org/x/time/rate"
 
+	"github.com/apex/log"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -28,7 +28,7 @@ type Config struct {
 	Concurrency   int
 	MaxThroughput int
 
-	Logger logrus.FieldLogger `yaml:"-"`
+	Logger log.Interface `yaml:"-"`
 
 	Redis       commonRedis.Config
 	RedisPrefix string
@@ -56,7 +56,7 @@ type Worker struct {
 	hashers      chan hash.Hash
 	buffers      chan []byte
 
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 }
 
 func New(config *Config) *Worker {
@@ -66,7 +66,7 @@ func New(config *Config) *Worker {
 }
 
 func (w *Worker) Start(ctx context.Context) {
-	w.fieldLogger = w.Config.Logger.WithFields(logrus.Fields{
+	w.fieldLogger = w.Config.Logger.WithFields(log.Fields{
 		"package":   "worker",
 		"component": "Worker",
 	})
@@ -184,14 +184,14 @@ type workerContext struct {
 func (w *workerContext) CalculateChecksum(job *work.Job) error {
 	workPack := workqueue.WorkPack{}
 
-	w.Worker.fieldLogger.WithFields(logrus.Fields{
+	w.Worker.fieldLogger.WithFields(log.Fields{
 		"args":     job.Args,
 		"job_name": job.Name,
 	}).Debug("Received work")
 
 	err := workPack.FromJobArgs(job.Args)
 	if err != nil {
-		w.Worker.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":   "skipping",
 			"args":     job.Args,
 			"job_name": job.Name,
@@ -202,7 +202,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 
 	prefix, err := w.Worker.prefixer.Prefix(&workPack)
 	if err != nil {
-		w.Worker.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":     "skipping",
 			"filesystem": workPack.FileSystemName,
 			"snapshot":   workPack.SnapshotName,
@@ -221,7 +221,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 		path := filepath.Join(prefix, file.Path)
 		fileReader, err := lengthsafe.Open(path)
 		if err != nil {
-			w.Worker.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":     "skipping",
 				"filesystem": workPack.FileSystemName,
 				"snapshot":   workPack.SnapshotName,
@@ -238,7 +238,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 		n, err := io.CopyBuffer(w.hasher, w.reader, w.buffer)
 		if err != nil {
 			_ = fileReader.Close()
-			w.Worker.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":     "skipping",
 				"filesystem": workPack.FileSystemName,
 				"snapshot":   workPack.SnapshotName,
@@ -251,7 +251,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 
 		err = fileReader.Close()
 		if err != nil {
-			w.Worker.fieldLogger.WithError(err).WithFields(logrus.Fields{
+			w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":     "skipping",
 				"filesystem": workPack.FileSystemName,
 				"snapshot":   workPack.SnapshotName,
@@ -264,7 +264,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 
 		checksum := w.hasher.Sum(nil)
 
-		w.Worker.fieldLogger.WithFields(logrus.Fields{
+		w.Worker.fieldLogger.WithFields(log.Fields{
 			"filesystem": workPack.FileSystemName,
 			"snapshot":   workPack.SnapshotName,
 			"job_name":   job.Name,
@@ -284,7 +284,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 
 	err = w.enqueueWriteBackPack(&workPack, &writeBackPack)
 	if err != nil {
-		w.Worker.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":          "skipping",
 			"filesystem":      workPack.FileSystemName,
 			"snapshot":        workPack.SnapshotName,

@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -38,8 +38,8 @@ type QueueSchedulerConfig struct {
 	Namespace string
 	JobName   string
 
-	Pool   *redis.Pool        `yaml:"-"`
-	Logger logrus.FieldLogger `yaml:"-"`
+	Pool   *redis.Pool   `yaml:"-"`
+	Logger log.Interface `yaml:"-"`
 
 	Controller SchedulingController
 }
@@ -55,7 +55,7 @@ type QueueScheduler struct {
 
 	enqueuer    *work.Enqueuer
 	client      *work.Client
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 
 	c chan ProductionRequest
 
@@ -72,7 +72,7 @@ func NewQueueScheduler(config *QueueSchedulerConfig) *QueueScheduler {
 }
 
 func (q *QueueScheduler) Start(ctx context.Context) {
-	q.fieldLogger = q.Config.Logger.WithFields(logrus.Fields{
+	q.fieldLogger = q.Config.Logger.WithFields(log.Fields{
 		"namespace": q.Config.Namespace,
 		"jobname":   q.Config.JobName,
 		"package":   "workqueue",
@@ -318,7 +318,7 @@ type EWMAScheduler struct {
 	Config *EWMASchedulerConfig
 
 	queueScheduler *QueueScheduler
-	fieldLogger    logrus.FieldLogger
+	fieldLogger    log.Interface
 
 	phase               ewmaSchedulerPhase
 	startUpStepCount    uint
@@ -339,7 +339,7 @@ func NewEWMAScheduler(config *EWMASchedulerConfig) *EWMAScheduler {
 
 func (e *EWMAScheduler) Init(queueScheduler *QueueScheduler) {
 	e.queueScheduler = queueScheduler
-	e.fieldLogger = queueScheduler.Config.Logger.WithFields(logrus.Fields{
+	e.fieldLogger = queueScheduler.Config.Logger.WithFields(log.Fields{
 		"package":   "workqueue",
 		"component": "EWMAScheduler",
 	})
@@ -372,7 +372,7 @@ func (e *EWMAScheduler) scheduleInit() {
 		return
 	}
 
-	e.fieldLogger.WithFields(logrus.Fields{
+	e.fieldLogger.WithFields(log.Fields{
 		"queue_length": queueLength,
 		"threshold":    e.threshold,
 		"worker_num":   workerNum,
@@ -420,7 +420,7 @@ func (e *EWMAScheduler) Schedule() {
 
 	e.deviationEWMA = updateEwma(e.deviationEWMA, e.Config.MaintainingDeviationAlpha, normaliseDuration(time.Second, timePassed, deviation))
 
-	e.fieldLogger.WithFields(logrus.Fields{
+	e.fieldLogger.WithFields(log.Fields{
 		"previous_queue_length": e.previousQueueLength,
 		"queue_length":          queueLength,
 		"exhausted":             exhausted,
@@ -443,7 +443,7 @@ func (e *EWMAScheduler) Schedule() {
 		} else {
 			e.threshold *= 2
 		}
-		e.fieldLogger.WithFields(logrus.Fields{
+		e.fieldLogger.WithFields(log.Fields{
 			"previous_threshold": prevThreshold,
 			"threshold":          e.threshold,
 		}).Debug("Exhausted, doubled threshold")
@@ -453,7 +453,7 @@ func (e *EWMAScheduler) Schedule() {
 			e.startUpStepCount++
 			e.threshold = e.minLength(e.startupThreshold(uint(workerNum)), uint(workerNum))
 
-			e.fieldLogger.WithFields(logrus.Fields{
+			e.fieldLogger.WithFields(log.Fields{
 				"threshold": e.threshold,
 				"phase":     "startup",
 			}).Debug("Calculated threshold")
@@ -462,27 +462,27 @@ func (e *EWMAScheduler) Schedule() {
 				e.queueScheduler.SetInterval(e.Config.MaintainingInterval)
 
 				e.threshold = e.minLength(e.maintainingThreshold(), uint(workerNum))
-				e.fieldLogger.WithFields(logrus.Fields{
+				e.fieldLogger.WithFields(log.Fields{
 					"threshold": e.threshold,
 					"phase":     "startup",
 				}).Debug("Switching to maintaining phase")
 			}
 		case espMaintaining:
 			e.threshold = e.minLength(e.maintainingThreshold(), uint(workerNum))
-			e.fieldLogger.WithFields(logrus.Fields{
+			e.fieldLogger.WithFields(log.Fields{
 				"threshold": e.threshold,
 				"phase":     "maintaining",
 			}).Debug("Calculated threshold")
 		default:
 			e.threshold = e.minLength(0, uint(workerNum))
-			e.fieldLogger.WithFields(logrus.Fields{
+			e.fieldLogger.WithFields(log.Fields{
 				"threshold": e.threshold,
 				"phase":     "unknown",
 			}).Debug("Calculated threshold")
 		}
 	}
 
-	e.fieldLogger.WithFields(logrus.Fields{
+	e.fieldLogger.WithFields(log.Fields{
 		"queue_length": queueLength,
 		"threshold":    e.threshold,
 		"worker_num":   workerNum,
@@ -507,7 +507,7 @@ func (e *EWMAScheduler) maintainingThreshold() uint {
 
 	calculatedThreshold := math.Ceil(e.Config.MaintainingDeviationFactor*expDeviation + expConsumption)
 
-	e.fieldLogger.WithFields(logrus.Fields{
+	e.fieldLogger.WithFields(log.Fields{
 		"exp_deviation":        expDeviation,
 		"exp_consumption":      expConsumption,
 		"calculated_threshold": calculatedThreshold,

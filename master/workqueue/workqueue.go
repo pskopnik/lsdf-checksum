@@ -4,8 +4,8 @@ package workqueue
 import (
 	"context"
 
+	"github.com/apex/log"
 	"github.com/gomodule/redigo/redis"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -41,9 +41,9 @@ type Config struct {
 	RunId        uint64
 	SnapshotName string
 
-	DB     *meda.DB           `yaml:"-"`
-	Logger logrus.FieldLogger `yaml:"-"`
-	Pool   *redis.Pool        `yaml:"-"`
+	DB     *meda.DB      `yaml:"-"`
+	Logger log.Interface `yaml:"-"`
+	Pool   *redis.Pool   `yaml:"-"`
 
 	// EWMAScheduler contains the configuration for the EWMAScheduler
 	// SchedulingController. Here only static configuration options should be
@@ -80,7 +80,7 @@ type WorkQueue struct {
 
 	tomb *tomb.Tomb
 
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 
 	schedulingController SchedulingController
 	producer             *Producer
@@ -96,7 +96,7 @@ func New(config *Config) *WorkQueue {
 }
 
 func (w *WorkQueue) Start(ctx context.Context) {
-	w.fieldLogger = w.Config.Logger.WithFields(logrus.Fields{
+	w.fieldLogger = w.Config.Logger.WithFields(log.Fields{
 		"run":        w.Config.RunId,
 		"snapshot":   w.Config.SnapshotName,
 		"filesystem": w.Config.FileSystemName,

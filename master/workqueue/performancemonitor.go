@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/apex/log"
 	"github.com/gomodule/redigo/redis"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -33,9 +33,9 @@ type PerformanceMonitorConfig struct {
 
 	Unit string
 
-	Pool          *redis.Pool        `yaml:"-"`
-	Logger        logrus.FieldLogger `yaml:"-"`
-	GetNodesNumer GetNodesNumer      `yaml:"-"`
+	Pool          *redis.Pool   `yaml:"-"`
+	Logger        log.Interface `yaml:"-"`
+	GetNodesNumer GetNodesNumer `yaml:"-"`
 }
 
 var PerformanceMonitorDefaultConfig = &PerformanceMonitorConfig{
@@ -49,7 +49,7 @@ type PerformanceMonitor struct {
 
 	lastMaxNodeThroughput uint64
 
-	fieldLogger logrus.FieldLogger
+	fieldLogger log.Interface
 }
 
 func NewPerformanceMonitor(config *PerformanceMonitorConfig) *PerformanceMonitor {
@@ -59,7 +59,7 @@ func NewPerformanceMonitor(config *PerformanceMonitorConfig) *PerformanceMonitor
 }
 
 func (p *PerformanceMonitor) Start(ctx context.Context) {
-	p.fieldLogger = p.Config.Logger.WithFields(logrus.Fields{
+	p.fieldLogger = p.Config.Logger.WithFields(log.Fields{
 		"unit":      p.Config.Unit,
 		"prefix":    p.Config.Prefix,
 		"package":   "workqueue",
@@ -96,7 +96,7 @@ func (p *PerformanceMonitor) run() error {
 
 	err = p.computeAll()
 	if err != nil {
-		p.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		p.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "stopping",
 		}).Error("Encountered error while computing performance constraints")
 
@@ -118,7 +118,7 @@ L:
 			p.fieldLogger.Debug("Re-computing performance constraints")
 			err = p.computeAll()
 			if err != nil {
-				p.fieldLogger.WithError(err).WithFields(logrus.Fields{
+				p.fieldLogger.WithError(err).WithFields(log.Fields{
 					"action": "stopping",
 				}).Error("Encountered error while computing performance constraints")
 
@@ -155,7 +155,7 @@ func (p *PerformanceMonitor) computeAll() error {
 func (p *PerformanceMonitor) computeMaxNodeThroughput() error {
 	nodesNum, err := p.Config.GetNodesNumer.GetNodesNum()
 	if err != nil {
-		p.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		p.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "skipping",
 		}).Warn("Encountered error while fetching number of nodes")
 
@@ -174,7 +174,7 @@ func (p *PerformanceMonitor) computeMaxNodeThroughput() error {
 
 	_, err = conn.Do("SET", key, maxNodeThroughput)
 	if err != nil {
-		p.fieldLogger.WithError(err).WithFields(logrus.Fields{
+		p.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":              "escalating",
 			"key":                 key,
 			"max_node_throughput": maxNodeThroughput,
