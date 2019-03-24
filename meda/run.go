@@ -58,12 +58,12 @@ func (d *DB) RunsInsertAndSetId(ctx context.Context, execer NamedExecerContext, 
 
 	result, err := execer.NamedExecContext(ctx, runsInsertQuery.SubstituteAll(d), run)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	run.Id = uint64(id)

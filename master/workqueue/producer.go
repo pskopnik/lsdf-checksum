@@ -197,54 +197,27 @@ func (p *Producer) rowFetcher() error {
 // "Next" is enforced by the Producer's lastRand and lastId fields, the fields
 // are also updated before returning.
 //
-// The passed in files are reset to the slice's capacity before fetching is
-// started.
-// The files slice is always returned in a valid state, i.e. files[:] only
-// contains successfully fetched meda.File rows. This also holds when the
-// returned error != nil.
-//
-// The end of rows can be detected by comparing len(files) and cap(files) for
-// the returned meda.File slice. If the length is less than the capacity, the
-// end of the table has been reached.
+// fetchNextBatch attempts to fill the entire slice files[0:cap(files)] with
+// file data. The end of rows can be detected by comparing len(files) and
+// cap(files) for the returned meda.File slice. If the length is less than the
+// capacity, the end of the table has been reached.
 func (p *Producer) fetchNextBatch(files []meda.File) ([]meda.File, error) {
-	// Reset files slice to full capacity
-	files = files[:cap(files)]
-	i := 0
-
-	finalise := func() {
-		files = files[:i]
-		if i > 0 {
-			p.lastRand = files[i-1].Rand
-			p.lastId = files[i-1].Id
-		}
-	}
-
-	rows, err := p.Config.DB.FilesQueryFilesToBeReadPaginated(
+	files, err := p.Config.DB.FilesAppendFilesToBeReadPaginated(
+		files[:0],
 		p.tomb.Context(nil),
 		p.Config.DB,
 		p.lastRand,
 		p.lastId,
-		uint64(len(files)), // Limit number of returned rows to at most len(files)
+		uint64(cap(files)), // Limit number of returned rows to at most len(files)
 	)
+	if len(files) > 0 {
+		p.lastRand = files[len(files)-1].Rand
+		p.lastId = files[len(files)-1].Id
+	}
 	if err != nil {
-		finalise()
-		return files, err
-	}
-	defer rows.Close()
-
-	for ; rows.Next(); i++ {
-		err = rows.StructScan(&files[i])
-		if err != nil {
-			finalise()
-			return files, err
-		}
-	}
-	if err := rows.Err(); err != nil {
-		finalise()
 		return files, err
 	}
 
-	finalise()
 	return files, nil
 }
 

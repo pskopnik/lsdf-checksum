@@ -83,6 +83,41 @@ func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.
 	)
 }
 
+func (d *DB) FilesFetchFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) ([]File, error) {
+	return d.FilesAppendFilesToBeReadPaginated(nil, ctx, querier, startRand, startId, limit)
+}
+
+func (d *DB) FilesAppendFilesToBeReadPaginated(files []File, ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) ([]File, error) {
+	baseInd := len(files)
+
+	var file File
+
+	rows, err := d.FilesQueryFilesToBeReadPaginated(ctx, querier, startRand, startId, limit)
+	if err != nil {
+		return files[:baseInd], err
+	}
+
+	for rows.Next() {
+		err = rows.StructScan(&file)
+		if err != nil {
+			_ = rows.Close()
+			return files[:baseInd], err
+		}
+
+		files = append(files, file)
+	}
+	if err = rows.Err(); err != nil {
+		_ = rows.Close()
+		return files[:baseInd], err
+	}
+
+	if err = rows.Close(); err != nil {
+		return files[:baseInd], err
+	}
+
+	return files, nil
+}
+
 const filesQueryFilesByIdsForShareQuery = GenericQuery(`
 	SELECT
 		id,
