@@ -116,6 +116,30 @@ func (d *DB) RunsQueryLatest(ctx context.Context, querier sqlx.QueryerContext) (
 	return &run, nil
 }
 
+const runsQueryByIdQuery = GenericQuery(`
+	SELECT
+		id, snapshot_name, snapshot_id, run_at, sync_mode, state
+	FROM {RUNS}
+		WHERE id = ?
+		LIMIT 1
+	;
+`)
+
+func (d *DB) RunsQueryById(ctx context.Context, querier sqlx.QueryerContext, id uint64) (*Run, error) {
+	if querier == nil {
+		querier = &d.DB
+	}
+
+	var run Run
+
+	err := querier.QueryRowxContext(ctx, runsQueryByIdQuery.SubstituteAll(d), id).StructScan(&run)
+	if err != nil {
+		return nil, err
+	}
+
+	return &run, nil
+}
+
 const runsQueryAllQuery = GenericQuery(`
 	SELECT
 		id, snapshot_name, snapshot_id, run_at, sync_mode, state
@@ -129,6 +153,99 @@ func (d *DB) RunsQueryAll(ctx context.Context, querier sqlx.QueryerContext) (*sq
 	}
 
 	return querier.QueryxContext(ctx, runsQueryAllQuery.SubstituteAll(d))
+}
+
+func (d *DB) RunsFetchAll(ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
+	return d.RunsAppendAll(nil, ctx, querier)
+}
+
+func (d *DB) RunsAppendAll(runs []Run, ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
+	baseInd := len(runs)
+
+	var run Run
+
+	rows, err := d.RunsQueryAll(ctx, querier)
+	if err != nil {
+		return runs[:baseInd], err
+	}
+
+	for rows.Next() {
+		err = rows.StructScan(&run)
+		if err != nil {
+			_ = rows.Close()
+			return runs[:baseInd], err
+		}
+
+		runs = append(runs, run)
+	}
+	if err = rows.Err(); err != nil {
+		_ = rows.Close()
+		return runs[:baseInd], err
+	}
+
+	if err = rows.Close(); err != nil {
+		return runs[:baseInd], err
+	}
+
+	return runs, nil
+}
+
+const runsExistsIncompleteBeforeIdQuery = GenericQuery(`
+	SELECT
+		EXISTS (
+			SELECT 1
+			FROM {RUNS}
+				WHERE
+						id < ?
+					AND
+						state NOT IN ("finished", "aborted")
+		) AS row_exists
+	;
+`)
+
+func (d *DB) RunsExistsIncompleteBeforeId(ctx context.Context, querier sqlx.QueryerContext, id uint64) (bool, error) {
+	if querier == nil {
+		querier = &d.DB
+	}
+
+	row := querier.QueryRowxContext(ctx, runsExistsIncompleteBeforeIdQuery.SubstituteAll(d), id)
+
+	var rowExists int
+
+	err := row.Scan(&rowExists)
+	if err != nil {
+		return false, err
+	}
+
+	return rowExists == 1, nil
+}
+
+const runsExistsIncompleteIdQuery = GenericQuery(`
+	SELECT
+		EXISTS (
+			SELECT 1
+			FROM {RUNS}
+				WHERE
+					state NOT IN ("finished", "aborted")
+		) AS row_exists
+	;
+`)
+
+func (d *DB) RunsExistsIncomplete(ctx context.Context, querier sqlx.QueryerContext) (bool, error) {
+	if querier == nil {
+		querier = &d.DB
+	}
+
+	row := querier.QueryRowxContext(ctx, runsExistsIncompleteIdQuery.SubstituteAll(d))
+
+	var rowExists int
+
+	err := row.Scan(&rowExists)
+	if err != nil {
+		return false, err
+	}
+
+	return rowExists == 1, nil
 }
 
 // Error variables related to RunSyncMode and RunState.
