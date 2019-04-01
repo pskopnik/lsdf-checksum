@@ -40,6 +40,15 @@ type RebindQueryerContext interface {
 	Rebind(query string) string
 }
 
+var _ RebindExecerContext = &sqlx.DB{}
+var _ RebindExecerContext = &sqlx.Tx{}
+
+type RebindExecerContext interface {
+	sqlx.ExecerContext
+
+	Rebind(query string) string
+}
+
 // Time is an alias to time.Time with additional methods defined to be parsable
 // by SQL database drivers.
 //

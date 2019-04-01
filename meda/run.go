@@ -92,30 +92,6 @@ func (d *DB) RunsUpdate(ctx context.Context, execer NamedExecerContext, run *Run
 	return execer.NamedExecContext(ctx, runsUpdateQuery.SubstituteAll(d), run)
 }
 
-const runsQueryLatestQuery = GenericQuery(`
-	SELECT
-		id, snapshot_name, snapshot_id, run_at, sync_mode, state
-	FROM {RUNS}
-		ORDER BY id DESC
-		LIMIT 1
-	;
-`)
-
-func (d *DB) RunsQueryLatest(ctx context.Context, querier sqlx.QueryerContext) (*Run, error) {
-	if querier == nil {
-		querier = &d.DB
-	}
-
-	var run Run
-
-	err := querier.QueryRowxContext(ctx, runsQueryLatestQuery.SubstituteAll(d)).StructScan(&run)
-	if err != nil {
-		return nil, err
-	}
-
-	return &run, nil
-}
-
 const runsQueryByIdQuery = GenericQuery(`
 	SELECT
 		id, snapshot_name, snapshot_id, run_at, sync_mode, state
@@ -125,7 +101,7 @@ const runsQueryByIdQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) RunsQueryById(ctx context.Context, querier sqlx.QueryerContext, id uint64) (*Run, error) {
+func (d *DB) RunsQueryById(ctx context.Context, querier sqlx.QueryerContext, id uint64) (Run, error) {
 	if querier == nil {
 		querier = &d.DB
 	}
@@ -134,40 +110,17 @@ func (d *DB) RunsQueryById(ctx context.Context, querier sqlx.QueryerContext, id 
 
 	err := querier.QueryRowxContext(ctx, runsQueryByIdQuery.SubstituteAll(d), id).StructScan(&run)
 	if err != nil {
-		return nil, err
+		return Run{}, err
 	}
 
-	return &run, nil
+	return run, nil
 }
 
-const runsQueryAllQuery = GenericQuery(`
-	SELECT
-		id, snapshot_name, snapshot_id, run_at, sync_mode, state
-	FROM {RUNS}
-	;
-`)
-
-func (d *DB) RunsQueryAll(ctx context.Context, querier sqlx.QueryerContext) (*sqlx.Rows, error) {
-	if querier == nil {
-		querier = &d.DB
-	}
-
-	return querier.QueryxContext(ctx, runsQueryAllQuery.SubstituteAll(d))
-}
-
-func (d *DB) RunsFetchAll(ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
-	return d.RunsAppendAll(nil, ctx, querier)
-}
-
-func (d *DB) RunsAppendAll(runs []Run, ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
+func (d *DB) runsAppendFromRows(runs []Run, rows *sqlx.Rows) ([]Run, error) {
 	baseInd := len(runs)
 
 	var run Run
-
-	rows, err := d.RunsQueryAll(ctx, querier)
-	if err != nil {
-		return runs[:baseInd], err
-	}
+	var err error
 
 	for rows.Next() {
 		err = rows.StructScan(&run)
@@ -188,6 +141,100 @@ func (d *DB) RunsAppendAll(runs []Run, ctx context.Context, querier sqlx.Queryer
 	}
 
 	return runs, nil
+}
+
+const runsQueryAllQuery = GenericQuery(`
+	SELECT
+		id, snapshot_name, snapshot_id, run_at, sync_mode, state
+	FROM {RUNS}
+		ORDER BY id ASC
+	;
+`)
+
+func (d *DB) RunsQueryAll(ctx context.Context, querier sqlx.QueryerContext) (*sqlx.Rows, error) {
+	if querier == nil {
+		querier = &d.DB
+	}
+
+	return querier.QueryxContext(ctx, runsQueryAllQuery.SubstituteAll(d))
+}
+
+func (d *DB) RunsFetchAll(ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
+	return d.RunsAppendAll(nil, ctx, querier)
+}
+
+func (d *DB) RunsAppendAll(runs []Run, ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
+	rows, err := d.RunsQueryAll(ctx, querier)
+	if err != nil {
+		return runs, err
+	}
+
+	return d.runsAppendFromRows(runs, rows)
+}
+
+const runsQueryLastNQuery = GenericQuery(`
+	SELECT
+		id, snapshot_name, snapshot_id, run_at, sync_mode, state
+	FROM (
+		SELECT
+			id, snapshot_name, snapshot_id, run_at, sync_mode, state
+		FROM {RUNS}
+			ORDER BY id DESC
+			LIMIT ?
+	) as last_runs
+		ORDER BY id ASC
+	;
+`)
+
+func (d *DB) RunsQueryLastN(ctx context.Context, querier sqlx.QueryerContext, n uint64) (*sqlx.Rows, error) {
+	if querier == nil {
+		querier = &d.DB
+	}
+
+	return querier.QueryxContext(ctx, runsQueryLastNQuery.SubstituteAll(d), n)
+}
+
+func (d *DB) RunsFetchLastN(ctx context.Context, querier sqlx.QueryerContext, n uint64) ([]Run, error) {
+	return d.RunsAppendLastN(nil, ctx, querier, n)
+}
+
+func (d *DB) RunsAppendLastN(runs []Run, ctx context.Context, querier sqlx.QueryerContext, n uint64) ([]Run, error) {
+	rows, err := d.RunsQueryLastN(ctx, querier, n)
+	if err != nil {
+		return runs, err
+	}
+
+	return d.runsAppendFromRows(runs, rows)
+}
+
+const runsQueryIncompleteQuery = GenericQuery(`
+	SELECT
+		id, snapshot_name, snapshot_id, run_at, sync_mode, state
+	FROM {RUNS}
+		WHERE state NOT IN ("finished", "aborted")
+		ORDER BY id ASC
+	;
+`)
+
+func (d *DB) RunsQueryIncomplete(ctx context.Context, querier sqlx.QueryerContext) (*sqlx.Rows, error) {
+	if querier == nil {
+		querier = &d.DB
+	}
+
+	return querier.QueryxContext(ctx, runsQueryIncompleteQuery.SubstituteAll(d))
+}
+
+func (d *DB) RunsFetchIncomplete(ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
+	return d.RunsAppendIncomplete(nil, ctx, querier)
+}
+
+func (d *DB) RunsAppendIncomplete(runs []Run, ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
+	rows, err := d.RunsQueryIncomplete(ctx, querier)
+	if err != nil {
+		return runs, err
+	}
+
+	return d.runsAppendFromRows(runs, rows)
 }
 
 const runsExistsIncompleteBeforeIdQuery = GenericQuery(`
