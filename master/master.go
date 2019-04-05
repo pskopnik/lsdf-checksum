@@ -128,12 +128,12 @@ func NewWithExistingRun(ctx context.Context, config *Config, runId uint64) (*med
 	config = config.
 		Clone().
 		Merge(&Config{
-			Run: run,
+			Run: &run,
 		})
 
 	master := New(config)
 
-	return run, master, nil
+	return &run, master, nil
 }
 
 func (m *Master) Start(ctx context.Context) {
