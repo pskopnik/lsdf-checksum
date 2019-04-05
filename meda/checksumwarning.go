@@ -83,17 +83,23 @@ func (d *DB) ChecksumWarningsPrepareInsert(ctx context.Context, preparer NamedPr
 func (d *DB) checksumWarningsAppendFromRows(checksumWarnings []ChecksumWarning, rows *sqlx.Rows) ([]ChecksumWarning, error) {
 	baseInd := len(checksumWarnings)
 
-	var run ChecksumWarning
 	var err error
+	i := baseInd
 
 	for rows.Next() {
-		err = rows.StructScan(&run)
+		if i == cap(checksumWarnings) {
+			checksumWarnings = append(checksumWarnings, ChecksumWarning{})
+		} else {
+			checksumWarnings = checksumWarnings[:len(checksumWarnings)+1]
+		}
+
+		err = rows.StructScan(&checksumWarnings[i])
 		if err != nil {
 			_ = rows.Close()
 			return checksumWarnings[:baseInd], err
 		}
 
-		checksumWarnings = append(checksumWarnings, run)
+		i += 1
 	}
 	if err = rows.Err(); err != nil {
 		_ = rows.Close()

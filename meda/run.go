@@ -119,17 +119,23 @@ func (d *DB) RunsQueryById(ctx context.Context, querier sqlx.QueryerContext, id 
 func (d *DB) runsAppendFromRows(runs []Run, rows *sqlx.Rows) ([]Run, error) {
 	baseInd := len(runs)
 
-	var run Run
 	var err error
+	i := baseInd
 
 	for rows.Next() {
-		err = rows.StructScan(&run)
+		if i == cap(runs) {
+			runs = append(runs, Run{})
+		} else {
+			runs = runs[:len(runs)+1]
+		}
+
+		err = rows.StructScan(&runs[i])
 		if err != nil {
 			_ = rows.Close()
 			return runs[:baseInd], err
 		}
 
-		runs = append(runs, run)
+		i += 1
 	}
 	if err = rows.Err(); err != nil {
 		_ = rows.Close()
