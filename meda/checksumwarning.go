@@ -80,7 +80,7 @@ func (d *DB) ChecksumWarningsPrepareInsert(ctx context.Context, preparer NamedPr
 	return preparer.PrepareNamedContext(ctx, checksumWarningsPrepareInsertQuery.SubstituteAll(d))
 }
 
-func (d *DB) checksumWarningsAppendFromRows(checksumWarnings []ChecksumWarning, rows *sqlx.Rows) ([]ChecksumWarning, error) {
+func checksumWarningsAppendFromRows(checksumWarnings []ChecksumWarning, rows *sqlx.Rows) ([]ChecksumWarning, error) {
 	baseInd := len(checksumWarnings)
 
 	var err error
@@ -148,7 +148,7 @@ func (d *DB) ChecksumWarningsAppendAll(checksumWarnings []ChecksumWarning, ctx c
 		return checksumWarnings, err
 	}
 
-	return d.checksumWarningsAppendFromRows(checksumWarnings, rows)
+	return checksumWarningsAppendFromRows(checksumWarnings, rows)
 }
 
 const checksumWarningsQueryFromLastNRunsQuery = GenericQuery(`
@@ -194,7 +194,7 @@ func (d *DB) ChecksumWarningsAppendFromLastNRuns(checksumWarnings []ChecksumWarn
 		return checksumWarnings, err
 	}
 
-	return d.checksumWarningsAppendFromRows(checksumWarnings, rows)
+	return checksumWarningsAppendFromRows(checksumWarnings, rows)
 }
 
 const checksumWarningsQueryFromRunByIdQuery = GenericQuery(`
@@ -233,7 +233,7 @@ func (d *DB) ChecksumWarningsAppendFromRunById(checksumWarnings []ChecksumWarnin
 		return checksumWarnings, err
 	}
 
-	return d.checksumWarningsAppendFromRows(checksumWarnings, rows)
+	return checksumWarningsAppendFromRows(checksumWarnings, rows)
 }
 
 const checksumWarningsDeleteByIdQuery = GenericQuery(`

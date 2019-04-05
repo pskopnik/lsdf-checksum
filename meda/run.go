@@ -116,7 +116,7 @@ func (d *DB) RunsQueryById(ctx context.Context, querier sqlx.QueryerContext, id 
 	return run, nil
 }
 
-func (d *DB) runsAppendFromRows(runs []Run, rows *sqlx.Rows) ([]Run, error) {
+func runsAppendFromRows(runs []Run, rows *sqlx.Rows) ([]Run, error) {
 	baseInd := len(runs)
 
 	var err error
@@ -175,7 +175,7 @@ func (d *DB) RunsAppendAll(runs []Run, ctx context.Context, querier sqlx.Queryer
 		return runs, err
 	}
 
-	return d.runsAppendFromRows(runs, rows)
+	return runsAppendFromRows(runs, rows)
 }
 
 const runsQueryLastNQuery = GenericQuery(`
@@ -210,7 +210,7 @@ func (d *DB) RunsAppendLastN(runs []Run, ctx context.Context, querier sqlx.Query
 		return runs, err
 	}
 
-	return d.runsAppendFromRows(runs, rows)
+	return runsAppendFromRows(runs, rows)
 }
 
 const runsQueryIncompleteQuery = GenericQuery(`
@@ -240,7 +240,7 @@ func (d *DB) RunsAppendIncomplete(runs []Run, ctx context.Context, querier sqlx.
 		return runs, err
 	}
 
-	return d.runsAppendFromRows(runs, rows)
+	return runsAppendFromRows(runs, rows)
 }
 
 const runsExistsIncompleteBeforeIdQuery = GenericQuery(`
