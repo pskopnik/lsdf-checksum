@@ -264,7 +264,7 @@ func (w *WriteBacker) processBatch(ctx context.Context, batch *filesBatch, trans
 	// TODO pool files
 	var files []meda.File
 
-	files, err := transactioner.AppendFilesByIdsForShare(files, ctx, fileIds)
+	files, err := transactioner.AppendFilesByIds(files, ctx, fileIds)
 	if err != nil {
 		return pkgErrors.Wrap(err, "(*WriteBacker).processBatch: fetch files from database")
 	}

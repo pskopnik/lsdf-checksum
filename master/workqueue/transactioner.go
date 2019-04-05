@@ -41,17 +41,17 @@ func newTransactioner(ctx context.Context, config *transactionerConfig) *transac
 	}
 }
 
-func (t *transactioner) FetchFilesByIdsForShare(ctx context.Context, fileIds []uint64) ([]meda.File, error) {
+func (t *transactioner) FetchFilesByIds(ctx context.Context, fileIds []uint64) ([]meda.File, error) {
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
-			return nil, errors.Wrap(err, "(*transactioner).FetchFilesByIdsForShare")
+			return nil, errors.Wrap(err, "(*transactioner).FetchFilesByIds")
 		}
 	}
 
-	files, err := t.Config.DB.FilesFetchFilesByIdsForShare(ctx, t.tx, fileIds)
+	files, err := t.Config.DB.FilesFetchFilesByIds(ctx, t.tx, fileIds)
 	if err != nil {
-		return nil, errors.Wrap(err, "(*transactioner).FetchFilesByIdsForShare")
+		return nil, errors.Wrap(err, "(*transactioner).FetchFilesByIds")
 	}
 
 	// t.txQueryCount += 1
@@ -66,17 +66,17 @@ func (t *transactioner) FetchFilesByIdsForShare(ctx context.Context, fileIds []u
 	return files, nil
 }
 
-func (t *transactioner) AppendFilesByIdsForShare(files []meda.File, ctx context.Context, fileIds []uint64) ([]meda.File, error) {
+func (t *transactioner) AppendFilesByIds(files []meda.File, ctx context.Context, fileIds []uint64) ([]meda.File, error) {
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
-			return files, errors.Wrap(err, "(*transactioner).FetchFilesByIdsForShare")
+			return files, errors.Wrap(err, "(*transactioner).FetchFilesByIds")
 		}
 	}
 
-	files, err := t.Config.DB.FilesAppendFilesByIdsForShare(files, ctx, t.tx, fileIds)
+	files, err := t.Config.DB.FilesAppendFilesByIds(files, ctx, t.tx, fileIds)
 	if err != nil {
-		return files, errors.Wrap(err, "(*transactioner).FetchFilesByIdsForShare")
+		return files, errors.Wrap(err, "(*transactioner).FetchFilesByIds")
 	}
 
 	// t.txQueryCount += 1

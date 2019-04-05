@@ -118,7 +118,7 @@ func (d *DB) FilesAppendFilesToBeReadPaginated(files []File, ctx context.Context
 	return files, nil
 }
 
-const filesQueryFilesByIdsForShareQuery = GenericQuery(`
+const filesQueryFilesByIdsQuery = GenericQuery(`
 	SELECT
 		id,
 		rand,
@@ -132,16 +132,15 @@ const filesQueryFilesByIdsForShareQuery = GenericQuery(`
 		last_read
 	FROM {FILES}
 		WHERE id IN (?)
-		LOCK IN SHARE MODE
 	;
 `)
 
-func (d *DB) FilesQueryFilesByIdsForShare(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) (*sqlx.Rows, error) {
+func (d *DB) FilesQueryFilesByIds(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) (*sqlx.Rows, error) {
 	if querier == nil {
 		querier = &d.DB
 	}
 
-	query, args, err := sqlx.In(filesQueryFilesByIdsForShareQuery.SubstituteAll(d), fileIds)
+	query, args, err := sqlx.In(filesQueryFilesByIdsQuery.SubstituteAll(d), fileIds)
 	if err != nil {
 		return nil, err
 	}
@@ -153,13 +152,13 @@ func (d *DB) FilesQueryFilesByIdsForShare(ctx context.Context, querier RebindQue
 	return querier.QueryxContext(ctx, query, args...)
 }
 
-func (d *DB) FilesFetchFilesByIdsForShare(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) ([]File, error) {
+func (d *DB) FilesFetchFilesByIds(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) ([]File, error) {
 	files := make([]File, 0, len(fileIds))
 
-	return d.FilesAppendFilesByIdsForShare(files, ctx, querier, fileIds)
+	return d.FilesAppendFilesByIds(files, ctx, querier, fileIds)
 }
 
-func (d *DB) FilesAppendFilesByIdsForShare(files []File, ctx context.Context, querier RebindQueryerContext, fileIds []uint64) ([]File, error) {
+func (d *DB) FilesAppendFilesByIds(files []File, ctx context.Context, querier RebindQueryerContext, fileIds []uint64) ([]File, error) {
 	baseInd := len(files)
 
 	for i := 0; i < len(fileIds); {
@@ -169,7 +168,7 @@ func (d *DB) FilesAppendFilesByIdsForShare(files []File, ctx context.Context, qu
 			rangeEnd = len(fileIds)
 		}
 
-		rows, err := d.FilesQueryFilesByIdsForShare(ctx, querier, fileIds[i:rangeEnd])
+		rows, err := d.FilesQueryFilesByIds(ctx, querier, fileIds[i:rangeEnd])
 		if err != nil {
 			return files[:baseInd], err
 		}
