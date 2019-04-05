@@ -55,6 +55,39 @@ type File struct {
 	LastRead         NullUint64 `db:"last_read"`
 }
 
+func filesAppendFromRowsAndClose(files []File, rows *sqlx.Rows) ([]File, error) {
+	baseInd := len(files)
+
+	var err error
+	i := baseInd
+
+	for rows.Next() {
+		if i == cap(files) {
+			files = append(files, File{})
+		} else {
+			files = files[:len(files)+1]
+		}
+
+		err = rows.StructScan(&files[i])
+		if err != nil {
+			_ = rows.Close()
+			return files[:baseInd], err
+		}
+
+		i += 1
+	}
+	if err = rows.Err(); err != nil {
+		_ = rows.Close()
+		return files[:baseInd], err
+	}
+
+	if err = rows.Close(); err != nil {
+		return files[:baseInd], err
+	}
+
+	return files, nil
+}
+
 const filesQueryFilesToBeReadPaginatedQuery = GenericQuery(`
 	SELECT
 		id, rand, path, file_size
@@ -88,34 +121,12 @@ func (d *DB) FilesFetchFilesToBeReadPaginated(ctx context.Context, querier sqlx.
 }
 
 func (d *DB) FilesAppendFilesToBeReadPaginated(files []File, ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) ([]File, error) {
-	baseInd := len(files)
-
-	var file File
-
 	rows, err := d.FilesQueryFilesToBeReadPaginated(ctx, querier, startRand, startId, limit)
 	if err != nil {
-		return files[:baseInd], err
+		return files, err
 	}
 
-	for rows.Next() {
-		err = rows.StructScan(&file)
-		if err != nil {
-			_ = rows.Close()
-			return files[:baseInd], err
-		}
-
-		files = append(files, file)
-	}
-	if err = rows.Err(); err != nil {
-		_ = rows.Close()
-		return files[:baseInd], err
-	}
-
-	if err = rows.Close(); err != nil {
-		return files[:baseInd], err
-	}
-
-	return files, nil
+	return filesAppendFromRowsAndClose(files, rows)
 }
 
 const filesQueryFilesByIdsQuery = GenericQuery(`
@@ -220,4 +231,147 @@ func (d *DB) FilesPrepareUpdateChecksum(ctx context.Context, preparer NamedPrepa
 	}
 
 	return preparer.PrepareNamedContext(ctx, filesPrepareUpdateChecksumQuery.SubstituteAll(d))
+}
+
+const filesToBeReadFetcherFetchQuery = GenericQuery(`
+	SELECT
+		id, rand, path, file_size
+	FROM {FILES}
+		WHERE
+				to_be_read = '1'
+			AND
+				(rand > ? OR (rand = ? AND id > ?))
+			AND
+				rand <= ?
+		ORDER BY rand, id ASC
+		LIMIT ?
+	;
+`)
+
+const filesToBeReadFetcherNextChunkQuery = GenericQuery(`
+	(
+		SELECT
+			rand
+		FROM {FILES}
+			WHERE rand > ?
+			ORDER BY rand ASC
+			LIMIT ?
+	)
+		ORDER BY rand DESC LIMIT 1;
+`)
+
+type FilesToBeReadFetcherConfig struct {
+	ChunkSize uint64
+}
+
+type FilesToBeReadFetcher struct {
+	db     *DB
+	config *FilesToBeReadFetcherConfig
+	// it is the ChunkIterator used to limit all queries to only a range of
+	// rows.
+	// The chunk size is not enforced accurately, as one rand value may refer to
+	// multiple rows.
+	it                ChunkIterator
+	chunkContainsRows bool
+	lastRand          float64
+	lastId            uint64
+}
+
+func (f *FilesToBeReadFetcher) initialise() {
+	f.it = ChunkIterator{
+		ChunkSize:      f.config.ChunkSize,
+		NextChunkQuery: filesToBeReadFetcherNextChunkQuery.SubstituteAll(f.db),
+	}
+	f.lastRand = -1
+	f.lastId = 0
+}
+
+func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, limit uint64) (*sqlx.Rows, error) {
+	if querier == nil {
+		querier = &f.db.DB
+	}
+
+	return querier.QueryxContext(
+		ctx,
+		filesToBeReadFetcherFetchQuery.SubstituteAll(f.db),
+		f.lastRand,
+		f.lastRand,
+		f.lastId,
+		f.it.LastId(),
+		limit,
+	)
+}
+
+// AppendNext fetches the next batch of rows representing files to be read
+// from the database. The rows are appended to the files slice.
+//
+// AppendNext attempts to fetch exactly limit rows. If less than limit Files
+// are appended to the passed in files slice, the end of the table has been
+// reached.
+func (f *FilesToBeReadFetcher) AppendNext(files []File, ctx context.Context, querier sqlx.QueryerContext, limit uint64) ([]File, error) {
+	if f.it.NextChunkQuery == "" {
+		f.initialise()
+	}
+
+	queryLimit := limit
+
+	for {
+		baseInd := len(files)
+
+		if !f.chunkContainsRows {
+			ok := f.it.Next(ctx, querier)
+			if !ok {
+				if f.it.Err() != nil {
+					return files[:baseInd], f.it.Err()
+				}
+				// no more chunks
+				break
+			}
+			f.chunkContainsRows = true
+		}
+
+		rows, err := f.queryFilesToBeReadPaginated(ctx, querier, queryLimit)
+		if err != nil {
+			return files[:baseInd], err
+		}
+		files, err = filesAppendFromRowsAndClose(files, rows)
+		if err != nil {
+			return files[:baseInd], err
+		}
+
+		if len(files[baseInd:]) > 0 {
+			// at least one file was fetched
+			f.lastRand = files[len(files)-1].Rand
+			f.lastId = files[len(files)-1].Id
+		}
+
+		if uint64(len(files[baseInd:])) < queryLimit {
+			// not enough files returned as chunk is exhausted, try to fetch
+			// files from next chunk
+			queryLimit = limit - uint64(len(files[baseInd:]))
+			f.chunkContainsRows = false
+			continue
+		} else {
+			break
+		}
+	}
+
+	return files, nil
+}
+
+// FetchNext fetches the next batch of rows representing files to be read from
+// the database.
+//
+// FetchNext attempts to fetch exactly limit rows. If the length of the
+// returned Files slice is less than limit, the end of the table has been
+// reached.
+func (f *FilesToBeReadFetcher) FetchNext(ctx context.Context, querier sqlx.QueryerContext, limit uint64) ([]File, error) {
+	return f.AppendNext(nil, ctx, querier, limit)
+}
+
+func (d *DB) FilesToBeReadFetcher(config *FilesToBeReadFetcherConfig) FilesToBeReadFetcher {
+	return FilesToBeReadFetcher{
+		db:     d,
+		config: config,
+	}
 }
