@@ -91,14 +91,7 @@ func New(config *Config) *Syncer {
 func (s *Syncer) Run(ctx context.Context) error {
 	var err error
 
-	s.fieldLogger = s.Config.Logger.WithFields(log.Fields{
-		"sync_mode":  s.Config.SyncMode,
-		"filesystem": s.Config.FileSystem.GetName(),
-		"run":        s.Config.RunId,
-		"snapshot":   s.Config.SnapshotName,
-		"subpath":    s.Config.Subpath,
-		"component":  "medasync.Syncer",
-	})
+	s.fieldLogger = s.createFieldLogger()
 
 	// Perform the first step of the Syncer in parallel
 
@@ -151,7 +144,20 @@ func (s *Syncer) Run(ctx context.Context) error {
 }
 
 func (s *Syncer) CleanUp(ctx context.Context) error {
+	s.fieldLogger = s.createFieldLogger()
+
 	return s.cleanUpDatabase(ctx)
+}
+
+func (s *Syncer) createFieldLogger() log.Interface {
+	return s.Config.Logger.WithFields(log.Fields{
+		"sync_mode":  s.Config.SyncMode,
+		"filesystem": s.Config.FileSystem.GetName(),
+		"run":        s.Config.RunId,
+		"snapshot":   s.Config.SnapshotName,
+		"subpath":    s.Config.Subpath,
+		"component":  "medasync.Syncer",
+	})
 }
 
 func (s *Syncer) prepareDatabase(ctx context.Context) error {
