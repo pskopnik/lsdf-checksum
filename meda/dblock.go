@@ -7,7 +7,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-const dbLockTableNameBase = "db_lock"
+const dbLockTableNameBase = "dblock"
 
 func (d *DB) DBLockTableName() string {
 	return d.Config.TablePrefix + dbLockTableNameBase
@@ -41,7 +41,7 @@ func (l *DBLockLocker) IsLocked() bool {
 	return l.tx != nil
 }
 
-var lockLockTableQuery = GenericQuery(`
+var dbLockLockerLockQuery = GenericQuery(`
 	LOCK TABLES
 		{DBLOCK} WRITE
 	;
@@ -57,7 +57,7 @@ func (l *DBLockLocker) Lock(ctx context.Context) error {
 		return err
 	}
 
-	_, err = tx.ExecContext(ctx, lockLockTableQuery.SubstituteAll(l.db))
+	_, err = tx.ExecContext(ctx, dbLockLockerLockQuery.SubstituteAll(l.db))
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -68,7 +68,7 @@ func (l *DBLockLocker) Lock(ctx context.Context) error {
 	return nil
 }
 
-var lockUnlockTablesQuery = GenericQuery(`
+var dbLockLockerUnlockQuery = GenericQuery(`
 	UNLOCK TABLES;
 `)
 
@@ -80,7 +80,7 @@ func (l *DBLockLocker) Unlock(ctx context.Context) error {
 	tx := l.tx
 	l.tx = nil
 
-	_, err := tx.ExecContext(ctx, lockUnlockTablesQuery.SubstituteAll(l.db))
+	_, err := tx.ExecContext(ctx, dbLockLockerUnlockQuery.SubstituteAll(l.db))
 	if err != nil {
 		_ = tx.Rollback()
 		return err

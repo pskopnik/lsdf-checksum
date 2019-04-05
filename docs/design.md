@@ -159,7 +159,7 @@ the `last_seen`, `last_read`, ... columns of other tables.
     state of the data in the database. This information is sufficient to
     resume aborted (or failed) runs.
 
-##### Lock (table `db_lock`)
+##### Lock (table `dblock`)
 
 The Lock table allows locking of the database while a run is performed by the
 master. An exclusive `WRITE` lock is acquired on the table whenever a run is
