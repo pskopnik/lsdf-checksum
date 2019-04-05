@@ -16,6 +16,7 @@ import (
 type ProducerConfig struct {
 	MinWorkPackFileSize   uint64
 	MaxWorkPackFileNumber uint64
+	FetchRowChunkSize     uint64
 	FetchRowBatchSize     uint64
 	RowBufferSize         uint64
 
@@ -34,6 +35,7 @@ type ProducerConfig struct {
 var ProducerDefaultConfig = &ProducerConfig{
 	MinWorkPackFileSize:   5 * 1024 * 1024, // 5 MiB
 	MaxWorkPackFileNumber: 1000,
+	FetchRowChunkSize:     100000,
 	FetchRowBatchSize:     1000,
 	RowBufferSize:         1000,
 }
@@ -162,13 +164,17 @@ func (p *Producer) rowFetcher() error {
 	var err error
 	var exhausted bool
 
-	files := make([]meda.File, p.Config.FetchRowBatchSize)
+	ctx := p.tomb.Context(nil)
 	dying := p.tomb.Dying()
+	files := make([]meda.File, 0, p.Config.FetchRowBatchSize)
+	filesFetcher := p.Config.DB.FilesToBeReadFetcher(&meda.FilesToBeReadFetcherConfig{
+		ChunkSize: p.Config.FetchRowChunkSize,
+	})
 
 	defer close(p.filesChan)
 
 	for !exhausted {
-		files, err = p.fetchNextBatch(files)
+		files, err = filesFetcher.AppendNext(files[:0], ctx, nil, p.Config.FetchRowBatchSize)
 		if err != nil {
 			p.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action": "stopping",
@@ -190,34 +196,6 @@ func (p *Producer) rowFetcher() error {
 	}
 
 	return nil
-}
-
-// fetchNextBatch fetches the next batch of meda.File rows from the database.
-// "Next" is enforced by the Producer's lastRand and lastId fields, the fields
-// are also updated before returning.
-//
-// fetchNextBatch attempts to fill the entire slice files[0:cap(files)] with
-// file data. The end of rows can be detected by comparing len(files) and
-// cap(files) for the returned meda.File slice. If the length is less than the
-// capacity, the end of the table has been reached.
-func (p *Producer) fetchNextBatch(files []meda.File) ([]meda.File, error) {
-	files, err := p.Config.DB.FilesAppendFilesToBeReadPaginated(
-		files[:0],
-		p.tomb.Context(nil),
-		p.Config.DB,
-		p.lastRand,
-		p.lastId,
-		uint64(cap(files)), // Limit number of returned rows to at most len(files)
-	)
-	if len(files) > 0 {
-		p.lastRand = files[len(files)-1].Rand
-		p.lastId = files[len(files)-1].Id
-	}
-	if err != nil {
-		return files, err
-	}
-
-	return files, nil
 }
 
 func (p *Producer) produce(n uint) (bool, error) {
