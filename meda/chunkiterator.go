@@ -21,8 +21,8 @@ type ChunkIterator struct {
 
 	finished   bool
 	err        error
-	previousId uint64
-	lastId     uint64
+	previousID uint64
+	lastID     uint64
 }
 
 // Next queries the next chunk of size ChunkSize using NextChunkQuery. If
@@ -31,17 +31,17 @@ type ChunkIterator struct {
 // between the two cases.
 //
 // The ids required to run queries on the chunk can be retrieved through
-// PreviousId and LastId. These methods may only be used after Next has
-// returned true. Each chunk consists of all records with id > PreviousId and
-// id <= LastId.
+// PreviousID and LastID. These methods may only be used after Next has
+// returned true. Each chunk consists of all records with id > PreviousID and
+// id <= LastID.
 func (c *ChunkIterator) Next(ctx context.Context, queryer sqlx.QueryerContext) bool {
 	if c.err != nil || c.finished {
 		return false
 	}
 
-	var lastId uint64
+	var lastID uint64
 
-	err := queryer.QueryRowxContext(ctx, c.NextChunkQuery, c.lastId, c.ChunkSize).Scan(&lastId)
+	err := queryer.QueryRowxContext(ctx, c.NextChunkQuery, c.lastID, c.ChunkSize).Scan(&lastID)
 	if err == sql.ErrNoRows {
 		c.finished = true
 		return false
@@ -50,7 +50,7 @@ func (c *ChunkIterator) Next(ctx context.Context, queryer sqlx.QueryerContext) b
 		return false
 	}
 
-	c.previousId, c.lastId = c.lastId, lastId
+	c.previousID, c.lastID = c.lastID, lastID
 
 	return true
 }
@@ -61,14 +61,14 @@ func (c *ChunkIterator) Err() error {
 	return c.err
 }
 
-// PreviousId returns the last id of the previous chunk. This method may only
+// PreviousID returns the last id of the previous chunk. This method may only
 // be called after Next has returned true.
-func (c *ChunkIterator) PreviousId() uint64 {
-	return c.previousId
+func (c *ChunkIterator) PreviousID() uint64 {
+	return c.previousID
 }
 
-// LastId returns the last id of the current chunk. This method may only be
+// LastID returns the last id of the current chunk. This method may only be
 // called after Next has returned true.
-func (c *ChunkIterator) LastId() uint64 {
-	return c.lastId
+func (c *ChunkIterator) LastID() uint64 {
+	return c.lastID
 }

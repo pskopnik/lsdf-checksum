@@ -41,7 +41,7 @@ func (d *DB) filesCreateTable(ctx context.Context) error {
 }
 
 type File struct {
-	Id               uint64     `db:"id"`
+	ID               uint64     `db:"id"`
 	Rand             float64    `db:"rand"`
 	Path             string     `db:"path"`
 	ModificationTime Time       `db:"modification_time"`

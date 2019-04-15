@@ -21,16 +21,16 @@ const truncateInsertsQuery = meda.GenericQuery(`
 //
 // The query requires several parameters:
 //
-//     previous_id - The Id previously returned by the query, i.e. the last Id
+//     previous_id - The ID previously returned by the query, i.e. the last ID
 //                   of the previous chunk. For the first query, this should be
 //                   set to 0.
 //     chunk_size  - Number of records to be included in the chunk.
 //
 // The query outputs zero or a single row with one column. After the query has
-// returned the last chunk, subsequent queries (with previous_id = last row Id
+// returned the last chunk, subsequent queries (with previous_id = last row ID
 // of last chunk) return no rows.
 //
-//     id - The Id of the last row included in the chunk.
+//     id - The ID of the last row included in the chunk.
 const nextInsertsChunkQuery = meda.GenericQuery(`
 	(
 		SELECT
@@ -51,16 +51,16 @@ const nextInsertsChunkQuery = meda.GenericQuery(`
 //
 // The query requires several parameters:
 //
-//     previous_id - The Id previously returned by the query, i.e. the last Id
+//     previous_id - The ID previously returned by the query, i.e. the last ID
 //                   of the previous chunk. For the first query, this should be
 //                   set to 0.
 //     chunk_size  - Number of records to be included in the chunk.
 //
 // The query outputs zero or a single row with one column. After the query has
-// returned the last chunk, subsequent queries (with previous_id = last row Id
+// returned the last chunk, subsequent queries (with previous_id = last row ID
 // of last chunk) return no rows.
 //
-//     id - The Id of the last row included in the chunk.
+//     id - The ID of the last row included in the chunk.
 const nextFilesChunkQuery = meda.GenericQuery(`
 	(
 		SELECT
@@ -80,17 +80,17 @@ const nextFilesChunkQuery = meda.GenericQuery(`
 //
 // The query requires several parameters:
 //
-//     run_id           - The Id of the run for which the synchronisation
+//     run_id           - The ID of the run for which the synchronisation
 //                        takes place.
 //     incremental_mode - 1 if the synchronisation takes place in incremental
 //                        mode, 0 otherwise.
 //     incremental_mode - 1 if the synchronisation takes place in incremental
 //                        mode, 0 otherwise.
-//     run_id           - The Id of the run for which the synchronisation
+//     run_id           - The ID of the run for which the synchronisation
 //                        takes place.
-//     prev_inserts_id  - The last Id of the inserts table included in the
+//     prev_inserts_id  - The last ID of the inserts table included in the
 //                        previous chunk.
-//     last_inserts_id  - The last Id of the inserts table included in the
+//     last_inserts_id  - The last ID of the inserts table included in the
 //                        current chunk.
 //
 // The to_be_read field is set to 1 if not running in incremental mode. In
@@ -151,11 +151,11 @@ const updateQuery = meda.GenericQuery(`
 //
 // The query requires one parameter:
 //
-//     run_id          - The Id of the run for which the synchronisation takes
+//     run_id          - The ID of the run for which the synchronisation takes
 //                       place.
-//     prev_inserts_id - The last Id of the inserts table included in the
+//     prev_inserts_id - The last ID of the inserts table included in the
 //                       previous chunk.
-//     last_inserts_id - The last Id of the inserts table included in the
+//     last_inserts_id - The last ID of the inserts table included in the
 //                        current chunk.
 //
 // After execution, the number of inserted / copied rows can be retrieved
@@ -181,11 +181,11 @@ const insertQuery = meda.GenericQuery(`
 //
 // The query requires one parameter:
 //
-//     run_id        - The Id of the run for which the synchronisation takes
+//     run_id        - The ID of the run for which the synchronisation takes
 //                     place.
-//     prev_files_id - The last Id of the files table included in the previous
+//     prev_files_id - The last ID of the files table included in the previous
 //                     chunk.
-//     last_files_id - The last Id of the files table included in the current
+//     last_files_id - The last ID of the files table included in the current
 //                     chunk.
 //
 // After execution, the number of deleted rows can be retrieved using

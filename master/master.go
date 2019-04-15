@@ -24,8 +24,8 @@ const (
 	snapshotNameFormat = "lsdf-checksum-master-run-%d-%s"
 )
 
-func snapshotName(runId uint64) string {
-	return fmt.Sprintf(snapshotNameFormat, runId, random.String(8))
+func snapshotName(runID uint64) string {
+	return fmt.Sprintf(snapshotNameFormat, runID, random.String(8))
 }
 
 //go:generate confions config Config
@@ -48,12 +48,12 @@ type Config struct {
 	Redis commonRedis.Config
 	// MedaSync contains the configuration for the medasync.Syncer. Here only
 	// static configuration options should be set.
-	// All known run time dependent options (database connections, RunId, etc.)
+	// All known run time dependent options (database connections, RunID, etc.)
 	// will be overwritten when the final configuration is assembled.
 	MedaSync medasync.Config
 	// WorkQueue contains the configuration for the workqueue.WorkQueue. Here
 	// only static configuration options should be set.
-	// All known run time dependent options (database connections, RunId, etc.)
+	// All known run time dependent options (database connections, RunID, etc.)
 	// will be overwritten when the final configuration is assembled.
 	WorkQueue workqueue.Config
 }
@@ -100,7 +100,7 @@ func NewWithNewRun(ctx context.Context, config *Config, syncMode meda.RunSyncMod
 		State:    meda.RSInitialised,
 	}
 
-	_, err := config.DB.RunsInsertAndSetId(ctx, nil, run)
+	_, err := config.DB.RunsInsertAndSetID(ctx, nil, run)
 	if err != nil {
 		return nil, nil, pkgErrors.Wrap(err, "NewWithNewRun: insert run")
 	}
@@ -119,10 +119,10 @@ func NewWithNewRun(ctx context.Context, config *Config, syncMode meda.RunSyncMod
 // NewWithExistingRun fetches an existing run from the database and returns a
 // Master instance using this run.
 // config is cloned and config.Run is replaced with the retrieved Run.
-func NewWithExistingRun(ctx context.Context, config *Config, runId uint64) (*meda.Run, *Master, error) {
-	run, err := config.DB.RunsQueryById(ctx, nil, runId)
+func NewWithExistingRun(ctx context.Context, config *Config, runID uint64) (*meda.Run, *Master, error) {
+	run, err := config.DB.RunsQueryByID(ctx, nil, runID)
 	if err != nil {
-		return nil, nil, pkgErrors.Wrapf(err, "NewWithExistingRun: query run with id = %d", runId)
+		return nil, nil, pkgErrors.Wrapf(err, "NewWithExistingRun: query run with id = %d", runID)
 	}
 
 	config = config.
@@ -139,7 +139,7 @@ func NewWithExistingRun(ctx context.Context, config *Config, runId uint64) (*med
 func (m *Master) Start(ctx context.Context) {
 	m.fieldLogger = m.Config.Logger.WithFields(log.Fields{
 		"filesystem":   m.Config.FileSystemName,
-		"run":          m.Config.Run.Id,
+		"run":          m.Config.Run.ID,
 		"sync_mode":    m.Config.Run.SyncMode,
 		"target_state": m.Config.TargetState,
 		"component":    "master.Master",
@@ -424,7 +424,7 @@ func (m *Master) updateRun() error {
 }
 
 func (m *Master) runInitialisedState() error {
-	m.Config.Run.SnapshotName.String = snapshotName(m.Config.Run.Id)
+	m.Config.Run.SnapshotName.String = snapshotName(m.Config.Run.ID)
 	m.Config.Run.SnapshotName.Valid = true
 	return nil
 }
@@ -538,12 +538,12 @@ func (m *Master) runSnapshotState() error {
 	m.fieldLogger.WithFields(log.Fields{
 		"run_state":           m.Config.Run.State,
 		"snapshot":            m.Config.Run.SnapshotName.String,
-		"snapshot_id":         snapshot.Id,
+		"snapshot_id":         snapshot.ID,
 		"snapshot_created_at": snapshot.CreatedAt,
 	}).Info("Retrieved snapshot data")
 
-	m.Config.Run.SnapshotId.Uint64 = uint64(snapshot.Id)
-	m.Config.Run.SnapshotId.Valid = true
+	m.Config.Run.SnapshotID.Uint64 = uint64(snapshot.ID)
+	m.Config.Run.SnapshotID.Valid = true
 	m.Config.Run.RunAt.Time = snapshot.CreatedAt
 	m.Config.Run.RunAt.Valid = true
 
@@ -823,7 +823,7 @@ func (m *Master) createSyncer() (*medasync.Syncer, error) {
 		Merge(&medasync.Config{
 			Subpath:      m.Config.FileSystemSubpath,
 			SnapshotName: m.Config.Run.SnapshotName.String,
-			RunId:        m.Config.Run.Id,
+			RunID:        m.Config.Run.ID,
 			SyncMode:     m.Config.Run.SyncMode,
 			DB:           m.Config.DB,
 			FileSystem:   m.fileSystem,
@@ -851,7 +851,7 @@ func (m *Master) createWorkQueue() (*workqueue.WorkQueue, error) {
 		Merge(&m.Config.WorkQueue).
 		Merge(&workqueue.Config{
 			FileSystemName: m.fileSystem.GetName(),
-			RunId:          m.Config.Run.Id,
+			RunID:          m.Config.Run.ID,
 			SnapshotName:   m.Config.Run.SnapshotName.String,
 			DB:             m.Config.DB,
 			Logger:         m.Config.Logger,

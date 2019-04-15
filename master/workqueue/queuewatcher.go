@@ -27,7 +27,7 @@ type QueueWatcherConfig struct {
 	FileSystemName string
 	Namespace      string
 
-	RunId        uint64
+	RunID        uint64
 	SnapshotName string
 
 	Pool   *redis.Pool   `yaml:"-"`
@@ -61,7 +61,7 @@ func NewQueueWatcher(config *QueueWatcherConfig) *QueueWatcher {
 
 func (q *QueueWatcher) Start(ctx context.Context) {
 	q.fieldLogger = q.Config.Logger.WithFields(log.Fields{
-		"run":        q.Config.RunId,
+		"run":        q.Config.RunID,
 		"snapshot":   q.Config.SnapshotName,
 		"filesystem": q.Config.FileSystemName,
 		"namespace":  q.Config.Namespace,

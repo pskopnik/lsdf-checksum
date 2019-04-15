@@ -11,7 +11,7 @@ func (q *QueueWatcherConfig) CopyFrom(other *QueueWatcherConfig) {
 	q.FileSystemName = other.FileSystemName
 	q.Namespace = other.Namespace
 
-	q.RunId = other.RunId
+	q.RunID = other.RunID
 	q.SnapshotName = other.SnapshotName
 
 	q.Pool = other.Pool
@@ -35,8 +35,8 @@ func (q *QueueWatcherConfig) Merge(other *QueueWatcherConfig) *QueueWatcherConfi
 		q.Namespace = other.Namespace
 	}
 
-	if other.RunId != 0 {
-		q.RunId = other.RunId
+	if other.RunID != 0 {
+		q.RunID = other.RunID
 	}
 	if len(other.SnapshotName) > 0 {
 		q.SnapshotName = other.SnapshotName

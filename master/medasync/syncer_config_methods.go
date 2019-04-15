@@ -10,7 +10,7 @@ func (c *Config) CopyFrom(other *Config) {
 	c.Subpath = other.Subpath
 
 	c.SnapshotName = other.SnapshotName
-	c.RunId = other.RunId
+	c.RunID = other.RunID
 	c.SyncMode = other.SyncMode
 
 	c.DB = other.DB
@@ -42,8 +42,8 @@ func (c *Config) Merge(other *Config) *Config {
 	if len(other.SnapshotName) > 0 {
 		c.SnapshotName = other.SnapshotName
 	}
-	if other.RunId != 0 {
-		c.RunId = other.RunId
+	if other.RunID != 0 {
+		c.RunID = other.RunID
 	}
 	if other.SyncMode != 0 {
 		c.SyncMode = other.SyncMode

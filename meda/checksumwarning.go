@@ -35,8 +35,8 @@ func (d *DB) checksumWarningsCreateTable(ctx context.Context) error {
 }
 
 type ChecksumWarning struct {
-	Id               uint64 `db:"id"`
-	FileId           uint64 `db:"file_id"`
+	ID               uint64 `db:"id"`
+	FileID           uint64 `db:"file_id"`
 	Path             string `db:"path"`
 	ModificationTime Time   `db:"modification_time"`
 	FileSize         uint64 `db:"file_size"`
@@ -197,7 +197,7 @@ func (d *DB) ChecksumWarningsAppendFromLastNRuns(checksumWarnings []ChecksumWarn
 	return checksumWarningsAppendFromRows(checksumWarnings, rows)
 }
 
-const checksumWarningsQueryFromRunByIdQuery = GenericQuery(`
+const checksumWarningsQueryFromRunByIDQuery = GenericQuery(`
 	SELECT
 		id,
 		file_id,
@@ -215,20 +215,20 @@ const checksumWarningsQueryFromRunByIdQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) ChecksumWarningsQueryFromRunById(ctx context.Context, querier sqlx.QueryerContext, runId uint64) (*sqlx.Rows, error) {
+func (d *DB) ChecksumWarningsQueryFromRunByID(ctx context.Context, querier sqlx.QueryerContext, runID uint64) (*sqlx.Rows, error) {
 	if querier == nil {
 		querier = &d.DB
 	}
 
-	return querier.QueryxContext(ctx, checksumWarningsQueryFromRunByIdQuery.SubstituteAll(d), runId)
+	return querier.QueryxContext(ctx, checksumWarningsQueryFromRunByIDQuery.SubstituteAll(d), runID)
 }
 
-func (d *DB) ChecksumWarningsFetchFromRunById(ctx context.Context, querier sqlx.QueryerContext, runId uint64) ([]ChecksumWarning, error) {
-	return d.ChecksumWarningsAppendFromRunById(nil, ctx, querier, runId)
+func (d *DB) ChecksumWarningsFetchFromRunByID(ctx context.Context, querier sqlx.QueryerContext, runID uint64) ([]ChecksumWarning, error) {
+	return d.ChecksumWarningsAppendFromRunByID(nil, ctx, querier, runID)
 }
 
-func (d *DB) ChecksumWarningsAppendFromRunById(checksumWarnings []ChecksumWarning, ctx context.Context, querier sqlx.QueryerContext, runId uint64) ([]ChecksumWarning, error) {
-	rows, err := d.ChecksumWarningsQueryFromRunById(ctx, querier, runId)
+func (d *DB) ChecksumWarningsAppendFromRunByID(checksumWarnings []ChecksumWarning, ctx context.Context, querier sqlx.QueryerContext, runID uint64) ([]ChecksumWarning, error) {
+	rows, err := d.ChecksumWarningsQueryFromRunByID(ctx, querier, runID)
 	if err != nil {
 		return checksumWarnings, err
 	}
@@ -236,18 +236,18 @@ func (d *DB) ChecksumWarningsAppendFromRunById(checksumWarnings []ChecksumWarnin
 	return checksumWarningsAppendFromRows(checksumWarnings, rows)
 }
 
-const checksumWarningsDeleteByIdQuery = GenericQuery(`
+const checksumWarningsDeleteByIDQuery = GenericQuery(`
 	DELETE FROM {CHECKSUM_WARNINGS}
 		WHERE id IN (?)
 	;
 `)
 
-func (d *DB) ChecksumWarningsDeleteById(ctx context.Context, execer RebindExecerContext, checksumWarningIds []uint64) (sql.Result, error) {
+func (d *DB) ChecksumWarningsDeleteByID(ctx context.Context, execer RebindExecerContext, checksumWarningIds []uint64) (sql.Result, error) {
 	if execer == nil {
 		execer = &d.DB
 	}
 
-	query, args, err := sqlx.In(checksumWarningsDeleteByIdQuery.SubstituteAll(d), checksumWarningIds)
+	query, args, err := sqlx.In(checksumWarningsDeleteByIDQuery.SubstituteAll(d), checksumWarningIds)
 	if err != nil {
 		return nil, err
 	}
@@ -283,10 +283,10 @@ func (d *DB) ChecksumWarningsDeleteChecksumWarnings(ctx context.Context, execer 
 		checksumWarningIds = append(checksumWarningIds[:0], make([]uint64, rangeEnd-i)...)
 
 		for ind := range checksumWarnings[i:rangeEnd] {
-			checksumWarningIds[ind] = checksumWarnings[i+ind].Id
+			checksumWarningIds[ind] = checksumWarnings[i+ind].ID
 		}
 
-		res, err := d.ChecksumWarningsDeleteById(ctx, execer, checksumWarningIds)
+		res, err := d.ChecksumWarningsDeleteByID(ctx, execer, checksumWarningIds)
 		if rowsAffected, err := res.RowsAffected(); err == nil {
 			totalRowsAffected += rowsAffected
 		}

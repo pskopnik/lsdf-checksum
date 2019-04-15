@@ -5,8 +5,8 @@ import (
 )
 
 type Generator struct {
-	minId          uint64
-	maxId          uint64
+	minID          uint64
+	maxID          uint64
 	checksumLength int
 
 	src  rand.Source
@@ -21,10 +21,10 @@ type Batch struct {
 	Checksums map[uint64][]byte
 }
 
-func newGenerator(minId, maxId uint64, checksumLength int, src rand.Source) *Generator {
+func newGenerator(minID, maxID uint64, checksumLength int, src rand.Source) *Generator {
 	return &Generator{
-		minId:          minId,
-		maxId:          maxId,
+		minID:          minID,
+		maxID:          maxID,
 		checksumLength: checksumLength,
 		src:            src,
 		rand:           rand.New(src),
@@ -33,7 +33,7 @@ func newGenerator(minId, maxId uint64, checksumLength int, src rand.Source) *Gen
 
 func (g *Generator) prepare() {
 	g.pos = 0
-	g.indices = g.rand.Perm(int(g.maxId - g.minId))
+	g.indices = g.rand.Perm(int(g.maxID - g.minID))
 }
 
 func (g *Generator) Done() bool {
@@ -46,7 +46,7 @@ func (g *Generator) Next() (id uint64, checksum []byte, ok bool) {
 		return
 	}
 
-	id = uint64(g.indices[g.pos]) + g.minId
+	id = uint64(g.indices[g.pos]) + g.minID
 	g.pos++
 
 	checksum = make([]byte, g.checksumLength)

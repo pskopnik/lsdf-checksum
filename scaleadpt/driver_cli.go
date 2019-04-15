@@ -247,7 +247,7 @@ func (c *CLIDriver) parseListSnapshots(output []byte) ([]*Snapshot, error) {
 		snapshots = append(
 			snapshots,
 			&Snapshot{
-				Id:        int(id),
+				ID:        int(id),
 				Name:      row[directoryField],
 				Status:    row[statusField],
 				CreatedAt: createdAt,

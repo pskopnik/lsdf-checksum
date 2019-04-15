@@ -28,7 +28,7 @@ func WriteBackJobName(fileSystemName, snapshotName string) string {
 //go:generate msgp
 
 type WorkPackFile struct {
-	Id   uint64
+	ID   uint64
 	Path string
 }
 
@@ -85,12 +85,12 @@ func (w *WorkPack) FromJobArgs(jobArgs map[string]interface{}) error {
 }
 
 type WriteBackPackFile struct {
-	Id       uint64
+	ID       uint64
 	Checksum []byte
 }
 
 func (w *WriteBackPackFile) DeepCopyFrom(other *WriteBackPackFile) {
-	w.Id = other.Id
+	w.ID = other.ID
 	w.Checksum = append(w.Checksum[:0], other.Checksum...)
 }
 

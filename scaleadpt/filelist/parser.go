@@ -11,7 +11,7 @@ import (
 type FileData struct {
 	Inode            uint64
 	Generation       uint64
-	SnapshotId       uint64
+	SnapshotID       uint64
 	FileSize         uint64
 	ModificationTime time.Time
 	Path             string
@@ -110,7 +110,7 @@ func (p *Parser) parsePreamble(fileData *FileData) error {
 		return err
 	}
 
-	fileData.SnapshotId, err = p.s.ParseUint64(true)
+	fileData.SnapshotID, err = p.s.ParseUint64(true)
 	if err != nil {
 		return err
 	}

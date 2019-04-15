@@ -225,7 +225,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 				"filesystem": workPack.FileSystemName,
 				"snapshot":   workPack.SnapshotName,
 				"job_name":   job.Name,
-				"id":         file.Id,
+				"id":         file.ID,
 				"path":       path,
 			}).Warn("Encountered error while opening file")
 			continue
@@ -242,7 +242,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 				"filesystem": workPack.FileSystemName,
 				"snapshot":   workPack.SnapshotName,
 				"job_name":   job.Name,
-				"id":         file.Id,
+				"id":         file.ID,
 				"path":       path,
 			}).Warn("Encountered error while calculating hashsum of file")
 			continue
@@ -255,7 +255,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 				"filesystem": workPack.FileSystemName,
 				"snapshot":   workPack.SnapshotName,
 				"job_name":   job.Name,
-				"id":         file.Id,
+				"id":         file.ID,
 				"path":       path,
 			}).Warn("Encountered error while closing file")
 			continue
@@ -267,14 +267,14 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 			"filesystem": workPack.FileSystemName,
 			"snapshot":   workPack.SnapshotName,
 			"job_name":   job.Name,
-			"id":         file.Id,
+			"id":         file.ID,
 			"path":       path,
 			"bytes_read": n,
 			"checksum":   checksum,
 		}).Debug("Read file")
 
 		writeBackPack.Files = append(writeBackPack.Files, workqueue.WriteBackPackFile{
-			Id:       file.Id,
+			ID:       file.ID,
 			Checksum: checksum,
 		})
 	}

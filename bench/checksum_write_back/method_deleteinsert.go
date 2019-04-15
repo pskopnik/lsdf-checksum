@@ -59,7 +59,7 @@ func (d *DeleteInsertMethodProcessor) ProcessBatch(ctx context.Context, batch Ba
 		// Pointer to file in files, don't copy
 		file := &files[ind]
 
-		calculatedChecksum, ok := calculatedChecksums[file.Id]
+		calculatedChecksum, ok := calculatedChecksums[file.ID]
 		if !ok {
 			// Only log warning in production
 			return errors.New("Database returned unknown file")
@@ -73,13 +73,13 @@ func (d *DeleteInsertMethodProcessor) ProcessBatch(ctx context.Context, batch Ba
 			d.runnerConfig.Logger.Println("Checksum mismatch discovered", file.Path)
 		}
 
-		file.Checksum = calculatedChecksums[file.Id]
-		file.LastRead.Uint64, file.LastRead.Valid = d.runnerConfig.RunId, true
+		file.Checksum = calculatedChecksums[file.ID]
+		file.LastRead.Uint64, file.LastRead.Valid = d.runnerConfig.RunID, true
 		file.ToBeRead = 0
 		file.ToBeCompared = 0
 
 		insert = insert.Values(
-			file.Id,
+			file.ID,
 			file.Rand,
 			file.Path,
 			file.ModificationTime,
@@ -91,7 +91,7 @@ func (d *DeleteInsertMethodProcessor) ProcessBatch(ctx context.Context, batch Ba
 			file.LastRead,
 		)
 
-		calculatedChecksums[file.Id] = nil
+		calculatedChecksums[file.ID] = nil
 	}
 
 	// Check that all files received from the batch's input channel

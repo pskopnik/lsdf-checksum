@@ -124,7 +124,7 @@ func (t *transactioner) InsertChecksumWarning(ctx context.Context, checksumWarni
 	return nil
 }
 
-func (t *transactioner) UpdateFilesChecksums(ctx context.Context, files []meda.File, runId uint64) error {
+func (t *transactioner) UpdateFilesChecksums(ctx context.Context, files []meda.File, runID uint64) error {
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
@@ -132,7 +132,7 @@ func (t *transactioner) UpdateFilesChecksums(ctx context.Context, files []meda.F
 		}
 	}
 
-	update, fileIds, err := t.buildUpdate(files, runId)
+	update, fileIds, err := t.buildUpdate(files, runID)
 	if err != nil {
 		return errors.Wrap(err, "(*transactioner).UpdateFilesChecksums")
 	}
@@ -156,7 +156,7 @@ func (t *transactioner) UpdateFilesChecksums(ctx context.Context, files []meda.F
 	return nil
 }
 
-func (t *transactioner) buildUpdate(files []meda.File, runId uint64) (squirrel.UpdateBuilder, []interface{}, error) {
+func (t *transactioner) buildUpdate(files []meda.File, runID uint64) (squirrel.UpdateBuilder, []interface{}, error) {
 	checksumCaseBuilder := squirrel.Case("id")
 
 	fileIds := t.getInterfaceSliceFromPool()
@@ -167,10 +167,10 @@ func (t *transactioner) buildUpdate(files []meda.File, runId uint64) (squirrel.U
 		file := &files[ind]
 
 		checksumCaseBuilder = checksumCaseBuilder.When(
-			squirrel.Expr(squirrel.Placeholders(1), file.Id),
+			squirrel.Expr(squirrel.Placeholders(1), file.ID),
 			squirrel.Expr(squirrel.Placeholders(1), file.Checksum),
 		)
-		fileIds[ind] = file.Id
+		fileIds[ind] = file.ID
 	}
 
 	checksumCaseSql, checksumCaseArgs, err := checksumCaseBuilder.ToSql()
@@ -183,7 +183,7 @@ func (t *transactioner) buildUpdate(files []meda.File, runId uint64) (squirrel.U
 		Set("to_be_read", 0).
 		Set("to_be_compared", 0).
 		Set("checksum", squirrel.Expr(checksumCaseSql, checksumCaseArgs...)).
-		Set("last_read", runId).
+		Set("last_read", runID).
 		Where("id IN ("+squirrel.Placeholders(len(fileIds))+")", fileIds...)
 
 	return update, fileIds, nil

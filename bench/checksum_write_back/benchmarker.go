@@ -19,7 +19,7 @@ type RunVariation struct {
 
 type RunnerConfig struct {
 	RunVariation
-	RunId     uint64
+	RunID     uint64
 	Logger    *log.Logger
 	DB        *DB
 	Generator *Generator
@@ -126,17 +126,17 @@ func (b *Benchmarker) Perform(
 		return BenchmarkResult{}, err
 	}
 
-	minId, maxId, err := b.getFilesMinMaxId(ctx)
+	minID, maxID, err := b.getFilesMinMaxID(ctx)
 	if err != nil {
 		return BenchmarkResult{}, err
 	}
 
-	generator := newGenerator(minId, maxId, b.config.ChecksumLength, b.src)
+	generator := newGenerator(minID, maxID, b.config.ChecksumLength, b.src)
 	generator.prepare()
 
 	runnerConfig := &RunnerConfig{
 		RunVariation: variation,
-		RunId:        2,
+		RunID:        2,
 		Logger:       b.config.Logger,
 		DB:           b.config.DB,
 		Generator:    generator,
@@ -284,12 +284,12 @@ func (b *Benchmarker) prepareFilesTable(ctx context.Context, method *Method) err
 }
 
 func (b *Benchmarker) generateAndWriteFilesChecksums(ctx context.Context, method *Method) error {
-	minId, maxId, err := b.getFilesMinMaxId(ctx)
+	minID, maxID, err := b.getFilesMinMaxID(ctx)
 	if err != nil {
 		return err
 	}
 
-	generator := newGenerator(minId, maxId, b.config.ChecksumLength, b.src)
+	generator := newGenerator(minID, maxID, b.config.ChecksumLength, b.src)
 	generator.prepare()
 
 	runnerConfig := &RunnerConfig{
@@ -318,23 +318,23 @@ func (b *Benchmarker) dropFilesTable(ctx context.Context) error {
 	return nil
 }
 
-const getFilesMinMaxIdQuery = GenericQuery(`
+const getFilesMinMaxIDQuery = GenericQuery(`
 	SELECT
 		min(id) as min_id, max(id) as max_id
 	FROM {FILES}
 	;
 `)
 
-func (b *Benchmarker) getFilesMinMaxId(ctx context.Context) (uint64, uint64, error) {
-	row := b.config.DB.QueryRowxContext(ctx, getFilesMinMaxIdQuery.SubstituteAll(b.config.DB))
+func (b *Benchmarker) getFilesMinMaxID(ctx context.Context) (uint64, uint64, error) {
+	row := b.config.DB.QueryRowxContext(ctx, getFilesMinMaxIDQuery.SubstituteAll(b.config.DB))
 
-	var minId uint64
-	var maxId uint64
+	var minID uint64
+	var maxID uint64
 
-	err := row.Scan(&minId, &maxId)
+	err := row.Scan(&minID, &maxID)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	return minId, maxId, nil
+	return minID, maxID, nil
 }

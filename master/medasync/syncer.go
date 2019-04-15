@@ -59,7 +59,7 @@ type Config struct {
 	// Invocation dependent params
 
 	SnapshotName string
-	RunId        uint64
+	RunID        uint64
 	SyncMode     meda.RunSyncMode
 
 	// Dynamic objects
@@ -153,7 +153,7 @@ func (s *Syncer) createFieldLogger() log.Interface {
 	return s.Config.Logger.WithFields(log.Fields{
 		"sync_mode":  s.Config.SyncMode,
 		"filesystem": s.Config.FileSystem.GetName(),
-		"run":        s.Config.RunId,
+		"run":        s.Config.RunID,
 		"snapshot":   s.Config.SnapshotName,
 		"subpath":    s.Config.Subpath,
 		"component":  "medasync.Syncer",
@@ -331,16 +331,16 @@ func (s *Syncer) syncDatabaseUpdate(ctx context.Context, incrementalMode int) er
 		NextChunkQuery: nextInsertsChunkQuery.SubstituteAll(s.Config.DB),
 		DB:             s.Config.DB,
 		BeginTx:        beginTxWithReadCommitted,
-		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevId, lastId uint64) error {
+		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevID, lastID uint64) error {
 			res, err := tx.ExecContext(
 				ctx,
 				updateQuery.SubstituteAll(s.Config.DB),
-				s.Config.RunId,
+				s.Config.RunID,
 				incrementalMode,
 				incrementalMode,
-				s.Config.RunId,
-				prevId,
-				lastId,
+				s.Config.RunID,
+				prevID,
+				lastID,
 			)
 			if err != nil {
 				return err
@@ -373,13 +373,13 @@ func (s *Syncer) syncDatabaseDelete(ctx context.Context, incrementalMode int) er
 		NextChunkQuery: nextFilesChunkQuery.SubstituteAll(s.Config.DB),
 		DB:             s.Config.DB,
 		BeginTx:        beginTxWithReadCommitted,
-		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevId, lastId uint64) error {
+		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevID, lastID uint64) error {
 			res, err := tx.ExecContext(
 				ctx,
 				deleteQuery.SubstituteAll(s.Config.DB),
-				s.Config.RunId,
-				prevId,
-				lastId,
+				s.Config.RunID,
+				prevID,
+				lastID,
 			)
 			if err != nil {
 				return err
@@ -412,13 +412,13 @@ func (s *Syncer) syncDatabaseInsert(ctx context.Context, incrementalMode int) er
 		NextChunkQuery: nextInsertsChunkQuery.SubstituteAll(s.Config.DB),
 		DB:             s.Config.DB,
 		BeginTx:        beginTxWithReadCommitted,
-		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevId, lastId uint64) error {
+		ProcessChunk: func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevID, lastID uint64) error {
 			res, err := tx.ExecContext(
 				ctx,
 				insertQuery.SubstituteAll(s.Config.DB),
-				s.Config.RunId,
-				prevId,
-				lastId,
+				s.Config.RunID,
+				prevID,
+				lastID,
 			)
 			if err != nil {
 				return err

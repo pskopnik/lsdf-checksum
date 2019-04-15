@@ -28,7 +28,7 @@ func (d *DB) insertsCreateTable(ctx context.Context) error {
 }
 
 type Insert struct {
-	Id               uint64 `db:"id"`
+	ID               uint64 `db:"id"`
 	Path             string `db:"path"`
 	ModificationTime Time   `db:"modification_time"`
 	FileSize         uint64 `db:"file_size"`

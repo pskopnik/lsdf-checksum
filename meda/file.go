@@ -43,7 +43,7 @@ func (d *DB) filesCreateTable(ctx context.Context) error {
 }
 
 type File struct {
-	Id               uint64     `db:"id"`
+	ID               uint64     `db:"id"`
 	Rand             float64    `db:"rand"`
 	Path             string     `db:"path"`
 	ModificationTime Time       `db:"modification_time"`
@@ -101,7 +101,7 @@ const filesQueryFilesToBeReadPaginatedQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) (*sqlx.Rows, error) {
+func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startID, limit uint64) (*sqlx.Rows, error) {
 	if querier == nil {
 		querier = &d.DB
 	}
@@ -111,17 +111,17 @@ func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.
 		filesQueryFilesToBeReadPaginatedQuery.SubstituteAll(d),
 		startRand,
 		startRand,
-		startId,
+		startID,
 		limit,
 	)
 }
 
-func (d *DB) FilesFetchFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) ([]File, error) {
-	return d.FilesAppendFilesToBeReadPaginated(nil, ctx, querier, startRand, startId, limit)
+func (d *DB) FilesFetchFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startID, limit uint64) ([]File, error) {
+	return d.FilesAppendFilesToBeReadPaginated(nil, ctx, querier, startRand, startID, limit)
 }
 
-func (d *DB) FilesAppendFilesToBeReadPaginated(files []File, ctx context.Context, querier sqlx.QueryerContext, startRand float64, startId, limit uint64) ([]File, error) {
-	rows, err := d.FilesQueryFilesToBeReadPaginated(ctx, querier, startRand, startId, limit)
+func (d *DB) FilesAppendFilesToBeReadPaginated(files []File, ctx context.Context, querier sqlx.QueryerContext, startRand float64, startID, limit uint64) ([]File, error) {
+	rows, err := d.FilesQueryFilesToBeReadPaginated(ctx, querier, startRand, startID, limit)
 	if err != nil {
 		return files, err
 	}
@@ -274,7 +274,7 @@ type FilesToBeReadFetcher struct {
 	it                ChunkIterator
 	chunkContainsRows bool
 	lastRand          float64
-	lastId            uint64
+	lastID            uint64
 }
 
 func (f *FilesToBeReadFetcher) initialise() {
@@ -283,7 +283,7 @@ func (f *FilesToBeReadFetcher) initialise() {
 		NextChunkQuery: filesToBeReadFetcherNextChunkQuery.SubstituteAll(f.db),
 	}
 	f.lastRand = -1
-	f.lastId = 0
+	f.lastID = 0
 }
 
 func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, limit uint64) (*sqlx.Rows, error) {
@@ -296,8 +296,8 @@ func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, 
 		filesToBeReadFetcherFetchQuery.SubstituteAll(f.db),
 		f.lastRand,
 		f.lastRand,
-		f.lastId,
-		f.it.LastId(),
+		f.lastID,
+		f.it.LastID(),
 		limit,
 	)
 }
@@ -342,7 +342,7 @@ func (f *FilesToBeReadFetcher) AppendNext(files []File, ctx context.Context, que
 		if len(files[baseInd:]) > 0 {
 			// at least one file was fetched
 			f.lastRand = files[len(files)-1].Rand
-			f.lastId = files[len(files)-1].Id
+			f.lastID = files[len(files)-1].ID
 		}
 
 		if uint64(len(files[baseInd:])) < queryLimit {

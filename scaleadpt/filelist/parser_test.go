@@ -22,7 +22,7 @@ var _ = Describe("Parser", func() {
 			Ω(parser.ParseLine()).Should(Equal(&FileData{
 				Inode:            1,
 				Generation:       2,
-				SnapshotId:       3,
+				SnapshotID:       3,
 				FileSize:         4,
 				ModificationTime: modTime,
 				Path:             "/some/file/path",
@@ -38,7 +38,7 @@ var _ = Describe("Parser", func() {
 			Ω(parser.ParseLine()).Should(Equal(&FileData{
 				Inode:            1,
 				Generation:       2,
-				SnapshotId:       3,
+				SnapshotID:       3,
 				FileSize:         4,
 				ModificationTime: modTime,
 				Path:             "/some/file/path",
@@ -50,7 +50,7 @@ var _ = Describe("Parser", func() {
 			Ω(parser.ParseLine()).Should(Equal(&FileData{
 				Inode:            2,
 				Generation:       3,
-				SnapshotId:       4,
+				SnapshotID:       4,
 				FileSize:         5,
 				ModificationTime: modTime,
 				Path:             "/another/file/path",
@@ -66,7 +66,7 @@ var _ = Describe("Parser", func() {
 			Ω(parser.ParseLine()).Should(Equal(&FileData{
 				Inode:            1,
 				Generation:       2,
-				SnapshotId:       3,
+				SnapshotID:       3,
 				FileSize:         4,
 				ModificationTime: modTime,
 				Path:             "/this is a/file /path.with/&a_lot-of/%strange (characters).?ß",

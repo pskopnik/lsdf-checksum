@@ -16,7 +16,7 @@ type chunker struct {
 	DB *meda.DB
 
 	BeginTx      func(ctx context.Context, db *meda.DB) (*sqlx.Tx, error)
-	ProcessChunk func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevId, lastId uint64) error
+	ProcessChunk func(ctx context.Context, db *meda.DB, tx *sqlx.Tx, prevID, lastID uint64) error
 }
 
 func (c *chunker) Run(ctx context.Context) error {
@@ -31,7 +31,7 @@ func (c *chunker) Run(ctx context.Context) error {
 	}
 
 	for it.Next(ctx, tx) {
-		err = c.ProcessChunk(ctx, c.DB, tx, it.PreviousId(), it.LastId())
+		err = c.ProcessChunk(ctx, c.DB, tx, it.PreviousID(), it.LastID())
 		if err != nil {
 			_ = tx.Rollback()
 			return errors.Wrap(err, "(*chunker).Run: ProcessChunk execution")

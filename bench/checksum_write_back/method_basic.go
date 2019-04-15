@@ -50,7 +50,7 @@ func (b *BasicMethodProcessor) ProcessBatch(ctx context.Context, batch Batch) er
 		// Pointer to file in files, don't copy
 		file := &files[ind]
 
-		calculatedChecksum, ok := calculatedChecksums[file.Id]
+		calculatedChecksum, ok := calculatedChecksums[file.ID]
 		if !ok {
 			_ = b.closeTxAndStmts(tx, filesUpdatePrepStmt)
 			// Only log warning in production
@@ -66,8 +66,8 @@ func (b *BasicMethodProcessor) ProcessBatch(ctx context.Context, batch Batch) er
 			b.runnerConfig.Logger.Println("Checksum mismatch discovered", file.Path)
 		}
 
-		file.Checksum = calculatedChecksums[file.Id]
-		file.LastRead.Uint64, file.LastRead.Valid = b.runnerConfig.RunId, true
+		file.Checksum = calculatedChecksums[file.ID]
+		file.LastRead.Uint64, file.LastRead.Valid = b.runnerConfig.RunID, true
 		file.ToBeRead = 0
 		file.ToBeCompared = 0
 
@@ -78,7 +78,7 @@ func (b *BasicMethodProcessor) ProcessBatch(ctx context.Context, batch Batch) er
 			return err
 		}
 
-		calculatedChecksums[file.Id] = nil
+		calculatedChecksums[file.ID] = nil
 	}
 
 	// Check that all files received from the batch's input channel

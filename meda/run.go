@@ -34,9 +34,9 @@ func (d *DB) runsCreateTable(ctx context.Context) error {
 }
 
 type Run struct {
-	Id           uint64         `db:"id"`
+	ID           uint64         `db:"id"`
 	SnapshotName sql.NullString `db:"snapshot_name"`
-	SnapshotId   NullUint64     `db:"snapshot_id"`
+	SnapshotID   NullUint64     `db:"snapshot_id"`
 	RunAt        mysql.NullTime `db:"run_at"`
 	SyncMode     RunSyncMode    `db:"sync_mode"`
 	State        RunState       `db:"state"`
@@ -51,7 +51,7 @@ const runsInsertQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) RunsInsertAndSetId(ctx context.Context, execer NamedExecerContext, run *Run) (sql.Result, error) {
+func (d *DB) RunsInsertAndSetID(ctx context.Context, execer NamedExecerContext, run *Run) (sql.Result, error) {
 	if execer == nil {
 		execer = &d.DB
 	}
@@ -66,7 +66,7 @@ func (d *DB) RunsInsertAndSetId(ctx context.Context, execer NamedExecerContext, 
 		return nil, err
 	}
 
-	run.Id = uint64(id)
+	run.ID = uint64(id)
 
 	return result, err
 }
@@ -92,7 +92,7 @@ func (d *DB) RunsUpdate(ctx context.Context, execer NamedExecerContext, run *Run
 	return execer.NamedExecContext(ctx, runsUpdateQuery.SubstituteAll(d), run)
 }
 
-const runsQueryByIdQuery = GenericQuery(`
+const runsQueryByIDQuery = GenericQuery(`
 	SELECT
 		id, snapshot_name, snapshot_id, run_at, sync_mode, state
 	FROM {RUNS}
@@ -101,14 +101,14 @@ const runsQueryByIdQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) RunsQueryById(ctx context.Context, querier sqlx.QueryerContext, id uint64) (Run, error) {
+func (d *DB) RunsQueryByID(ctx context.Context, querier sqlx.QueryerContext, id uint64) (Run, error) {
 	if querier == nil {
 		querier = &d.DB
 	}
 
 	var run Run
 
-	err := querier.QueryRowxContext(ctx, runsQueryByIdQuery.SubstituteAll(d), id).StructScan(&run)
+	err := querier.QueryRowxContext(ctx, runsQueryByIDQuery.SubstituteAll(d), id).StructScan(&run)
 	if err != nil {
 		return Run{}, err
 	}
@@ -243,7 +243,7 @@ func (d *DB) RunsAppendIncomplete(runs []Run, ctx context.Context, querier sqlx.
 	return runsAppendFromRows(runs, rows)
 }
 
-const runsExistsIncompleteBeforeIdQuery = GenericQuery(`
+const runsExistsIncompleteBeforeIDQuery = GenericQuery(`
 	SELECT
 		EXISTS (
 			SELECT 1
@@ -256,12 +256,12 @@ const runsExistsIncompleteBeforeIdQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) RunsExistsIncompleteBeforeId(ctx context.Context, querier sqlx.QueryerContext, id uint64) (bool, error) {
+func (d *DB) RunsExistsIncompleteBeforeID(ctx context.Context, querier sqlx.QueryerContext, id uint64) (bool, error) {
 	if querier == nil {
 		querier = &d.DB
 	}
 
-	row := querier.QueryRowxContext(ctx, runsExistsIncompleteBeforeIdQuery.SubstituteAll(d), id)
+	row := querier.QueryRowxContext(ctx, runsExistsIncompleteBeforeIDQuery.SubstituteAll(d), id)
 
 	var rowExists int
 
@@ -273,7 +273,7 @@ func (d *DB) RunsExistsIncompleteBeforeId(ctx context.Context, querier sqlx.Quer
 	return rowExists == 1, nil
 }
 
-const runsExistsIncompleteIdQuery = GenericQuery(`
+const runsExistsIncompleteIDQuery = GenericQuery(`
 	SELECT
 		EXISTS (
 			SELECT 1
@@ -289,7 +289,7 @@ func (d *DB) RunsExistsIncomplete(ctx context.Context, querier sqlx.QueryerConte
 		querier = &d.DB
 	}
 
-	row := querier.QueryRowxContext(ctx, runsExistsIncompleteIdQuery.SubstituteAll(d))
+	row := querier.QueryRowxContext(ctx, runsExistsIncompleteIDQuery.SubstituteAll(d))
 
 	var rowExists int
 

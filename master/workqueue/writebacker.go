@@ -31,7 +31,7 @@ type WriteBackerConfig struct {
 	FileSystemName string
 	Namespace      string
 
-	RunId        uint64
+	RunID        uint64
 	SnapshotName string
 
 	Pool   *redis.Pool   `yaml:"-"`
@@ -80,7 +80,7 @@ func (w *WriteBacker) Start(ctx context.Context) {
 	w.tomb, _ = tomb.WithContext(ctx)
 
 	w.fieldLogger = w.Config.Logger.WithFields(log.Fields{
-		"run":        w.Config.RunId,
+		"run":        w.Config.RunID,
 		"snapshot":   w.Config.SnapshotName,
 		"filesystem": w.Config.FileSystemName,
 		"namespace":  w.Config.Namespace,
@@ -273,25 +273,25 @@ func (w *WriteBacker) processBatch(ctx context.Context, batch *filesBatch, trans
 		// Pointer to file in files, don't copy
 		file := &files[i]
 
-		checksum, ok := checksums[file.Id]
+		checksum, ok := checksums[file.ID]
 		if !ok {
-			return pkgErrors.Wrapf(ErrFetchedUnexpectedFile, "(*WriteBacker).processBatch: process file with id %d", file.Id)
+			return pkgErrors.Wrapf(ErrFetchedUnexpectedFile, "(*WriteBacker).processBatch: process file with id %d", file.ID)
 		} else if checksum == nil {
-			return pkgErrors.Wrapf(ErrFetchedDuplicateFile, "(*WriteBacker).processBatch: process file with id %d", file.Id)
+			return pkgErrors.Wrapf(ErrFetchedDuplicateFile, "(*WriteBacker).processBatch: process file with id %d", file.ID)
 		}
-		checksums[file.Id] = nil
+		checksums[file.ID] = nil
 
 		if file.Checksum != nil && file.ToBeCompared == 1 && !bytes.Equal(checksum, file.Checksum) {
 			// info logging is handled by issueChecksumWarning
 			err = w.issueChecksumWarning(ctx, file, checksum, transactioner)
 			if err != nil {
 				// error logging is handled by issueChecksumWarning (escalating)
-				return pkgErrors.Wrapf(err, "(*WriteBacker).processBatch: process file with id %d", file.Id)
+				return pkgErrors.Wrapf(err, "(*WriteBacker).processBatch: process file with id %d", file.ID)
 			}
 		}
 
 		file.Checksum = checksum
-		file.LastRead.Uint64, file.LastRead.Valid = w.Config.RunId, true
+		file.LastRead.Uint64, file.LastRead.Valid = w.Config.RunID, true
 		file.ToBeRead = 0
 		file.ToBeCompared = 0
 	}
@@ -303,7 +303,7 @@ func (w *WriteBacker) processBatch(ctx context.Context, batch *filesBatch, trans
 		}
 	}
 
-	err = transactioner.UpdateFilesChecksums(ctx, files, w.Config.RunId)
+	err = transactioner.UpdateFilesChecksums(ctx, files, w.Config.RunID)
 	if err != nil {
 		return pkgErrors.Wrap(err, "(*WriteBacker).processBatch: update files in database")
 	}
@@ -321,18 +321,18 @@ func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte,
 	for i := range batch.Files {
 		file := &batch.Files[i]
 
-		if checksum, ok := checksums[file.Id]; ok {
+		if checksum, ok := checksums[file.ID]; ok {
 			w.fieldLogger.WithFields(log.Fields{
 				"action":              "skipping",
-				"file_id":             file.Id,
+				"file_id":             file.ID,
 				"first_checksum":      checksum,
 				"subsequent_checksum": file.Checksum,
 			}).Warn("Received same file multiple times in job batch, dropping all but first encounter")
 			continue
 		}
 
-		checksums[file.Id] = file.Checksum
-		fileIds[i] = file.Id
+		checksums[file.ID] = file.Checksum
+		fileIds[i] = file.ID
 	}
 
 	return checksums, fileIds
@@ -340,7 +340,7 @@ func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte,
 
 func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File, checksum []byte, transactioner *transactioner) error {
 	w.fieldLogger.WithFields(log.Fields{
-		"file_id":                file.Id,
+		"file_id":                file.ID,
 		"file_path":              file.Path,
 		"file_modification_time": file.ModificationTime,
 		"file_size":              file.FileSize,
@@ -350,13 +350,13 @@ func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File,
 	}).Info("Discovered checksum mismatch, writing checksum warning")
 
 	checksumWarning := meda.ChecksumWarning{
-		FileId:           file.Id,
+		FileID:           file.ID,
 		Path:             file.Path,
 		ModificationTime: file.ModificationTime,
 		FileSize:         file.FileSize,
 		ExpectedChecksum: file.Checksum,
 		ActualChecksum:   checksum,
-		Discovered:       w.Config.RunId,
+		Discovered:       w.Config.RunID,
 		LastRead:         file.LastRead.Uint64,
 		Created:          meda.Time(time.Now()),
 	}
@@ -366,7 +366,7 @@ func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File,
 		err = pkgErrors.Wrap(err, "(*WriteBacker).issueChecksumWarning")
 		w.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":                 "escalating",
-			"file_id":                file.Id,
+			"file_id":                file.ID,
 			"file_path":              file.Path,
 			"file_modification_time": file.ModificationTime,
 			"file_size":              file.FileSize,
@@ -415,7 +415,7 @@ func (w *writeBackerContext) Process(job *work.Job) error {
 			err = pkgErrors.Wrap(err, "(*writeBackerContext).Process: add received file to batcher")
 			w.WriteBacker.fieldLogger.WithError(err).WithFields(log.Fields{
 				"action":        "stopping",
-				"file_id":       file.Id,
+				"file_id":       file.ID,
 				"file_checksum": file.Checksum,
 			}).Error("Encountered error while adding received file to batcher")
 			w.WriteBacker.tomb.Kill(err)

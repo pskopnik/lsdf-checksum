@@ -47,7 +47,7 @@ type Producer struct {
 
 	filesChan      chan meda.File
 	lastRand       float64
-	lastId         uint64
+	lastID         uint64
 	queueScheduler *QueueScheduler
 	fieldLogger    log.Interface
 }
@@ -77,7 +77,7 @@ func (p *Producer) Start(ctx context.Context) {
 	}
 
 	p.lastRand = -1
-	p.lastId = 0
+	p.lastID = 0
 	p.filesChan = make(chan meda.File, p.Config.RowBufferSize)
 
 	p.queueScheduler = NewQueueScheduler(queueSchedulerConfig)
@@ -227,7 +227,7 @@ func (p *Producer) produce(n uint) (bool, error) {
 			}
 
 			workPack.Files = append(workPack.Files, WorkPackFile{
-				Id:   file.Id,
+				ID:   file.ID,
 				Path: file.Path,
 			})
 

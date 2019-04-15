@@ -12,7 +12,7 @@ var SnapshotOpt = options.SnapshotOptioners{}
 type Snapshot struct {
 	filesystem *FileSystem
 
-	Id        int
+	ID        int
 	Name      string
 	Status    string
 	CreatedAt time.Time

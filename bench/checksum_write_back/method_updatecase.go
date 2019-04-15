@@ -53,13 +53,13 @@ func (u *UpdateCaseMethodProcessor) ProcessBatch(ctx context.Context, batch Batc
 	}
 
 	checksumCaseBuilder := squirrel.Case("id")
-	fileIdInterfaces := make([]interface{}, len(files))
+	fileIDInterfaces := make([]interface{}, len(files))
 
 	for ind, _ := range files {
 		// Pointer to file in files, don't copy
 		file := &files[ind]
 
-		calculatedChecksum, ok := calculatedChecksums[file.Id]
+		calculatedChecksum, ok := calculatedChecksums[file.ID]
 		if !ok {
 			// Only log warning in production
 			return errors.New("Database returned unknown file")
@@ -73,18 +73,18 @@ func (u *UpdateCaseMethodProcessor) ProcessBatch(ctx context.Context, batch Batc
 			u.runnerConfig.Logger.Println("Checksum mismatch discovered", file.Path)
 		}
 
-		file.Checksum = calculatedChecksums[file.Id]
-		file.LastRead.Uint64, file.LastRead.Valid = u.runnerConfig.RunId, true
+		file.Checksum = calculatedChecksums[file.ID]
+		file.LastRead.Uint64, file.LastRead.Valid = u.runnerConfig.RunID, true
 		file.ToBeRead = 0
 		file.ToBeCompared = 0
 
 		checksumCaseBuilder = checksumCaseBuilder.When(
-			squirrel.Expr(squirrel.Placeholders(1), file.Id),
+			squirrel.Expr(squirrel.Placeholders(1), file.ID),
 			squirrel.Expr(squirrel.Placeholders(1), file.Checksum),
 		)
-		fileIdInterfaces[ind] = file.Id
+		fileIDInterfaces[ind] = file.ID
 
-		calculatedChecksums[file.Id] = nil
+		calculatedChecksums[file.ID] = nil
 	}
 
 	// Check that all files received from the batch's input channel
@@ -95,7 +95,7 @@ func (u *UpdateCaseMethodProcessor) ProcessBatch(ctx context.Context, batch Batc
 		}
 	}
 
-	update, err := u.buildUpdate(checksumCaseBuilder, fileIdInterfaces)
+	update, err := u.buildUpdate(checksumCaseBuilder, fileIDInterfaces)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (u *UpdateCaseMethodProcessor) buildUpdate(
 		Set("to_be_read", 0).
 		Set("to_be_compared", 0).
 		Set("checksum", squirrel.Expr(checksumCaseSql, checksumCaseArgs...)).
-		Set("last_read", u.runnerConfig.RunId).
+		Set("last_read", u.runnerConfig.RunID).
 		Where("id IN ("+squirrel.Placeholders(len(fileIds))+")", fileIds...).
 		RunWith(u.tx)
 

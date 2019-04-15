@@ -4,7 +4,7 @@ func (c *Config) CopyFrom(other *Config) {
 	c.FileSystemName = other.FileSystemName
 	c.RedisPrefix = other.RedisPrefix
 
-	c.RunId = other.RunId
+	c.RunID = other.RunID
 	c.SnapshotName = other.SnapshotName
 
 	c.DB = other.DB
@@ -26,8 +26,8 @@ func (c *Config) Merge(other *Config) *Config {
 		c.FileSystemName = other.FileSystemName
 	}
 
-	if other.RunId != 0 {
-		c.RunId = other.RunId
+	if other.RunID != 0 {
+		c.RunID = other.RunID
 	}
 	if len(other.SnapshotName) > 0 {
 		c.SnapshotName = other.SnapshotName

@@ -116,12 +116,12 @@ const updateFilesQuery = GenericQuery(`
 func (c *CollectJoinMethodIncorporater) Finalise(ctx context.Context) error {
 	var err error
 
-	_, err = c.runnerConfig.DB.ExecContext(ctx, c.substituteAll(writeChecksumWarningsQuery), c.runnerConfig.RunId)
+	_, err = c.runnerConfig.DB.ExecContext(ctx, c.substituteAll(writeChecksumWarningsQuery), c.runnerConfig.RunID)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.runnerConfig.DB.ExecContext(ctx, c.substituteAll(updateFilesQuery), c.runnerConfig.RunId)
+	_, err = c.runnerConfig.DB.ExecContext(ctx, c.substituteAll(updateFilesQuery), c.runnerConfig.RunID)
 	if err != nil {
 		return err
 	}

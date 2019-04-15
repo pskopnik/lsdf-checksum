@@ -11,7 +11,7 @@ func (w *WriteBackerConfig) CopyFrom(other *WriteBackerConfig) {
 	w.FileSystemName = other.FileSystemName
 	w.Namespace = other.Namespace
 
-	w.RunId = other.RunId
+	w.RunID = other.RunID
 	w.SnapshotName = other.SnapshotName
 
 	w.Pool = other.Pool
@@ -44,8 +44,8 @@ func (w *WriteBackerConfig) Merge(other *WriteBackerConfig) *WriteBackerConfig {
 		w.Namespace = other.Namespace
 	}
 
-	if other.RunId != 0 {
-		w.RunId = other.RunId
+	if other.RunID != 0 {
+		w.RunID = other.RunID
 	}
 	if len(other.SnapshotName) > 0 {
 		w.SnapshotName = other.SnapshotName

@@ -65,11 +65,11 @@ var sampleWorkPack workqueue.WorkPack = workqueue.WorkPack{
 	SnapshotName:   "lsdf-checksum-run-1",
 	Files: []workqueue.WorkPackFile{
 		workqueue.WorkPackFile{
-			Id:   3,
+			ID:   3,
 			Path: "/asdf",
 		},
 		workqueue.WorkPackFile{
-			Id:   5,
+			ID:   5,
 			Path: "/ghjj/asdff",
 		},
 	},

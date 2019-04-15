@@ -38,7 +38,7 @@ type Config struct {
 	FileSystemName string
 	RedisPrefix    string
 
-	RunId        uint64
+	RunID        uint64
 	SnapshotName string
 
 	DB     *meda.DB      `yaml:"-"`
@@ -48,27 +48,27 @@ type Config struct {
 	// EWMAScheduler contains the configuration for the EWMAScheduler
 	// SchedulingController. Here only static configuration options should be
 	// set.
-	// All known run time dependent options (database connections, RunId, etc.)
+	// All known run time dependent options (database connections, RunID, etc.)
 	// will be overwritten when the final configuration is assembled.
 	EWMAScheduler EWMASchedulerConfig
 	// Producer contains the configuration for the Producer. Here only static
 	// configuration options should be set.
-	// All known run time dependent options (database connections, RunId, etc.)
+	// All known run time dependent options (database connections, RunID, etc.)
 	// will be overwritten when the final configuration is assembled.
 	Producer ProducerConfig
 	// QueueWatcher contains the configuration for the QueueWatcher. Here only
 	// static configuration options should be set.
-	// All known run time dependent options (database connections, RunId, etc.)
+	// All known run time dependent options (database connections, RunID, etc.)
 	// will be overwritten when the final configuration is assembled.
 	QueueWatcher QueueWatcherConfig
 	// WriteBacker contains the configuration for the WriteBacker. Here only
 	// static configuration options should be set.
-	// All known run time dependent options (database connections, RunId, etc.)
+	// All known run time dependent options (database connections, RunID, etc.)
 	// will be overwritten when the final configuration is assembled.
 	WriteBacker WriteBackerConfig
 	// PerformanceMonitor contains the configuration for the PerformanceMonitor.
 	// Here only static configuration options should be set.
-	// All known run time dependent options (database connections, RunId, etc.)
+	// All known run time dependent options (database connections, RunID, etc.)
 	// will be overwritten when the final configuration is assembled.
 	PerformanceMonitor PerformanceMonitorConfig
 }
@@ -97,7 +97,7 @@ func New(config *Config) *WorkQueue {
 
 func (w *WorkQueue) Start(ctx context.Context) {
 	w.fieldLogger = w.Config.Logger.WithFields(log.Fields{
-		"run":        w.Config.RunId,
+		"run":        w.Config.RunID,
 		"snapshot":   w.Config.SnapshotName,
 		"filesystem": w.Config.FileSystemName,
 		"component":  "workqueue.WorkQueue",
@@ -257,7 +257,7 @@ func (w *WorkQueue) createWriteBacker() *WriteBacker {
 			FileSystemName: w.Config.FileSystemName,
 			Namespace:      GocraftWorkNamespace(w.Config.RedisPrefix),
 
-			RunId:        w.Config.RunId,
+			RunID:        w.Config.RunID,
 			SnapshotName: w.Config.SnapshotName,
 
 			Pool:   w.Config.Pool,
@@ -276,7 +276,7 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 			FileSystemName: w.Config.FileSystemName,
 			Namespace:      GocraftWorkNamespace(w.Config.RedisPrefix),
 
-			RunId:        w.Config.RunId,
+			RunID:        w.Config.RunID,
 			SnapshotName: w.Config.SnapshotName,
 
 			Pool:   w.Config.Pool,

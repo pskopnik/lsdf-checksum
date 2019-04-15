@@ -56,8 +56,8 @@ func (z *WorkPack) DecodeMsg(dc *msgp.Reader) (err error) {
 						return
 					}
 					switch msgp.UnsafeString(field) {
-					case "Id":
-						z.Files[za0001].Id, err = dc.ReadUint64()
+					case "ID":
+						z.Files[za0001].ID, err = dc.ReadUint64()
 						if err != nil {
 							return
 						}
@@ -116,12 +116,12 @@ func (z *WorkPack) EncodeMsg(en *msgp.Writer) (err error) {
 	}
 	for za0001 := range z.Files {
 		// map header, size 2
-		// write "Id"
+		// write "ID"
 		err = en.Append(0x82, 0xa2, 0x49, 0x64)
 		if err != nil {
 			return
 		}
-		err = en.WriteUint64(z.Files[za0001].Id)
+		err = en.WriteUint64(z.Files[za0001].ID)
 		if err != nil {
 			return
 		}
@@ -153,9 +153,9 @@ func (z *WorkPack) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendArrayHeader(o, uint32(len(z.Files)))
 	for za0001 := range z.Files {
 		// map header, size 2
-		// string "Id"
+		// string "ID"
 		o = append(o, 0x82, 0xa2, 0x49, 0x64)
-		o = msgp.AppendUint64(o, z.Files[za0001].Id)
+		o = msgp.AppendUint64(o, z.Files[za0001].ID)
 		// string "Path"
 		o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
 		o = msgp.AppendString(o, z.Files[za0001].Path)
@@ -213,8 +213,8 @@ func (z *WorkPack) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					switch msgp.UnsafeString(field) {
-					case "Id":
-						z.Files[za0001].Id, bts, err = msgp.ReadUint64Bytes(bts)
+					case "ID":
+						z.Files[za0001].ID, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							return
 						}
@@ -267,8 +267,8 @@ func (z *WorkPackFile) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Id":
-			z.Id, err = dc.ReadUint64()
+		case "ID":
+			z.ID, err = dc.ReadUint64()
 			if err != nil {
 				return
 			}
@@ -290,12 +290,12 @@ func (z *WorkPackFile) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z WorkPackFile) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "Id"
+	// write "ID"
 	err = en.Append(0x82, 0xa2, 0x49, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.Id)
+	err = en.WriteUint64(z.ID)
 	if err != nil {
 		return
 	}
@@ -315,9 +315,9 @@ func (z WorkPackFile) EncodeMsg(en *msgp.Writer) (err error) {
 func (z WorkPackFile) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "Id"
+	// string "ID"
 	o = append(o, 0x82, 0xa2, 0x49, 0x64)
-	o = msgp.AppendUint64(o, z.Id)
+	o = msgp.AppendUint64(o, z.ID)
 	// string "Path"
 	o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
 	o = msgp.AppendString(o, z.Path)
@@ -340,8 +340,8 @@ func (z *WorkPackFile) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Id":
-			z.Id, bts, err = msgp.ReadUint64Bytes(bts)
+		case "ID":
+			z.ID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				return
 			}
@@ -407,8 +407,8 @@ func (z *WriteBackPack) DecodeMsg(dc *msgp.Reader) (err error) {
 						return
 					}
 					switch msgp.UnsafeString(field) {
-					case "Id":
-						z.Files[za0001].Id, err = dc.ReadUint64()
+					case "ID":
+						z.Files[za0001].ID, err = dc.ReadUint64()
 						if err != nil {
 							return
 						}
@@ -449,12 +449,12 @@ func (z *WriteBackPack) EncodeMsg(en *msgp.Writer) (err error) {
 	}
 	for za0001 := range z.Files {
 		// map header, size 2
-		// write "Id"
+		// write "ID"
 		err = en.Append(0x82, 0xa2, 0x49, 0x64)
 		if err != nil {
 			return
 		}
-		err = en.WriteUint64(z.Files[za0001].Id)
+		err = en.WriteUint64(z.Files[za0001].ID)
 		if err != nil {
 			return
 		}
@@ -480,9 +480,9 @@ func (z *WriteBackPack) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendArrayHeader(o, uint32(len(z.Files)))
 	for za0001 := range z.Files {
 		// map header, size 2
-		// string "Id"
+		// string "ID"
 		o = append(o, 0x82, 0xa2, 0x49, 0x64)
-		o = msgp.AppendUint64(o, z.Files[za0001].Id)
+		o = msgp.AppendUint64(o, z.Files[za0001].ID)
 		// string "Checksum"
 		o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
 		o = msgp.AppendBytes(o, z.Files[za0001].Checksum)
@@ -530,8 +530,8 @@ func (z *WriteBackPack) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					switch msgp.UnsafeString(field) {
-					case "Id":
-						z.Files[za0001].Id, bts, err = msgp.ReadUint64Bytes(bts)
+					case "ID":
+						z.Files[za0001].ID, bts, err = msgp.ReadUint64Bytes(bts)
 						if err != nil {
 							return
 						}
@@ -584,8 +584,8 @@ func (z *WriteBackPackFile) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Id":
-			z.Id, err = dc.ReadUint64()
+		case "ID":
+			z.ID, err = dc.ReadUint64()
 			if err != nil {
 				return
 			}
@@ -607,12 +607,12 @@ func (z *WriteBackPackFile) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *WriteBackPackFile) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "Id"
+	// write "ID"
 	err = en.Append(0x82, 0xa2, 0x49, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.Id)
+	err = en.WriteUint64(z.ID)
 	if err != nil {
 		return
 	}
@@ -632,9 +632,9 @@ func (z *WriteBackPackFile) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *WriteBackPackFile) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "Id"
+	// string "ID"
 	o = append(o, 0x82, 0xa2, 0x49, 0x64)
-	o = msgp.AppendUint64(o, z.Id)
+	o = msgp.AppendUint64(o, z.ID)
 	// string "Checksum"
 	o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
 	o = msgp.AppendBytes(o, z.Checksum)
@@ -657,8 +657,8 @@ func (z *WriteBackPackFile) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Id":
-			z.Id, bts, err = msgp.ReadUint64Bytes(bts)
+		case "ID":
+			z.ID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				return
 			}
