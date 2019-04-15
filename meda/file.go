@@ -302,6 +302,24 @@ func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, 
 	)
 }
 
+func (f *FilesToBeReadFetcher) advanceToNextChunk(ctx context.Context, querier sqlx.QueryerContext) (bool, error) {
+	if querier == nil {
+		querier = &f.db.DB
+	}
+
+	ok := f.it.Next(ctx, querier)
+	if !ok {
+		if f.it.Err() != nil {
+			return false, f.it.Err()
+		}
+		// no more chunks, chunkIterator exhausted
+		return false, nil
+	}
+
+	f.chunkContainsRows = true
+	return true, nil
+}
+
 // AppendNext fetches the next batch of rows representing files to be read
 // from the database. The rows are appended to the files slice.
 //
@@ -319,15 +337,12 @@ func (f *FilesToBeReadFetcher) AppendNext(files []File, ctx context.Context, que
 		baseInd := len(files)
 
 		if !f.chunkContainsRows {
-			ok := f.it.Next(ctx, querier)
-			if !ok {
-				if f.it.Err() != nil {
-					return files[:baseInd], f.it.Err()
-				}
-				// no more chunks
+			ok, err := f.advanceToNextChunk(ctx, querier)
+			if err != nil {
+				return files[:baseInd], err
+			} else if !ok {
 				break
 			}
-			f.chunkContainsRows = true
 		}
 
 		rows, err := f.queryFilesToBeReadPaginated(ctx, querier, queryLimit)
