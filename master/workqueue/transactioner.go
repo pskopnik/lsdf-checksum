@@ -41,17 +41,17 @@ func newTransactioner(ctx context.Context, config *transactionerConfig) *transac
 	}
 }
 
-func (t *transactioner) FetchFilesByIds(ctx context.Context, fileIds []uint64) ([]meda.File, error) {
+func (t *transactioner) FetchFilesByIDs(ctx context.Context, fileIDs []uint64) ([]meda.File, error) {
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
-			return nil, errors.Wrap(err, "(*transactioner).FetchFilesByIds")
+			return nil, errors.Wrap(err, "(*transactioner).FetchFilesByIDs")
 		}
 	}
 
-	files, err := t.Config.DB.FilesFetchFilesByIds(ctx, t.tx, fileIds)
+	files, err := t.Config.DB.FilesFetchFilesByIDs(ctx, t.tx, fileIDs)
 	if err != nil {
-		return nil, errors.Wrap(err, "(*transactioner).FetchFilesByIds")
+		return nil, errors.Wrap(err, "(*transactioner).FetchFilesByIDs")
 	}
 
 	// t.txQueryCount += 1
@@ -66,17 +66,17 @@ func (t *transactioner) FetchFilesByIds(ctx context.Context, fileIds []uint64) (
 	return files, nil
 }
 
-func (t *transactioner) AppendFilesByIds(files []meda.File, ctx context.Context, fileIds []uint64) ([]meda.File, error) {
+func (t *transactioner) AppendFilesByIDs(files []meda.File, ctx context.Context, fileIDs []uint64) ([]meda.File, error) {
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
-			return files, errors.Wrap(err, "(*transactioner).FetchFilesByIds")
+			return files, errors.Wrap(err, "(*transactioner).FetchFilesByIDs")
 		}
 	}
 
-	files, err := t.Config.DB.FilesAppendFilesByIds(files, ctx, t.tx, fileIds)
+	files, err := t.Config.DB.FilesAppendFilesByIDs(files, ctx, t.tx, fileIDs)
 	if err != nil {
-		return files, errors.Wrap(err, "(*transactioner).FetchFilesByIds")
+		return files, errors.Wrap(err, "(*transactioner).FetchFilesByIDs")
 	}
 
 	// t.txQueryCount += 1
@@ -132,13 +132,13 @@ func (t *transactioner) UpdateFilesChecksums(ctx context.Context, files []meda.F
 		}
 	}
 
-	update, fileIds, err := t.buildUpdate(files, runID)
+	update, fileIDs, err := t.buildUpdate(files, runID)
 	if err != nil {
 		return errors.Wrap(err, "(*transactioner).UpdateFilesChecksums")
 	}
 
 	_, err = update.RunWith(t.tx).ExecContext(ctx)
-	t.returnInterfaceSliceToPool(fileIds)
+	t.returnInterfaceSliceToPool(fileIDs)
 	if err != nil {
 		return errors.Wrap(err, "(*transactioner).UpdateFilesChecksums: exec query")
 	}
@@ -159,8 +159,8 @@ func (t *transactioner) UpdateFilesChecksums(ctx context.Context, files []meda.F
 func (t *transactioner) buildUpdate(files []meda.File, runID uint64) (squirrel.UpdateBuilder, []interface{}, error) {
 	checksumCaseBuilder := squirrel.Case("id")
 
-	fileIds := t.getInterfaceSliceFromPool()
-	fileIds = append(fileIds, make([]interface{}, len(files))...)
+	fileIDs := t.getInterfaceSliceFromPool()
+	fileIDs = append(fileIDs, make([]interface{}, len(files))...)
 
 	for ind, _ := range files {
 		// Pointer to file in files, don't copy
@@ -170,12 +170,12 @@ func (t *transactioner) buildUpdate(files []meda.File, runID uint64) (squirrel.U
 			squirrel.Expr(squirrel.Placeholders(1), file.ID),
 			squirrel.Expr(squirrel.Placeholders(1), file.Checksum),
 		)
-		fileIds[ind] = file.ID
+		fileIDs[ind] = file.ID
 	}
 
 	checksumCaseSql, checksumCaseArgs, err := checksumCaseBuilder.ToSql()
 	if err != nil {
-		t.returnInterfaceSliceToPool(fileIds)
+		t.returnInterfaceSliceToPool(fileIDs)
 		return squirrel.UpdateBuilder{}, nil, errors.Wrap(err, "(*transactioner).buildUpdate")
 	}
 
@@ -184,9 +184,9 @@ func (t *transactioner) buildUpdate(files []meda.File, runID uint64) (squirrel.U
 		Set("to_be_compared", 0).
 		Set("checksum", squirrel.Expr(checksumCaseSql, checksumCaseArgs...)).
 		Set("last_read", runID).
-		Where("id IN ("+squirrel.Placeholders(len(fileIds))+")", fileIds...)
+		Where("id IN ("+squirrel.Placeholders(len(fileIDs))+")", fileIDs...)
 
-	return update, fileIds, nil
+	return update, fileIDs, nil
 }
 
 func (t *transactioner) getInterfaceSliceFromPool() []interface{} {

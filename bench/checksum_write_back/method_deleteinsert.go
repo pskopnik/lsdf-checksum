@@ -39,7 +39,7 @@ type DeleteInsertMethodProcessor struct {
 func (d *DeleteInsertMethodProcessor) ProcessBatch(ctx context.Context, batch Batch) error {
 	var err error
 	calculatedChecksums := batch.Checksums
-	fileIds := batch.Ids
+	fileIDs := batch.IDs
 
 	if d.tx == nil {
 		err = d.openTx(ctx)
@@ -48,7 +48,7 @@ func (d *DeleteInsertMethodProcessor) ProcessBatch(ctx context.Context, batch Ba
 		}
 	}
 
-	files, err := d.runnerConfig.DB.FilesFetchFilesByIds(ctx, d.tx, fileIds)
+	files, err := d.runnerConfig.DB.FilesFetchFilesByIDs(ctx, d.tx, fileIDs)
 	if err != nil {
 		return err
 	}
@@ -102,7 +102,7 @@ func (d *DeleteInsertMethodProcessor) ProcessBatch(ctx context.Context, batch Ba
 		}
 	}
 
-	_, err = d.filesDeleteFilesByIds(ctx, d.tx, fileIds)
+	_, err = d.filesDeleteFilesByIDs(ctx, d.tx, fileIDs)
 	if err != nil {
 		return err
 	}
@@ -149,18 +149,18 @@ func (d *DeleteInsertMethodProcessor) buildInsertBase() squirrel.InsertBuilder {
 		RunWith(d.tx)
 }
 
-const filesDeleteFilesByIdsQuery = GenericQuery(`
+const filesDeleteFilesByIDsQuery = GenericQuery(`
 	DELETE FROM {FILES}
 		WHERE id IN (?)
 	;
 `)
 
-func (d *DeleteInsertMethodProcessor) filesDeleteFilesByIds(ctx context.Context, querier RebindExecerContext, fileIds []uint64) (sql.Result, error) {
+func (d *DeleteInsertMethodProcessor) filesDeleteFilesByIDs(ctx context.Context, querier RebindExecerContext, fileIDs []uint64) (sql.Result, error) {
 	if querier == nil {
 		querier = d.runnerConfig.DB
 	}
 
-	query, args, err := sqlx.In(filesDeleteFilesByIdsQuery.SubstituteAll(d.runnerConfig.DB), fileIds)
+	query, args, err := sqlx.In(filesDeleteFilesByIDsQuery.SubstituteAll(d.runnerConfig.DB), fileIDs)
 	if err != nil {
 		return nil, err
 	}

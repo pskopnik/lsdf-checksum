@@ -53,7 +53,7 @@ type File struct {
 	LastRead         NullUint64 `db:"last_read"`
 }
 
-const filesQueryFilesByIdsQuery = GenericQuery(`
+const filesQueryFilesByIDsQuery = GenericQuery(`
 	SELECT
 		id,
 		rand,
@@ -70,12 +70,12 @@ const filesQueryFilesByIdsQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) FilesQueryFilesByIds(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) (*sqlx.Rows, error) {
+func (d *DB) FilesQueryFilesByIDs(ctx context.Context, querier RebindQueryerContext, fileIDs []uint64) (*sqlx.Rows, error) {
 	if querier == nil {
 		querier = &d.DB
 	}
 
-	query, args, err := sqlx.In(filesQueryFilesByIdsQuery.SubstituteAll(d), fileIds)
+	query, args, err := sqlx.In(filesQueryFilesByIDsQuery.SubstituteAll(d), fileIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -87,17 +87,17 @@ func (d *DB) FilesQueryFilesByIds(ctx context.Context, querier RebindQueryerCont
 	return querier.QueryxContext(ctx, query, args...)
 }
 
-func (d *DB) FilesFetchFilesByIds(ctx context.Context, querier RebindQueryerContext, fileIds []uint64) ([]File, error) {
-	files := make([]File, 0, len(fileIds))
+func (d *DB) FilesFetchFilesByIDs(ctx context.Context, querier RebindQueryerContext, fileIDs []uint64) ([]File, error) {
+	files := make([]File, 0, len(fileIDs))
 
-	for i := 0; i < len(fileIds); {
+	for i := 0; i < len(fileIDs); {
 		var file File
 		rangeEnd := i + MaxPlaceholders
-		if rangeEnd >= len(fileIds) {
-			rangeEnd = len(fileIds)
+		if rangeEnd >= len(fileIDs) {
+			rangeEnd = len(fileIDs)
 		}
 
-		rows, err := d.FilesQueryFilesByIds(ctx, querier, fileIds[i:rangeEnd])
+		rows, err := d.FilesQueryFilesByIDs(ctx, querier, fileIDs[i:rangeEnd])
 		if err != nil {
 			return []File{}, err
 		}

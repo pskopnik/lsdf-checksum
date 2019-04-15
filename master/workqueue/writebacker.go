@@ -259,12 +259,12 @@ func (w *WriteBacker) processor() error {
 func (w *WriteBacker) processBatch(ctx context.Context, batch *filesBatch, transactioner *transactioner) error {
 	w.fieldLogger.Debug("Starting processing of batch")
 
-	checksums, fileIds := w.collectFilesInBatch(batch)
+	checksums, fileIDs := w.collectFilesInBatch(batch)
 
 	// TODO pool files
 	var files []meda.File
 
-	files, err := transactioner.AppendFilesByIds(files, ctx, fileIds)
+	files, err := transactioner.AppendFilesByIDs(files, ctx, fileIDs)
 	if err != nil {
 		return pkgErrors.Wrap(err, "(*WriteBacker).processBatch: fetch files from database")
 	}
@@ -315,8 +315,8 @@ func (w *WriteBacker) processBatch(ctx context.Context, batch *filesBatch, trans
 
 func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte, []uint64) {
 	checksums := make(map[uint64][]byte)
-	// TODO use pool for fileIds
-	fileIds := make([]uint64, len(batch.Files))
+	// TODO use pool for fileIDs
+	fileIDs := make([]uint64, len(batch.Files))
 
 	for i := range batch.Files {
 		file := &batch.Files[i]
@@ -332,10 +332,10 @@ func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte,
 		}
 
 		checksums[file.ID] = file.Checksum
-		fileIds[i] = file.ID
+		fileIDs[i] = file.ID
 	}
 
-	return checksums, fileIds
+	return checksums, fileIDs
 }
 
 func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File, checksum []byte, transactioner *transactioner) error {

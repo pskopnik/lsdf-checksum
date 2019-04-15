@@ -38,7 +38,7 @@ type UpdateCaseMethodProcessor struct {
 func (u *UpdateCaseMethodProcessor) ProcessBatch(ctx context.Context, batch Batch) error {
 	var err error
 	calculatedChecksums := batch.Checksums
-	fileIds := batch.Ids
+	fileIDs := batch.IDs
 
 	if u.tx == nil {
 		err = u.openTx(ctx)
@@ -47,7 +47,7 @@ func (u *UpdateCaseMethodProcessor) ProcessBatch(ctx context.Context, batch Batc
 		}
 	}
 
-	files, err := u.runnerConfig.DB.FilesFetchFilesByIds(ctx, u.tx, fileIds)
+	files, err := u.runnerConfig.DB.FilesFetchFilesByIDs(ctx, u.tx, fileIDs)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (u *UpdateCaseMethodProcessor) Finalise(_ context.Context) (err error) {
 
 func (u *UpdateCaseMethodProcessor) buildUpdate(
 	checksumCaseBuilder squirrel.CaseBuilder,
-	fileIds []interface{},
+	fileIDs []interface{},
 ) (squirrel.UpdateBuilder, error) {
 	checksumCaseSql, checksumCaseArgs, err := checksumCaseBuilder.ToSql()
 	if err != nil {
@@ -138,7 +138,7 @@ func (u *UpdateCaseMethodProcessor) buildUpdate(
 		Set("to_be_compared", 0).
 		Set("checksum", squirrel.Expr(checksumCaseSql, checksumCaseArgs...)).
 		Set("last_read", u.runnerConfig.RunID).
-		Where("id IN ("+squirrel.Placeholders(len(fileIds))+")", fileIds...).
+		Where("id IN ("+squirrel.Placeholders(len(fileIDs))+")", fileIDs...).
 		RunWith(u.tx)
 
 	return update, nil

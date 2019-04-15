@@ -38,7 +38,7 @@ type OnDuplicateMethodProcessor struct {
 func (o *OnDuplicateMethodProcessor) ProcessBatch(ctx context.Context, batch Batch) error {
 	var err error
 	calculatedChecksums := batch.Checksums
-	fileIds := batch.Ids
+	fileIDs := batch.IDs
 
 	if o.tx == nil {
 		err = o.openTx(ctx)
@@ -47,7 +47,7 @@ func (o *OnDuplicateMethodProcessor) ProcessBatch(ctx context.Context, batch Bat
 		}
 	}
 
-	files, err := o.runnerConfig.DB.FilesFetchFilesByIds(ctx, o.tx, fileIds)
+	files, err := o.runnerConfig.DB.FilesFetchFilesByIDs(ctx, o.tx, fileIDs)
 	if err != nil {
 		return err
 	}

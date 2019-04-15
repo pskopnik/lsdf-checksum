@@ -17,7 +17,7 @@ type Generator struct {
 }
 
 type Batch struct {
-	Ids       []uint64
+	IDs       []uint64
 	Checksums map[uint64][]byte
 }
 
@@ -74,7 +74,7 @@ func (g *Generator) CollectBatch(batchSize int) Batch {
 	}
 
 	return Batch{
-		Ids:       ids,
+		IDs:       ids,
 		Checksums: checksums,
 	}
 }

@@ -9,7 +9,7 @@ import (
 )
 
 // ChunkIterator is a utility to iterate over fixed-size chunks of a table.
-// Each chunk consists of a number of rows whose Ids are in between two
+// Each chunk consists of a number of rows whose IDs are in between two
 // values. ChunkIterator has no associated resources and does not have to be
 // closed.
 type ChunkIterator struct {

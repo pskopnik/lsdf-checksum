@@ -33,14 +33,14 @@ type BasicMethodProcessor struct {
 
 func (b *BasicMethodProcessor) ProcessBatch(ctx context.Context, batch Batch) error {
 	calculatedChecksums := batch.Checksums
-	fileIds := batch.Ids
+	fileIDs := batch.IDs
 
 	tx, filesUpdatePrepStmt, err := b.openTxAndStmts(ctx)
 	if err != nil {
 		return err
 	}
 
-	files, err := b.runnerConfig.DB.FilesFetchFilesByIds(ctx, tx, fileIds)
+	files, err := b.runnerConfig.DB.FilesFetchFilesByIDs(ctx, tx, fileIDs)
 	if err != nil {
 		_ = b.closeTxAndStmts(tx, filesUpdatePrepStmt)
 		return err

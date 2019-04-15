@@ -15,7 +15,7 @@ const truncateInsertsQuery = meda.GenericQuery(`
 
 // nextInsertsChunkQuery is the SQL query searching for the last row to be
 // included in the next fixed-size chunk of rows of the inserts table. Each
-// chunk consists of a number of rows whose Ids are in between two values.
+// chunk consists of a number of rows whose IDs are in between two values.
 // This allows chunked execution of queries on the inserts table. The query is
 // meant to be run using query.
 //
@@ -45,7 +45,7 @@ const nextInsertsChunkQuery = meda.GenericQuery(`
 
 // nextFilesChunkQuery is the SQL query searching for the last row to be
 // included in the next fixed-size chunk of rows of the files table. Each
-// chunk consists of a number of rows whose Ids are in between two values.
+// chunk consists of a number of rows whose IDs are in between two values.
 // This allows chunked execution of queries on the files table. The query is
 // meant to be run using query.
 //

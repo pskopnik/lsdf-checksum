@@ -242,12 +242,12 @@ const checksumWarningsDeleteByIDQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) ChecksumWarningsDeleteByID(ctx context.Context, execer RebindExecerContext, checksumWarningIds []uint64) (sql.Result, error) {
+func (d *DB) ChecksumWarningsDeleteByID(ctx context.Context, execer RebindExecerContext, checksumWarningIDs []uint64) (sql.Result, error) {
 	if execer == nil {
 		execer = &d.DB
 	}
 
-	query, args, err := sqlx.In(checksumWarningsDeleteByIDQuery.SubstituteAll(d), checksumWarningIds)
+	query, args, err := sqlx.In(checksumWarningsDeleteByIDQuery.SubstituteAll(d), checksumWarningIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +272,7 @@ func (r rowsAffectedResult) RowsAffected() (int64, error) {
 }
 
 func (d *DB) ChecksumWarningsDeleteChecksumWarnings(ctx context.Context, execer RebindExecerContext, checksumWarnings []ChecksumWarning) (sql.Result, error) {
-	var checksumWarningIds []uint64
+	var checksumWarningIDs []uint64
 	var totalRowsAffected int64
 
 	for i := 0; i < len(checksumWarnings); {
@@ -280,13 +280,13 @@ func (d *DB) ChecksumWarningsDeleteChecksumWarnings(ctx context.Context, execer 
 		if rangeEnd >= len(checksumWarnings) {
 			rangeEnd = len(checksumWarnings)
 		}
-		checksumWarningIds = append(checksumWarningIds[:0], make([]uint64, rangeEnd-i)...)
+		checksumWarningIDs = append(checksumWarningIDs[:0], make([]uint64, rangeEnd-i)...)
 
 		for ind := range checksumWarnings[i:rangeEnd] {
-			checksumWarningIds[ind] = checksumWarnings[i+ind].ID
+			checksumWarningIDs[ind] = checksumWarnings[i+ind].ID
 		}
 
-		res, err := d.ChecksumWarningsDeleteByID(ctx, execer, checksumWarningIds)
+		res, err := d.ChecksumWarningsDeleteByID(ctx, execer, checksumWarningIDs)
 		if rowsAffected, err := res.RowsAffected(); err == nil {
 			totalRowsAffected += rowsAffected
 		}
