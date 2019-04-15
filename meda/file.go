@@ -267,18 +267,18 @@ type FilesToBeReadFetcherConfig struct {
 type FilesToBeReadFetcher struct {
 	db     *DB
 	config *FilesToBeReadFetcherConfig
-	// it is the ChunkIterator used to limit all queries to only a range of
-	// rows.
+	// it is the ChunkIteratorByRand used to limit all queries to only a range
+	// of rows.
 	// The chunk size is not enforced accurately, as one rand value may refer to
 	// multiple rows.
-	it                ChunkIterator
+	it                ChunkIteratorByRand
 	chunkContainsRows bool
 	lastRand          float64
 	lastID            uint64
 }
 
 func (f *FilesToBeReadFetcher) initialise() {
-	f.it = ChunkIterator{
+	f.it = ChunkIteratorByRand{
 		ChunkSize:      f.config.ChunkSize,
 		NextChunkQuery: filesToBeReadFetcherNextChunkQuery.SubstituteAll(f.db),
 	}
@@ -297,7 +297,7 @@ func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, 
 		f.lastRand,
 		f.lastRand,
 		f.lastID,
-		f.it.LastID(),
+		f.it.LastRand(),
 		limit,
 	)
 }
