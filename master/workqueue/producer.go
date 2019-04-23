@@ -35,7 +35,7 @@ type ProducerConfig struct {
 var ProducerDefaultConfig = &ProducerConfig{
 	MinWorkPackFileSize:   5 * 1024 * 1024, // 5 MiB
 	MaxWorkPackFileNumber: 1000,
-	FetchRowChunkSize:     100000,
+	FetchRowChunkSize:     50000,
 	FetchRowBatchSize:     1000,
 	RowBufferSize:         1000,
 }
