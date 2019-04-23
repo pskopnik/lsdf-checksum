@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 const insertsTableNameBase = "inserts"
@@ -24,7 +25,11 @@ const insertsCreateTableQuery = GenericQuery(`
 
 func (d *DB) insertsCreateTable(ctx context.Context) error {
 	_, err := d.ExecContext(ctx, insertsCreateTableQuery.SubstituteAll(d))
-	return err
+	if err != nil {
+		return errors.Wrap(err, "(*DB).insertsCreateTable")
+	}
+
+	return nil
 }
 
 type Insert struct {
@@ -48,5 +53,10 @@ func (d *DB) InsertsPrepareInsert(ctx context.Context, preparer NamedPreparerCon
 		preparer = &d.DB
 	}
 
-	return preparer.PrepareNamedContext(ctx, insertsPrepareInsertQuery.SubstituteAll(d))
+	stmt, err := preparer.PrepareNamedContext(ctx, insertsPrepareInsertQuery.SubstituteAll(d))
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).InsertsPrepareInsert")
+	}
+
+	return stmt, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 const filesTableNameBase = "files"
@@ -39,7 +40,11 @@ const filesCreateTableQuery = GenericQuery(`
 
 func (d *DB) filesCreateTable(ctx context.Context) error {
 	_, err := d.ExecContext(ctx, filesCreateTableQuery.SubstituteAll(d))
-	return err
+	if err != nil {
+		return errors.Wrap(err, "(*DB).filesCreateTable")
+	}
+
+	return nil
 }
 
 type File struct {
@@ -71,18 +76,18 @@ func filesAppendFromRowsAndClose(files []File, rows *sqlx.Rows) ([]File, error) 
 		err = rows.StructScan(&files[i])
 		if err != nil {
 			_ = rows.Close()
-			return files[:baseInd], err
+			return files[:baseInd], errors.Wrap(err, "filesAppendFromRowsAndClose: scan row into struct")
 		}
 
 		i += 1
 	}
 	if err = rows.Err(); err != nil {
 		_ = rows.Close()
-		return files[:baseInd], err
+		return files[:baseInd], errors.Wrap(err, "filesAppendFromRowsAndClose: iterate over rows")
 	}
 
 	if err = rows.Close(); err != nil {
-		return files[:baseInd], err
+		return files[:baseInd], errors.Wrap(err, "filesAppendFromRowsAndClose: close rows")
 	}
 
 	return files, nil
@@ -106,7 +111,7 @@ func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.
 		querier = &d.DB
 	}
 
-	return querier.QueryxContext(
+	rows, err := querier.QueryxContext(
 		ctx,
 		filesQueryFilesToBeReadPaginatedQuery.SubstituteAll(d),
 		startRand,
@@ -114,19 +119,34 @@ func (d *DB) FilesQueryFilesToBeReadPaginated(ctx context.Context, querier sqlx.
 		startID,
 		limit,
 	)
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).FilesQueryFilesToBeReadPaginated")
+	}
+
+	return rows, nil
 }
 
 func (d *DB) FilesFetchFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, startRand float64, startID, limit uint64) ([]File, error) {
-	return d.FilesAppendFilesToBeReadPaginated(nil, ctx, querier, startRand, startID, limit)
+	files, err := d.FilesAppendFilesToBeReadPaginated(nil, ctx, querier, startRand, startID, limit)
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).FilesFetchFilesToBeReadPaginated")
+	}
+
+	return files, nil
 }
 
 func (d *DB) FilesAppendFilesToBeReadPaginated(files []File, ctx context.Context, querier sqlx.QueryerContext, startRand float64, startID, limit uint64) ([]File, error) {
 	rows, err := d.FilesQueryFilesToBeReadPaginated(ctx, querier, startRand, startID, limit)
 	if err != nil {
-		return files, err
+		return files, errors.Wrap(err, "(*DB).FilesAppendFilesToBeReadPaginated")
 	}
 
-	return filesAppendFromRowsAndClose(files, rows)
+	files, err = filesAppendFromRowsAndClose(files, rows)
+	if err != nil {
+		return files, errors.Wrap(err, "(*DB).FilesAppendFilesToBeReadPaginated")
+	}
+
+	return files, nil
 }
 
 const filesQueryFilesByIDsQuery = GenericQuery(`
@@ -153,20 +173,30 @@ func (d *DB) FilesQueryFilesByIDs(ctx context.Context, querier RebindQueryerCont
 
 	query, args, err := sqlx.In(filesQueryFilesByIDsQuery.SubstituteAll(d), fileIDs)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "(*DB).FilesQueryFilesByIDs: expand query")
 	}
 
 	// query is a generic query using `?` as the bindvar.
 	// It needs to be rebound to match the backend in use.
 	query = querier.Rebind(query)
 
-	return querier.QueryxContext(ctx, query, args...)
+	res, err := querier.QueryxContext(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).FilesQueryFilesByIDs: exec query")
+	}
+
+	return res, nil
 }
 
 func (d *DB) FilesFetchFilesByIDs(ctx context.Context, querier RebindQueryerContext, fileIDs []uint64) ([]File, error) {
 	files := make([]File, 0, len(fileIDs))
 
-	return d.FilesAppendFilesByIDs(files, ctx, querier, fileIDs)
+	files, err := d.FilesAppendFilesByIDs(files, ctx, querier, fileIDs)
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).FilesFetchFilesByIDs")
+	}
+
+	return files, nil
 }
 
 func (d *DB) FilesAppendFilesByIDs(files []File, ctx context.Context, querier RebindQueryerContext, fileIDs []uint64) ([]File, error) {
@@ -180,12 +210,12 @@ func (d *DB) FilesAppendFilesByIDs(files []File, ctx context.Context, querier Re
 
 		rows, err := d.FilesQueryFilesByIDs(ctx, querier, fileIDs[i:rangeEnd])
 		if err != nil {
-			return files[:baseInd], err
+			return files[:baseInd], errors.Wrap(err, "(*DB).FilesAppendFilesByIDs")
 		}
 
 		files, err = filesAppendFromRowsAndClose(files, rows)
 		if err != nil {
-			return files[:baseInd], err
+			return files[:baseInd], errors.Wrap(err, "(*DB).FilesAppendFilesByIDs")
 		}
 
 		i = rangeEnd
@@ -210,7 +240,12 @@ func (d *DB) FilesPrepareUpdateChecksum(ctx context.Context, preparer NamedPrepa
 		preparer = &d.DB
 	}
 
-	return preparer.PrepareNamedContext(ctx, filesPrepareUpdateChecksumQuery.SubstituteAll(d))
+	stmt, err := preparer.PrepareNamedContext(ctx, filesPrepareUpdateChecksumQuery.SubstituteAll(d))
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).FilesPrepareUpdateChecksum")
+	}
+
+	return stmt, nil
 }
 
 const filesToBeReadFetcherFetchQuery = GenericQuery(`
@@ -271,7 +306,7 @@ func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, 
 		querier = &f.db.DB
 	}
 
-	return querier.QueryxContext(
+	rows, err := querier.QueryxContext(
 		ctx,
 		filesToBeReadFetcherFetchQuery.SubstituteAll(f.db),
 		f.lastRand,
@@ -280,6 +315,11 @@ func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, 
 		f.it.LastRand(),
 		limit,
 	)
+	if err != nil {
+		return nil, errors.Wrap(err, "(*FilesToBeReadFetcher).queryFilesToBeReadPaginated")
+	}
+
+	return rows, nil
 }
 
 func (f *FilesToBeReadFetcher) advanceToNextChunk(ctx context.Context, querier sqlx.QueryerContext) (bool, error) {
@@ -290,7 +330,7 @@ func (f *FilesToBeReadFetcher) advanceToNextChunk(ctx context.Context, querier s
 	ok := f.it.Next(ctx, querier)
 	if !ok {
 		if f.it.Err() != nil {
-			return false, f.it.Err()
+			return false, errors.Wrap(f.it.Err(), "(*FilesToBeReadFetcher).advanceToNextChunk")
 		}
 		// no more chunks, chunkIterator exhausted
 		return false, nil
@@ -319,7 +359,7 @@ func (f *FilesToBeReadFetcher) AppendNext(files []File, ctx context.Context, que
 		if !f.chunkContainsRows {
 			ok, err := f.advanceToNextChunk(ctx, querier)
 			if err != nil {
-				return files[:baseInd], err
+				return files[:baseInd], errors.Wrap(err, "(*FilesToBeReadFetcher).AppendNext")
 			} else if !ok {
 				break
 			}
@@ -327,11 +367,11 @@ func (f *FilesToBeReadFetcher) AppendNext(files []File, ctx context.Context, que
 
 		rows, err := f.queryFilesToBeReadPaginated(ctx, querier, queryLimit)
 		if err != nil {
-			return files[:baseInd], err
+			return files[:baseInd], errors.Wrap(err, "(*FilesToBeReadFetcher).AppendNext")
 		}
 		files, err = filesAppendFromRowsAndClose(files, rows)
 		if err != nil {
-			return files[:baseInd], err
+			return files[:baseInd], errors.Wrap(err, "(*FilesToBeReadFetcher).AppendNext")
 		}
 
 		if len(files[baseInd:]) > 0 {
@@ -361,7 +401,12 @@ func (f *FilesToBeReadFetcher) AppendNext(files []File, ctx context.Context, que
 // returned Files slice is less than limit, the end of the table has been
 // reached.
 func (f *FilesToBeReadFetcher) FetchNext(ctx context.Context, querier sqlx.QueryerContext, limit uint64) ([]File, error) {
-	return f.AppendNext(nil, ctx, querier, limit)
+	files, err := f.AppendNext(nil, ctx, querier, limit)
+	if err != nil {
+		return nil, errors.Wrap(err, "(*FilesToBeReadFetcher).FetchNext")
+	}
+
+	return files, nil
 }
 
 func (d *DB) FilesToBeReadFetcher(config *FilesToBeReadFetcherConfig) FilesToBeReadFetcher {

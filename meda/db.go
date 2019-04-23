@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 // MaxPlaceholders is the maximum number of placeholders ('?') allowed in a
@@ -41,7 +42,7 @@ type DB struct {
 func Open(config *Config) (*DB, error) {
 	sqlxDB, err := sqlx.Open(config.Driver, config.DataSourceName)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "meda.Open: open database")
 	}
 
 	db := &DB{
@@ -89,7 +90,7 @@ func (d *DB) GetVersion(ctx context.Context) (string, error) {
 
 	err := d.QueryRow(getVersionQuery).Scan(&version)
 	if err != nil {
-		return "", err
+		return "", errors.Wrap(err, "(*DB).GetVersion")
 	}
 
 	return version, nil
@@ -106,27 +107,27 @@ func (d *DB) Migrate(ctx context.Context) error {
 
 	err = d.checksumWarningsCreateTable(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*DB).Migrate")
 	}
 
 	err = d.filesCreateTable(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*DB).Migrate")
 	}
 
 	err = d.insertsCreateTable(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*DB).Migrate")
 	}
 
 	err = d.runsCreateTable(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*DB).Migrate")
 	}
 
 	err = d.dbLockCreateTable(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "(*DB).Migrate")
 	}
 
 	return nil

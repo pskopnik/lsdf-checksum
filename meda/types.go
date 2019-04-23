@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 var _ NamedPreparer = &sqlx.DB{}
@@ -59,6 +60,7 @@ func (t *Time) Scan(value interface{}) (err error) {
 	nt := mysql.NullTime{}
 	err = nt.Scan(value)
 	if err != nil {
+		err = errors.Wrap(err, "(*Time).Scan")
 		return
 	}
 
@@ -89,6 +91,7 @@ func (n *NullUint64) Scan(value interface{}) (err error) {
 	nint64 := sql.NullInt64{}
 	err = nint64.Scan(value)
 	if err != nil {
+		err = errors.Wrap(err, "(*NullUint64).Scan")
 		return
 	}
 

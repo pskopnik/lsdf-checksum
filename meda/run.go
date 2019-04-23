@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	pkgErrors "github.com/pkg/errors"
 )
 
 const runsTableNameBase = "runs"
@@ -30,7 +31,11 @@ const runsCreateTableQuery = GenericQuery(`
 
 func (d *DB) runsCreateTable(ctx context.Context) error {
 	_, err := d.ExecContext(ctx, runsCreateTableQuery.SubstituteAll(d))
-	return err
+	if err != nil {
+		return pkgErrors.Wrap(err, "(*DB).runsCreateTable")
+	}
+
+	return nil
 }
 
 type Run struct {
@@ -58,17 +63,17 @@ func (d *DB) RunsInsertAndSetID(ctx context.Context, execer NamedExecerContext, 
 
 	result, err := execer.NamedExecContext(ctx, runsInsertQuery.SubstituteAll(d), run)
 	if err != nil {
-		return nil, err
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsInsertAndSetID: exec insert query")
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		return nil, err
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsInsertAndSetID: retrieve last insert ID")
 	}
 
 	run.ID = uint64(id)
 
-	return result, err
+	return result, nil
 }
 
 const runsUpdateQuery = GenericQuery(`
@@ -89,7 +94,12 @@ func (d *DB) RunsUpdate(ctx context.Context, execer NamedExecerContext, run *Run
 		execer = &d.DB
 	}
 
-	return execer.NamedExecContext(ctx, runsUpdateQuery.SubstituteAll(d), run)
+	res, err := execer.NamedExecContext(ctx, runsUpdateQuery.SubstituteAll(d), run)
+	if err != nil {
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsUpdate")
+	}
+
+	return res, nil
 }
 
 const runsQueryByIDQuery = GenericQuery(`
@@ -110,7 +120,7 @@ func (d *DB) RunsQueryByID(ctx context.Context, querier sqlx.QueryerContext, id 
 
 	err := querier.QueryRowxContext(ctx, runsQueryByIDQuery.SubstituteAll(d), id).StructScan(&run)
 	if err != nil {
-		return Run{}, err
+		return Run{}, pkgErrors.Wrap(err, "(*DB).RunsQueryByID")
 	}
 
 	return run, nil
@@ -132,18 +142,18 @@ func runsAppendFromRows(runs []Run, rows *sqlx.Rows) ([]Run, error) {
 		err = rows.StructScan(&runs[i])
 		if err != nil {
 			_ = rows.Close()
-			return runs[:baseInd], err
+			return runs[:baseInd], pkgErrors.Wrap(err, "runsAppendFromRows: scan row into struct")
 		}
 
 		i += 1
 	}
 	if err = rows.Err(); err != nil {
 		_ = rows.Close()
-		return runs[:baseInd], err
+		return runs[:baseInd], pkgErrors.Wrap(err, "runsAppendFromRows: iterate over rows")
 	}
 
 	if err = rows.Close(); err != nil {
-		return runs[:baseInd], err
+		return runs[:baseInd], pkgErrors.Wrap(err, "runsAppendFromRows: close rows")
 	}
 
 	return runs, nil
@@ -162,20 +172,35 @@ func (d *DB) RunsQueryAll(ctx context.Context, querier sqlx.QueryerContext) (*sq
 		querier = &d.DB
 	}
 
-	return querier.QueryxContext(ctx, runsQueryAllQuery.SubstituteAll(d))
+	rows, err := querier.QueryxContext(ctx, runsQueryAllQuery.SubstituteAll(d))
+	if err != nil {
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsQueryAll")
+	}
+
+	return rows, nil
 }
 
 func (d *DB) RunsFetchAll(ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
-	return d.RunsAppendAll(nil, ctx, querier)
+	runs, err := d.RunsAppendAll(nil, ctx, querier)
+	if err != nil {
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsFetchAll")
+	}
+
+	return runs, nil
 }
 
 func (d *DB) RunsAppendAll(runs []Run, ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
 	rows, err := d.RunsQueryAll(ctx, querier)
 	if err != nil {
-		return runs, err
+		return runs, pkgErrors.Wrap(err, "(*DB).RunsAppendAll")
 	}
 
-	return runsAppendFromRows(runs, rows)
+	runs, err = runsAppendFromRows(runs, rows)
+	if err != nil {
+		return runs, pkgErrors.Wrap(err, "(*DB).RunsAppendAll")
+	}
+
+	return runs, nil
 }
 
 const runsQueryLastNQuery = GenericQuery(`
@@ -197,20 +222,35 @@ func (d *DB) RunsQueryLastN(ctx context.Context, querier sqlx.QueryerContext, n 
 		querier = &d.DB
 	}
 
-	return querier.QueryxContext(ctx, runsQueryLastNQuery.SubstituteAll(d), n)
+	rows, err := querier.QueryxContext(ctx, runsQueryLastNQuery.SubstituteAll(d), n)
+	if err != nil {
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsQueryLastN")
+	}
+
+	return rows, nil
 }
 
 func (d *DB) RunsFetchLastN(ctx context.Context, querier sqlx.QueryerContext, n uint64) ([]Run, error) {
-	return d.RunsAppendLastN(nil, ctx, querier, n)
+	runs, err := d.RunsAppendLastN(nil, ctx, querier, n)
+	if err != nil {
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsFetchLastN")
+	}
+
+	return runs, nil
 }
 
 func (d *DB) RunsAppendLastN(runs []Run, ctx context.Context, querier sqlx.QueryerContext, n uint64) ([]Run, error) {
 	rows, err := d.RunsQueryLastN(ctx, querier, n)
 	if err != nil {
-		return runs, err
+		return runs, pkgErrors.Wrap(err, "(*DB).RunsAppendLastN")
 	}
 
-	return runsAppendFromRows(runs, rows)
+	runs, err = runsAppendFromRows(runs, rows)
+	if err != nil {
+		return runs, pkgErrors.Wrap(err, "(*DB).RunsAppendLastN")
+	}
+
+	return runs, nil
 }
 
 const runsQueryIncompleteQuery = GenericQuery(`
@@ -227,20 +267,35 @@ func (d *DB) RunsQueryIncomplete(ctx context.Context, querier sqlx.QueryerContex
 		querier = &d.DB
 	}
 
-	return querier.QueryxContext(ctx, runsQueryIncompleteQuery.SubstituteAll(d))
+	rows, err := querier.QueryxContext(ctx, runsQueryIncompleteQuery.SubstituteAll(d))
+	if err != nil {
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsQueryIncomplete")
+	}
+
+	return rows, nil
 }
 
 func (d *DB) RunsFetchIncomplete(ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
-	return d.RunsAppendIncomplete(nil, ctx, querier)
+	runs, err := d.RunsAppendIncomplete(nil, ctx, querier)
+	if err != nil {
+		return nil, pkgErrors.Wrap(err, "(*DB).RunsFetchIncomplete")
+	}
+
+	return runs, nil
 }
 
 func (d *DB) RunsAppendIncomplete(runs []Run, ctx context.Context, querier sqlx.QueryerContext) ([]Run, error) {
 	rows, err := d.RunsQueryIncomplete(ctx, querier)
 	if err != nil {
-		return runs, err
+		return runs, pkgErrors.Wrap(err, "(*DB).RunsAppendIncomplete")
 	}
 
-	return runsAppendFromRows(runs, rows)
+	runs, err = runsAppendFromRows(runs, rows)
+	if err != nil {
+		return runs, pkgErrors.Wrap(err, "(*DB).RunsAppendIncomplete")
+	}
+
+	return runs, nil
 }
 
 const runsExistsIncompleteBeforeIDQuery = GenericQuery(`
@@ -267,7 +322,7 @@ func (d *DB) RunsExistsIncompleteBeforeID(ctx context.Context, querier sqlx.Quer
 
 	err := row.Scan(&rowExists)
 	if err != nil {
-		return false, err
+		return false, pkgErrors.Wrap(err, "(*DB).RunsExistsIncompleteBeforeID")
 	}
 
 	return rowExists == 1, nil
@@ -295,7 +350,7 @@ func (d *DB) RunsExistsIncomplete(ctx context.Context, querier sqlx.QueryerConte
 
 	err := row.Scan(&rowExists)
 	if err != nil {
-		return false, err
+		return false, pkgErrors.Wrap(err, "(*DB).RunsExistsIncomplete")
 	}
 
 	return rowExists == 1, nil
@@ -344,7 +399,7 @@ func (r *RunSyncMode) Scan(src interface{}) error {
 	case []byte:
 		strSrc = string(typedSrc)
 	default:
-		return ErrInvalidRunStateValueType
+		return pkgErrors.Wrapf(ErrInvalidRunSyncModeValueType, "(*RunSyncMode).Scan: src has type %T", src)
 	}
 
 	switch strSrc {
@@ -421,7 +476,7 @@ func (r *RunState) Scan(src interface{}) error {
 	case []byte:
 		strSrc = string(typedSrc)
 	default:
-		return ErrInvalidRunStateValueType
+		return pkgErrors.Wrapf(ErrInvalidRunStateValueType, "(*RunState).Scan: src has type %T", src)
 	}
 
 	switch strSrc {

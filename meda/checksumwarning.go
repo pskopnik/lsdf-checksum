@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 const checksumWarningsTableNameBase = "checksum_warnings"
@@ -31,7 +32,7 @@ const checksumWarningsCreateTableQuery = GenericQuery(`
 
 func (d *DB) checksumWarningsCreateTable(ctx context.Context) error {
 	_, err := d.ExecContext(ctx, checksumWarningsCreateTableQuery.SubstituteAll(d))
-	return err
+	return errors.Wrap(err, "(*DB).checksumWarningsCreateTable")
 }
 
 type ChecksumWarning struct {
@@ -77,7 +78,12 @@ func (d *DB) ChecksumWarningsPrepareInsert(ctx context.Context, preparer NamedPr
 		preparer = &d.DB
 	}
 
-	return preparer.PrepareNamedContext(ctx, checksumWarningsPrepareInsertQuery.SubstituteAll(d))
+	stmt, err := preparer.PrepareNamedContext(ctx, checksumWarningsPrepareInsertQuery.SubstituteAll(d))
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).ChecksumWarningsPrepareInsert")
+	}
+
+	return stmt, nil
 }
 
 func checksumWarningsAppendFromRows(checksumWarnings []ChecksumWarning, rows *sqlx.Rows) ([]ChecksumWarning, error) {
@@ -96,18 +102,18 @@ func checksumWarningsAppendFromRows(checksumWarnings []ChecksumWarning, rows *sq
 		err = rows.StructScan(&checksumWarnings[i])
 		if err != nil {
 			_ = rows.Close()
-			return checksumWarnings[:baseInd], err
+			return checksumWarnings[:baseInd], errors.Wrap(err, "checksumWarningsAppendFromRows: scan row into struct")
 		}
 
 		i += 1
 	}
 	if err = rows.Err(); err != nil {
 		_ = rows.Close()
-		return checksumWarnings[:baseInd], err
+		return checksumWarnings[:baseInd], errors.Wrap(err, "checksumWarningsAppendFromRows: iterate over rows")
 	}
 
 	if err = rows.Close(); err != nil {
-		return checksumWarnings[:baseInd], err
+		return checksumWarnings[:baseInd], errors.Wrap(err, "checksumWarningsAppendFromRows: close rows")
 	}
 
 	return checksumWarnings, nil
@@ -135,20 +141,35 @@ func (d *DB) ChecksumWarningsQueryAll(ctx context.Context, querier sqlx.QueryerC
 		querier = &d.DB
 	}
 
-	return querier.QueryxContext(ctx, checksumWarningsQueryAllQuery.SubstituteAll(d))
+	rows, err := querier.QueryxContext(ctx, checksumWarningsQueryAllQuery.SubstituteAll(d))
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).ChecksumWarningsQueryAll")
+	}
+
+	return rows, nil
 }
 
 func (d *DB) ChecksumWarningsFetchAll(ctx context.Context, querier sqlx.QueryerContext) ([]ChecksumWarning, error) {
-	return d.ChecksumWarningsAppendAll(nil, ctx, querier)
+	warnings, err := d.ChecksumWarningsAppendAll(nil, ctx, querier)
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).ChecksumWarningsFetchAll")
+	}
+
+	return warnings, nil
 }
 
 func (d *DB) ChecksumWarningsAppendAll(checksumWarnings []ChecksumWarning, ctx context.Context, querier sqlx.QueryerContext) ([]ChecksumWarning, error) {
 	rows, err := d.ChecksumWarningsQueryAll(ctx, querier)
 	if err != nil {
-		return checksumWarnings, err
+		return checksumWarnings, errors.Wrap(err, "(*DB).ChecksumWarningsAppendAll")
 	}
 
-	return checksumWarningsAppendFromRows(checksumWarnings, rows)
+	checksumWarnings, err = checksumWarningsAppendFromRows(checksumWarnings, rows)
+	if err != nil {
+		return checksumWarnings, errors.Wrap(err, "(*DB).ChecksumWarningsAppendAll")
+	}
+
+	return checksumWarnings, nil
 }
 
 const checksumWarningsQueryFromLastNRunsQuery = GenericQuery(`
@@ -181,20 +202,35 @@ func (d *DB) ChecksumWarningsQueryFromLastNRuns(ctx context.Context, querier sql
 		querier = &d.DB
 	}
 
-	return querier.QueryxContext(ctx, checksumWarningsQueryFromLastNRunsQuery.SubstituteAll(d), n)
+	rows, err := querier.QueryxContext(ctx, checksumWarningsQueryFromLastNRunsQuery.SubstituteAll(d), n)
+	if err != nil {
+		return nil, errors.Wrapf(err, "(*DB).ChecksumWarningsQueryFromLastNRuns: n = %d", n)
+	}
+
+	return rows, nil
 }
 
 func (d *DB) ChecksumWarningsFetchFromLastNRuns(ctx context.Context, querier sqlx.QueryerContext, n uint64) ([]ChecksumWarning, error) {
-	return d.ChecksumWarningsAppendFromLastNRuns(nil, ctx, querier, n)
+	warnings, err := d.ChecksumWarningsAppendFromLastNRuns(nil, ctx, querier, n)
+	if err != nil {
+		return warnings, errors.Wrap(err, "(*DB).ChecksumWarningsFetchFromLastNRuns")
+	}
+
+	return warnings, nil
 }
 
 func (d *DB) ChecksumWarningsAppendFromLastNRuns(checksumWarnings []ChecksumWarning, ctx context.Context, querier sqlx.QueryerContext, n uint64) ([]ChecksumWarning, error) {
 	rows, err := d.ChecksumWarningsQueryFromLastNRuns(ctx, querier, n)
 	if err != nil {
-		return checksumWarnings, err
+		return checksumWarnings, errors.Wrap(err, "(*DB).ChecksumWarningsAppendFromLastNRuns")
 	}
 
-	return checksumWarningsAppendFromRows(checksumWarnings, rows)
+	checksumWarnings, err = checksumWarningsAppendFromRows(checksumWarnings, rows)
+	if err != nil {
+		return checksumWarnings, errors.Wrap(err, "(*DB).ChecksumWarningsAppendFromLastNRuns")
+	}
+
+	return checksumWarnings, nil
 }
 
 const checksumWarningsQueryFromRunByIDQuery = GenericQuery(`
@@ -220,20 +256,35 @@ func (d *DB) ChecksumWarningsQueryFromRunByID(ctx context.Context, querier sqlx.
 		querier = &d.DB
 	}
 
-	return querier.QueryxContext(ctx, checksumWarningsQueryFromRunByIDQuery.SubstituteAll(d), runID)
+	rows, err := querier.QueryxContext(ctx, checksumWarningsQueryFromRunByIDQuery.SubstituteAll(d), runID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "(*DB).ChecksumWarningsQueryFromRunByID: runID = %d", runID)
+	}
+
+	return rows, nil
 }
 
 func (d *DB) ChecksumWarningsFetchFromRunByID(ctx context.Context, querier sqlx.QueryerContext, runID uint64) ([]ChecksumWarning, error) {
-	return d.ChecksumWarningsAppendFromRunByID(nil, ctx, querier, runID)
+	checksumWarnings, err := d.ChecksumWarningsAppendFromRunByID(nil, ctx, querier, runID)
+	if err != nil {
+		return checksumWarnings, errors.Wrap(err, "(*DB).ChecksumWarningsFetchFromRunByID")
+	}
+
+	return checksumWarnings, nil
 }
 
 func (d *DB) ChecksumWarningsAppendFromRunByID(checksumWarnings []ChecksumWarning, ctx context.Context, querier sqlx.QueryerContext, runID uint64) ([]ChecksumWarning, error) {
 	rows, err := d.ChecksumWarningsQueryFromRunByID(ctx, querier, runID)
 	if err != nil {
-		return checksumWarnings, err
+		return checksumWarnings, errors.Wrap(err, "(*DB).ChecksumWarningsAppendFromRunByID")
 	}
 
-	return checksumWarningsAppendFromRows(checksumWarnings, rows)
+	checksumWarnings, err = checksumWarningsAppendFromRows(checksumWarnings, rows)
+	if err != nil {
+		return checksumWarnings, errors.Wrap(err, "(*DB).ChecksumWarningsAppendFromRunByID")
+	}
+
+	return checksumWarnings, nil
 }
 
 const checksumWarningsDeleteByIDQuery = GenericQuery(`
@@ -249,14 +300,19 @@ func (d *DB) ChecksumWarningsDeleteByID(ctx context.Context, execer RebindExecer
 
 	query, args, err := sqlx.In(checksumWarningsDeleteByIDQuery.SubstituteAll(d), checksumWarningIDs)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "(*DB).ChecksumWarningsDeleteByID: expand query")
 	}
 
 	// query is a generic query using `?` as the bindvar.
 	// It needs to be rebound to match the backend in use.
 	query = execer.Rebind(query)
 
-	return execer.ExecContext(ctx, query, args...)
+	res, err := execer.ExecContext(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Wrap(err, "(*DB).ChecksumWarningsDeleteByID: exec query")
+	}
+
+	return res, nil
 }
 
 var _ sql.Result = rowsAffectedResult(0)
@@ -291,7 +347,7 @@ func (d *DB) ChecksumWarningsDeleteChecksumWarnings(ctx context.Context, execer 
 			totalRowsAffected += rowsAffected
 		}
 		if err != nil {
-			return rowsAffectedResult(totalRowsAffected), err
+			return rowsAffectedResult(totalRowsAffected), errors.Wrap(err, "(*DB).ChecksumWarningsDeleteChecksumWarnings")
 		}
 
 		i = rangeEnd

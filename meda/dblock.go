@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/jmoiron/sqlx"
+	pkgErrors "github.com/pkg/errors"
 )
 
 const dbLockTableNameBase = "dblock"
@@ -22,7 +23,11 @@ const dbLockCreateTableQuery = GenericQuery(`
 
 func (d *DB) dbLockCreateTable(ctx context.Context) error {
 	_, err := d.ExecContext(ctx, dbLockCreateTableQuery.SubstituteAll(d))
-	return err
+	if err != nil {
+		return pkgErrors.Wrap(err, "(*DB).dbLockCreateTable")
+	}
+
+	return nil
 }
 
 // Error variables related to DBLockLocker.
@@ -49,18 +54,18 @@ var dbLockLockerLockQuery = GenericQuery(`
 
 func (l *DBLockLocker) Lock(ctx context.Context) error {
 	if l.IsLocked() {
-		return ErrAlreadyLocked
+		return pkgErrors.Wrap(ErrAlreadyLocked, "(*DBLockLocker).Lock")
 	}
 
 	tx, err := l.db.BeginTxx(l.ctx, nil)
 	if err != nil {
-		return err
+		return pkgErrors.Wrap(err, "(*DBLockLocker).Lock: begin transaction")
 	}
 
 	_, err = tx.ExecContext(ctx, dbLockLockerLockQuery.SubstituteAll(l.db))
 	if err != nil {
 		_ = tx.Rollback()
-		return err
+		return pkgErrors.Wrap(err, "(*DBLockLocker).Lock: exec lock query")
 	}
 
 	l.tx = tx
@@ -74,7 +79,7 @@ var dbLockLockerUnlockQuery = GenericQuery(`
 
 func (l *DBLockLocker) Unlock(ctx context.Context) error {
 	if !l.IsLocked() {
-		return ErrNotLocked
+		return pkgErrors.Wrap(ErrNotLocked, "(*DBLockLocker).Unlock")
 	}
 
 	tx := l.tx
@@ -83,12 +88,12 @@ func (l *DBLockLocker) Unlock(ctx context.Context) error {
 	_, err := tx.ExecContext(ctx, dbLockLockerUnlockQuery.SubstituteAll(l.db))
 	if err != nil {
 		_ = tx.Rollback()
-		return err
+		return pkgErrors.Wrap(err, "(*DBLockLocker).Unlock: exec unlock query")
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return err
+		return pkgErrors.Wrap(err, "(*DBLockLocker).Unlock: commit transaction")
 	}
 
 	return nil
