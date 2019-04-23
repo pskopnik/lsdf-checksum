@@ -316,7 +316,7 @@ func (w *WriteBacker) processBatch(ctx context.Context, batch *filesBatch, trans
 func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte, []uint64) {
 	checksums := make(map[uint64][]byte)
 	// TODO use pool for fileIDs
-	fileIDs := make([]uint64, len(batch.Files))
+	fileIDs := make([]uint64, 0, len(batch.Files))
 
 	for i := range batch.Files {
 		file := &batch.Files[i]
@@ -332,7 +332,7 @@ func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte,
 		}
 
 		checksums[file.ID] = file.Checksum
-		fileIDs[i] = file.ID
+		fileIDs = append(fileIDs, file.ID)
 	}
 
 	return checksums, fileIDs
