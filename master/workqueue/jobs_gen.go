@@ -117,7 +117,7 @@ func (z *WorkPack) EncodeMsg(en *msgp.Writer) (err error) {
 	for za0001 := range z.Files {
 		// map header, size 2
 		// write "ID"
-		err = en.Append(0x82, 0xa2, 0x49, 0x64)
+		err = en.Append(0x82, 0xa2, 0x49, 0x44)
 		if err != nil {
 			return
 		}
@@ -154,7 +154,7 @@ func (z *WorkPack) MarshalMsg(b []byte) (o []byte, err error) {
 	for za0001 := range z.Files {
 		// map header, size 2
 		// string "ID"
-		o = append(o, 0x82, 0xa2, 0x49, 0x64)
+		o = append(o, 0x82, 0xa2, 0x49, 0x44)
 		o = msgp.AppendUint64(o, z.Files[za0001].ID)
 		// string "Path"
 		o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
@@ -291,7 +291,7 @@ func (z *WorkPackFile) DecodeMsg(dc *msgp.Reader) (err error) {
 func (z WorkPackFile) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
 	// write "ID"
-	err = en.Append(0x82, 0xa2, 0x49, 0x64)
+	err = en.Append(0x82, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -316,7 +316,7 @@ func (z WorkPackFile) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "ID"
-	o = append(o, 0x82, 0xa2, 0x49, 0x64)
+	o = append(o, 0x82, 0xa2, 0x49, 0x44)
 	o = msgp.AppendUint64(o, z.ID)
 	// string "Path"
 	o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
@@ -450,7 +450,7 @@ func (z *WriteBackPack) EncodeMsg(en *msgp.Writer) (err error) {
 	for za0001 := range z.Files {
 		// map header, size 2
 		// write "ID"
-		err = en.Append(0x82, 0xa2, 0x49, 0x64)
+		err = en.Append(0x82, 0xa2, 0x49, 0x44)
 		if err != nil {
 			return
 		}
@@ -481,7 +481,7 @@ func (z *WriteBackPack) MarshalMsg(b []byte) (o []byte, err error) {
 	for za0001 := range z.Files {
 		// map header, size 2
 		// string "ID"
-		o = append(o, 0x82, 0xa2, 0x49, 0x64)
+		o = append(o, 0x82, 0xa2, 0x49, 0x44)
 		o = msgp.AppendUint64(o, z.Files[za0001].ID)
 		// string "Checksum"
 		o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
@@ -608,7 +608,7 @@ func (z *WriteBackPackFile) DecodeMsg(dc *msgp.Reader) (err error) {
 func (z *WriteBackPackFile) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
 	// write "ID"
-	err = en.Append(0x82, 0xa2, 0x49, 0x64)
+	err = en.Append(0x82, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -633,7 +633,7 @@ func (z *WriteBackPackFile) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "ID"
-	o = append(o, 0x82, 0xa2, 0x49, 0x64)
+	o = append(o, 0x82, 0xa2, 0x49, 0x44)
 	o = msgp.AppendUint64(o, z.ID)
 	// string "Checksum"
 	o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
