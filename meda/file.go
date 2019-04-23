@@ -172,8 +172,6 @@ func (d *DB) FilesFetchFilesByIDs(ctx context.Context, querier RebindQueryerCont
 func (d *DB) FilesAppendFilesByIDs(files []File, ctx context.Context, querier RebindQueryerContext, fileIDs []uint64) ([]File, error) {
 	baseInd := len(files)
 
-	ind := baseInd
-
 	for i := 0; i < len(fileIDs); {
 		rangeEnd := i + MaxPlaceholders
 		if rangeEnd >= len(fileIDs) {
@@ -185,29 +183,11 @@ func (d *DB) FilesAppendFilesByIDs(files []File, ctx context.Context, querier Re
 			return files[:baseInd], err
 		}
 
-		for rows.Next() {
-			if ind == cap(files) {
-				files = append(files, File{})
-			} else {
-				files = files[:len(files)+1]
-			}
-
-			err = rows.StructScan(&files[ind])
-			if err != nil {
-				_ = rows.Close()
-				return files[:baseInd], err
-			}
-
-			ind += 1
-		}
-		if err = rows.Err(); err != nil {
-			_ = rows.Close()
+		files, err = filesAppendFromRowsAndClose(files, rows)
+		if err != nil {
 			return files[:baseInd], err
 		}
 
-		if err = rows.Close(); err != nil {
-			return files[:baseInd], err
-		}
 		i = rangeEnd
 	}
 
