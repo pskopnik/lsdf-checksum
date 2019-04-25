@@ -53,6 +53,9 @@ var WriteBackerDefaultConfig = &WriteBackerConfig{
 		// Commit transaction once 20 write queries have been performed (as
 		// identified in checksum_write_back benchmark).
 		MaxTransactionSize: 20,
+		// Commit transaction after 2 minutes regardless of the number of
+		// queries performed.
+		MaxTransactionLifetime: 2 * time.Minute,
 	},
 }
 

@@ -3,17 +3,29 @@ package workqueue
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
+	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 )
 
+type transactionState int8
+
+const (
+	transactionStateUninitialised transactionState = iota
+	transactionStateIdle
+	transactionStateActive
+	transactionStateClosed
+)
+
 type transactionerConfig struct {
-	DB                 *meda.DB `yaml:"-"`
-	MaxTransactionSize int
+	DB                     *meda.DB `yaml:"-"`
+	MaxTransactionSize     int
+	MaxTransactionLifetime time.Duration
 }
 
 type transactioner struct {
@@ -23,10 +35,22 @@ type transactioner struct {
 	updateFileCount            int
 	insertChecksumWarningCount int
 
-	tx                        *sqlx.Tx
+	// txMutex protects txState and somewhat protects tx, txQueryCount and
+	// insertChecksumWarningStmt.
+	// The fields tx, txQueryCount and insertChecksumWarningStmt may only be
+	// read or written when holding the mutex or if txState == active only by
+	// the goroutine maintaining txState.
+	txMutex sync.Mutex
+	txState transactionState
+	tx      *sqlx.Tx
+	// insertChecksumWarningStmt may be nil even if tx is set.
 	insertChecksumWarningStmt *sqlx.NamedStmt
-	// txQueryCount tracks the number of writing (!) queries executed within the transaction.
+	// txQueryCount tracks the number of writing (!) queries executed within
+	// the transaction.
 	txQueryCount int
+
+	tomb   *tomb.Tomb
+	cancel context.CancelFunc
 
 	interfaceSlicesPool sync.Pool
 }
@@ -42,6 +66,17 @@ func newTransactioner(ctx context.Context, config *transactionerConfig) *transac
 }
 
 func (t *transactioner) FetchFilesByIDs(ctx context.Context, fileIDs []uint64) ([]meda.File, error) {
+	t.txMutex.Lock()
+	t.txState = transactionStateActive
+	t.txMutex.Unlock()
+	defer func() {
+		t.txMutex.Lock()
+		if t.txState == transactionStateActive {
+			t.txState = transactionStateIdle
+		}
+		t.txMutex.Unlock()
+	}()
+
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
@@ -67,6 +102,17 @@ func (t *transactioner) FetchFilesByIDs(ctx context.Context, fileIDs []uint64) (
 }
 
 func (t *transactioner) AppendFilesByIDs(files []meda.File, ctx context.Context, fileIDs []uint64) ([]meda.File, error) {
+	t.txMutex.Lock()
+	t.txState = transactionStateActive
+	t.txMutex.Unlock()
+	defer func() {
+		t.txMutex.Lock()
+		if t.txState == transactionStateActive {
+			t.txState = transactionStateIdle
+		}
+		t.txMutex.Unlock()
+	}()
+
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
@@ -92,6 +138,17 @@ func (t *transactioner) AppendFilesByIDs(files []meda.File, ctx context.Context,
 }
 
 func (t *transactioner) InsertChecksumWarning(ctx context.Context, checksumWarning *meda.ChecksumWarning) error {
+	t.txMutex.Lock()
+	t.txState = transactionStateActive
+	t.txMutex.Unlock()
+	defer func() {
+		t.txMutex.Lock()
+		if t.txState == transactionStateActive {
+			t.txState = transactionStateIdle
+		}
+		t.txMutex.Unlock()
+	}()
+
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
@@ -125,6 +182,21 @@ func (t *transactioner) InsertChecksumWarning(ctx context.Context, checksumWarni
 }
 
 func (t *transactioner) UpdateFilesChecksums(ctx context.Context, files []meda.File, runID uint64) error {
+	if len(files) == 0 {
+		return nil
+	}
+
+	t.txMutex.Lock()
+	t.txState = transactionStateActive
+	t.txMutex.Unlock()
+	defer func() {
+		t.txMutex.Lock()
+		if t.txState == transactionStateActive {
+			t.txState = transactionStateIdle
+		}
+		t.txMutex.Unlock()
+	}()
+
 	if t.tx == nil {
 		err := t.beginTx(ctx)
 		if err != nil {
@@ -189,6 +261,91 @@ func (t *transactioner) buildUpdate(files []meda.File, runID uint64) (squirrel.U
 	return update, fileIDs, nil
 }
 
+func (t *transactioner) transactionCommitter() error {
+	timer := time.NewTimer(t.Config.MaxTransactionLifetime)
+
+	select {
+	case <-timer.C:
+		break
+	case <-t.tomb.Dying():
+		return tomb.ErrDying
+	}
+
+	tx, insertChecksumWarningStmt, err := t.stealTransaction(t.tomb.Context(nil))
+	if err != nil {
+		// TODO
+		// tx and insertChecksumWarningStmt are now potentially idling because ctx was closed
+		return errors.Wrap(err, "(*transactioner).transactionCommitter")
+	} else if tx == nil {
+		// No open transaction stolen, there is no need for closing
+		return nil
+	}
+
+	var retErr error
+
+	if insertChecksumWarningStmt != nil {
+		err = insertChecksumWarningStmt.Close()
+		if err != nil && retErr == nil {
+			retErr = errors.Wrap(err, "(*transactioner).transactionCommitter: close insert checksum warning statement")
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil && retErr == nil {
+		retErr = errors.Wrap(err, "(*transactioner).transactionCommitter: commit transaction")
+	}
+
+	return retErr
+}
+
+func (t *transactioner) stealTransaction(ctx context.Context) (*sqlx.Tx, *sqlx.NamedStmt, error) {
+	var tx *sqlx.Tx
+	var insertChecksumWarningStmt *sqlx.NamedStmt
+	var noTxn bool
+
+	timer := time.NewTimer(0)
+	done := ctx.Done()
+
+	for {
+		t.txMutex.Lock()
+
+		if t.txState == transactionStateIdle {
+			tx, insertChecksumWarningStmt = t.tx, t.insertChecksumWarningStmt
+			t.tx, t.txState, t.txQueryCount = nil, transactionStateUninitialised, 0
+			t.insertChecksumWarningStmt = nil
+		} else if t.txState == transactionStateActive {
+			// wait
+		} else {
+			// tx does not represent an open transaction
+			noTxn = true
+		}
+
+		t.txMutex.Unlock()
+
+		if tx != nil {
+			break
+		} else if noTxn {
+			break
+		}
+
+		timer.Reset(500 * time.Microsecond)
+
+		select {
+		case <-timer.C:
+			continue
+		case <-done:
+			// Exhaust timer
+			if !timer.Stop() {
+				<-timer.C
+			}
+
+			return tx, insertChecksumWarningStmt, ctx.Err()
+		}
+	}
+
+	return tx, insertChecksumWarningStmt, nil
+}
+
 func (t *transactioner) getInterfaceSliceFromPool() []interface{} {
 	sl := t.interfaceSlicesPool.Get()
 	if sl == nil {
@@ -221,18 +378,30 @@ func (t *transactioner) Commit() error {
 
 func (t *transactioner) Close() error {
 	var retErr error
+	var tx *sqlx.Tx
+	var insertChecksumWarningStmt *sqlx.NamedStmt
 
-	if t.insertChecksumWarningStmt != nil {
-		err := t.insertChecksumWarningStmt.Close()
+	t.cancel()
+	// No context, so cannot wait for caller signalled cancel event
+	<-t.tomb.Dead()
+
+	t.txMutex.Lock()
+	if t.txState == transactionStateIdle || t.txState == transactionStateActive {
+		tx, insertChecksumWarningStmt = t.tx, t.insertChecksumWarningStmt
+		t.tx, t.txState, t.txQueryCount = nil, transactionStateUninitialised, 0
 		t.insertChecksumWarningStmt = nil
+	}
+	t.txMutex.Unlock()
+
+	if insertChecksumWarningStmt != nil {
+		err := insertChecksumWarningStmt.Close()
 		if err != nil && retErr == nil {
 			retErr = errors.Wrap(err, "(*transactioner).Close: close insert checksum warning statement")
 		}
 	}
 
-	if t.tx != nil {
-		err := t.tx.Rollback()
-		t.tx, t.txQueryCount = nil, 0
+	if tx != nil {
+		err := tx.Rollback()
 		if err != nil && retErr == nil {
 			retErr = errors.Wrap(err, "(*transactioner).Close: rollback transaction")
 		}
@@ -242,45 +411,64 @@ func (t *transactioner) Close() error {
 
 }
 
+// beginTx begins a new transaction and sets t.tx.
+// t.txQueryCount is resetted as well.
+// txState == active must be held by the caller of this method.
 func (t *transactioner) beginTx(_ context.Context) error {
-	var err error
-
-	t.tx, err = t.Config.DB.BeginTxx(t.ctx, nil)
-	t.txQueryCount = 0
+	tx, err := t.Config.DB.BeginTxx(t.ctx, nil)
 	if err != nil {
-		t.tx = nil
 		return errors.Wrap(err, "(*transactioner).beginTx: begin transaction")
 	}
+
+	t.tx, t.txQueryCount = tx, 0
+
+	tombCtx, cancel := context.WithCancel(t.ctx)
+	t.cancel = cancel
+	t.tomb, _ = tomb.WithContext(tombCtx)
+	t.tomb.Go(t.transactionCommitter)
 
 	return nil
 }
 
+// prepInsertChecksumWarningStmt prepares and sets t.insertChecksumWarningStmt.
+// txState == active must be held by the caller of this method.
 func (t *transactioner) prepInsertChecksumWarningStmt(ctx context.Context) error {
-	var err error
-
-	t.insertChecksumWarningStmt, err = t.Config.DB.ChecksumWarningsPrepareInsert(ctx, t.tx)
+	insertChecksumWarningStmt, err := t.Config.DB.ChecksumWarningsPrepareInsert(ctx, t.tx)
 	if err != nil {
-		t.tx = nil
 		return errors.Wrap(err, "(*transactioner).prepInsertChecksumWarningStmt")
 	}
+
+	t.insertChecksumWarningStmt = insertChecksumWarningStmt
 
 	return nil
 }
 
 func (t *transactioner) commitTx() error {
 	var retErr error
+	var tx *sqlx.Tx
+	var insertChecksumWarningStmt *sqlx.NamedStmt
 
-	if t.insertChecksumWarningStmt != nil {
-		err := t.insertChecksumWarningStmt.Close()
+	t.cancel()
+	// No context, so cannot wait for caller signalled cancel event
+	<-t.tomb.Dead()
+
+	t.txMutex.Lock()
+	if t.txState == transactionStateIdle || t.txState == transactionStateActive {
+		tx, insertChecksumWarningStmt = t.tx, t.insertChecksumWarningStmt
+		t.tx, t.txState, t.txQueryCount = nil, transactionStateUninitialised, 0
 		t.insertChecksumWarningStmt = nil
+	}
+	t.txMutex.Unlock()
+
+	if insertChecksumWarningStmt != nil {
+		err := t.insertChecksumWarningStmt.Close()
 		if err != nil && retErr == nil {
 			retErr = errors.Wrap(err, "(*transactioner).commitTx: close insert checksum warning statement")
 		}
 	}
 
-	if t.tx != nil {
-		err := t.tx.Commit()
-		t.tx, t.txQueryCount = nil, 0
+	if tx != nil {
+		err := tx.Commit()
 		if err != nil {
 			// TODO check for conflicts, re-perform transaction
 			if retErr == nil {

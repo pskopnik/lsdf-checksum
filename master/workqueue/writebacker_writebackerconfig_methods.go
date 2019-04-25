@@ -7,6 +7,7 @@ func (w *WriteBackerConfig) CopyFrom(other *WriteBackerConfig) {
 
 	w.Transactioner.DB = other.Transactioner.DB
 	w.Transactioner.MaxTransactionSize = other.Transactioner.MaxTransactionSize
+	w.Transactioner.MaxTransactionLifetime = other.Transactioner.MaxTransactionLifetime
 
 	w.FileSystemName = other.FileSystemName
 	w.Namespace = other.Namespace
@@ -35,6 +36,9 @@ func (w *WriteBackerConfig) Merge(other *WriteBackerConfig) *WriteBackerConfig {
 	}
 	if other.Transactioner.MaxTransactionSize != 0 {
 		w.Transactioner.MaxTransactionSize = other.Transactioner.MaxTransactionSize
+	}
+	if other.Transactioner.MaxTransactionLifetime != 0 {
+		w.Transactioner.MaxTransactionLifetime = other.Transactioner.MaxTransactionLifetime
 	}
 
 	if len(other.FileSystemName) > 0 {
