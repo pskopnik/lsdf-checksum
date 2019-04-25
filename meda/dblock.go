@@ -3,9 +3,11 @@ package meda
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	pkgErrors "github.com/pkg/errors"
+	"gopkg.in/tomb.v2"
 )
 
 const dbLockTableNameBase = "dblock"
@@ -39,7 +41,11 @@ var (
 type DBLockLocker struct {
 	ctx context.Context
 	db  *DB
-	tx  *sqlx.Tx
+
+	tx *sqlx.Tx
+
+	tomb   *tomb.Tomb
+	cancel context.CancelFunc
 }
 
 func (l *DBLockLocker) IsLocked() bool {
@@ -69,6 +75,11 @@ func (l *DBLockLocker) Lock(ctx context.Context) error {
 	}
 
 	l.tx = tx
+	tombCtx, cancel := context.WithCancel(l.ctx)
+	l.tomb, _ = tomb.WithContext(tombCtx)
+	l.cancel = cancel
+
+	l.tomb.Go(l.keepAliver)
 
 	return nil
 }
@@ -80,6 +91,18 @@ var dbLockLockerUnlockQuery = GenericQuery(`
 func (l *DBLockLocker) Unlock(ctx context.Context) error {
 	if !l.IsLocked() {
 		return pkgErrors.Wrap(ErrNotLocked, "(*DBLockLocker).Unlock")
+	}
+
+	l.cancel()
+
+	select {
+	case <-l.tomb.Dead():
+	case <-ctx.Done():
+		return pkgErrors.Wrap(ctx.Err(), "(*DBLockLocker).Unlock: wait for keepAliver death")
+	}
+
+	if l.tomb.Err() != nil {
+		return pkgErrors.Wrap(l.tomb.Err(), "(*DBLockLocker).Unlock: keepAliver died with error")
 	}
 
 	tx := l.tx
@@ -94,6 +117,73 @@ func (l *DBLockLocker) Unlock(ctx context.Context) error {
 	err = tx.Commit()
 	if err != nil {
 		return pkgErrors.Wrap(err, "(*DBLockLocker).Unlock: commit transaction")
+	}
+
+	return nil
+}
+
+// Wait blocks until all background workers (the keepAliver) have died. Then
+// the same error is returned as by Err.
+// Wait is only valid if l is locked.
+func (l *DBLockLocker) Wait() error {
+	return l.tomb.Wait()
+}
+
+// Dead returns a channel closed as soon as all background workers (the
+// keepAliver) have died.
+// Dead is only valid if l is locked.
+func (l *DBLockLocker) Dead() <-chan struct{} {
+	return l.tomb.Dead()
+}
+
+// Err returns the error because of which the background workers (the
+// keepAliver) are shutting down.
+// Err is only valid if l is locked.
+func (l *DBLockLocker) Err() error {
+	return l.tomb.Err()
+}
+
+func (l *DBLockLocker) keepAliver() error {
+	dying := l.tomb.Dying()
+	timer := time.NewTimer(0)
+
+	// Exhaust timer
+	if !timer.Stop() {
+		<-timer.C
+	}
+
+	for {
+		timer.Reset(l.db.Config.LockKeepAliveInterval)
+
+		select {
+		case <-timer.C:
+			err := l.querySelectOne(l.tomb.Context(nil))
+			if err != nil {
+				return pkgErrors.Wrap(err, "(*DBLockLocker).keepAliver")
+			}
+		case <-dying:
+			// Exhaust timer
+			if !timer.Stop() {
+				<-timer.C
+			}
+
+			return tomb.ErrDying
+		}
+	}
+
+	return nil
+}
+
+var dbLockLockerQuerySelectOneQuery = GenericQuery(`
+	SELECT 1;
+`)
+
+func (l *DBLockLocker) querySelectOne(ctx context.Context) error {
+	var one uint64
+
+	err := l.db.QueryRowxContext(ctx, dbLockLockerQuerySelectOneQuery.SubstituteAll(l.db)).Scan(&one)
+	if err != nil {
+		return pkgErrors.Wrap(err, "(*DBLockLocker).querySelectOne")
 	}
 
 	return nil

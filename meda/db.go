@@ -22,13 +22,15 @@ type Config struct {
 	MaxOpenConns          int
 	MaxIdleConns          int
 	ConnMaxLifetime       time.Duration
+	LockKeepAliveInterval time.Duration
 	ServerConcurrencyHint int
 }
 
 var DefaultConfig = &Config{
-	MaxOpenConns:    100,
-	MaxIdleConns:    50,
-	ConnMaxLifetime: 10 * time.Minute,
+	MaxOpenConns:          100,
+	MaxIdleConns:          50,
+	ConnMaxLifetime:       10 * time.Minute,
+	LockKeepAliveInterval: 30 * time.Second,
 }
 
 type DB struct {

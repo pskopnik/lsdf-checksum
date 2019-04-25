@@ -1,9 +1,5 @@
 package meda
 
-import (
-	"time"
-)
-
 func (c *Config) CopyFrom(other *Config) {
 	c.Driver = other.Driver
 	c.DataSourceName = other.DataSourceName
@@ -11,6 +7,7 @@ func (c *Config) CopyFrom(other *Config) {
 	c.MaxOpenConns = other.MaxOpenConns
 	c.MaxIdleConns = other.MaxIdleConns
 	c.ConnMaxLifetime = other.ConnMaxLifetime
+	c.LockKeepAliveInterval = other.LockKeepAliveInterval
 	c.ServerConcurrencyHint = other.ServerConcurrencyHint
 }
 
@@ -30,8 +27,11 @@ func (c *Config) Merge(other *Config) *Config {
 	if other.MaxIdleConns != 0 {
 		c.MaxIdleConns = other.MaxIdleConns
 	}
-	if other.ConnMaxLifetime != time.Duration(0) {
+	if other.ConnMaxLifetime != 0 {
 		c.ConnMaxLifetime = other.ConnMaxLifetime
+	}
+	if other.LockKeepAliveInterval != 0 {
+		c.LockKeepAliveInterval = other.LockKeepAliveInterval
 	}
 	if other.ServerConcurrencyHint != 0 {
 		c.ServerConcurrencyHint = other.ServerConcurrencyHint
