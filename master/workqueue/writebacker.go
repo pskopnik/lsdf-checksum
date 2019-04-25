@@ -295,14 +295,25 @@ func (w *WriteBacker) processBatch(ctx context.Context, batch *filesBatch, trans
 
 		file.Checksum = checksum
 		file.LastRead.Uint64, file.LastRead.Valid = w.Config.RunID, true
-		file.ToBeRead = 0
 		file.ToBeCompared = 0
+		// ToBeRead is set in a separate loop
 	}
 
 	// Check that all files in the batch have been processed
 	for _, checksum := range checksums {
 		if checksum != nil {
 			return pkgErrors.Wrap(ErrFetchedInsufficientFiles, "(*WriteBacker).processBatch: check all files processed")
+		}
+	}
+
+	// Set ToBeRead to 0 and drop files, which have already been written
+	for i := 0; i < len(files); {
+		if files[i].ToBeRead != 1 {
+			files[i] = files[len(files)-1]
+			files = files[:len(files)-1]
+		} else {
+			files[i].ToBeRead = 0
+			i++
 		}
 	}
 

@@ -2,6 +2,7 @@ package workqueue
 
 import (
 	"context"
+	"database/sql"
 	"sync"
 	"time"
 
@@ -20,6 +21,12 @@ const (
 	transactionStateIdle
 	transactionStateActive
 	transactionStateClosed
+)
+
+var (
+	txOptionsReadUncommitted = &sql.TxOptions{
+		Isolation: sql.LevelReadUncommitted,
+	}
 )
 
 type transactionerConfig struct {
@@ -415,7 +422,7 @@ func (t *transactioner) Close() error {
 // t.txQueryCount is resetted as well.
 // txState == active must be held by the caller of this method.
 func (t *transactioner) beginTx(_ context.Context) error {
-	tx, err := t.Config.DB.BeginTxx(t.ctx, nil)
+	tx, err := t.Config.DB.BeginTxx(t.ctx, txOptionsReadUncommitted)
 	if err != nil {
 		return errors.Wrap(err, "(*transactioner).beginTx: begin transaction")
 	}
