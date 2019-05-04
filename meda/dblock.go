@@ -98,10 +98,10 @@ func (l *DBLockLocker) Unlock(ctx context.Context) error {
 	select {
 	case <-l.tomb.Dead():
 	case <-ctx.Done():
-		return pkgErrors.Wrap(ctx.Err(), "(*DBLockLocker).Unlock: wait for keepAliver death")
+		return pkgErrors.Wrap(ctx.Err(), "(*DBLockLocker).Unlock: context done while waiting for keepAliver death")
 	}
 
-	if l.tomb.Err() != nil {
+	if l.tomb.Err() != nil && pkgErrors.Cause(l.tomb.Err()) != context.Canceled {
 		return pkgErrors.Wrap(l.tomb.Err(), "(*DBLockLocker).Unlock: keepAliver died with error")
 	}
 

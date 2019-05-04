@@ -174,9 +174,22 @@ func runMaster(ctx *MasterContext, master *master.Master) error {
 	go func() {
 		signalChan := make(chan os.Signal, 1)
 		signal.Notify(signalChan, unix.SIGINT, unix.SIGTERM)
-		<-signalChan
 
-		master.SignalStop()
+		select {
+		case <-master.Dead():
+		case signal := <-signalChan:
+			ctx.Logger.WithFields(log.Fields{
+				"action": "stopping",
+				"signal": signal,
+			}).Info("Received OS signal")
+			master.SignalStop()
+		case <-ctx.MedaLocker.Dead():
+			err := ctx.MedaLocker.Err()
+			ctx.Logger.WithError(err).WithFields(log.Fields{
+				"action": "stopping",
+			}).Error("Lock on meda database no longer held (locker died)")
+			master.SignalStop()
+		}
 	}()
 
 	err := master.Wait()
