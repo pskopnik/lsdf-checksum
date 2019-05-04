@@ -181,7 +181,7 @@ var dbLockLockerQuerySelectOneQuery = GenericQuery(`
 func (l *DBLockLocker) querySelectOne(ctx context.Context) error {
 	var one uint64
 
-	err := l.db.QueryRowxContext(ctx, dbLockLockerQuerySelectOneQuery.SubstituteAll(l.db)).Scan(&one)
+	err := l.tx.QueryRowxContext(ctx, dbLockLockerQuerySelectOneQuery.SubstituteAll(l.db)).Scan(&one)
 	if err != nil {
 		return pkgErrors.Wrap(err, "(*DBLockLocker).querySelectOne")
 	}
