@@ -40,6 +40,31 @@ compile a list of all files including some meta-data in the file system.
 [lsdf]: https://www.scc.kit.edu/en/research/11843.php
 [gridka]: http://www.gridka.de/welcome-en.html
 
+## Building
+
+The lsdf-checksum project has two primary commands:
+
+ * `lsdf-checksum-master` is the master component of the system. This command
+   contains the functionality for managing and performing checksum runs. It
+   also allows querying the meta data database for checksum mismatches.
+ * `lsdf-checksum-worker` is the light-weight worker component of the system.
+   Workers receive work packs containing files to be checksummed. After
+   reading the files, their checksums are send back to the master.
+
+The binaries are built using a recent go version (tested with go1.12). Execute
+the following commands in the root folder of this repository. Go will fetch
+all dependencies. The output are the two binaries in the current working
+directory.
+
+```bash
+go build ./cmd/lsdf-checksum-master
+go build ./cmd/lsdf-checksum-worker
+```
+
+Both binaries do not depend on significant runtime libraries (e.g. libc is
+required). Both binaries contain help texts (`--help`). Calling the binaries
+only with the `--help-man` flag outputs a man page for the command.
+
 ## Development Status
 
 This repository contains the prototype / work-in-progress of the lsdf-checksum
