@@ -5,7 +5,6 @@ import (
 )
 
 func (r *Config) CopyFrom(other *Config) {
-	r.Dialect = other.Dialect
 	r.Network = other.Network
 	r.Address = other.Address
 	r.Database = other.Database
@@ -16,9 +15,6 @@ func (r *Config) CopyFrom(other *Config) {
 }
 
 func (r *Config) Merge(other *Config) *Config {
-	if len(other.Dialect) > 0 {
-		r.Dialect = other.Dialect
-	}
 	if len(other.Network) > 0 {
 		r.Network = other.Network
 	}
