@@ -3,7 +3,7 @@
 lsdf-checksum is a distributed system to compute checksums of file content in
 large-scale file systems with the goal of verifying file data integrity.
 
-lsdf-checksum uses [gocraft/work][gocraft-work] with a [LedisDB][ledisdb]
+lsdf-checksum uses [gocraft/work][gocraft-work] with a [Redis][redis]
 backend as a queue system and stores all its data in a MySQL / MariaDB database.
 It operates on [IBM Spectrum Scale][spectrum-scale] file systems.
 
@@ -14,7 +14,7 @@ available (the slides may be difficult to understand without the corresponding
 presentation, however).
 
 [gocraft-work]: https://github.com/gocraft/work
-[ledisdb]: http://ledisdb.com/
+[redis]: https://redis.io/
 [spectrum-scale]: https://en.wikipedia.org/wiki/IBM_Spectrum_Scale
 [slides]: https://buckets.meta.mailsrv.io/share/X6MP1mDqwCckSZfzHDLeENZ8OIeeyUUe/slides.pdf
 
