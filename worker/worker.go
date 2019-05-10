@@ -17,9 +17,9 @@ import (
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/lengthsafe"
-	"git.scc.kit.edu/sdm/lsdf-checksum/master/workqueue"
 	"git.scc.kit.edu/sdm/lsdf-checksum/ratedreader"
 	commonRedis "git.scc.kit.edu/sdm/lsdf-checksum/redis"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
 const bufferSize int = 32 * 1024

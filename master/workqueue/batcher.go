@@ -10,6 +10,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
 // Error variables related to batcher.
@@ -23,7 +24,7 @@ var (
 
 type filesBatch struct {
 	batcher *batcher
-	Files   []WriteBackPackFile
+	Files   []workqueue.WriteBackPackFile
 }
 
 // Return returns the batch to the pool held by the batcher. After Return has
@@ -118,7 +119,7 @@ func (b *batcher) Out() <-chan *filesBatch {
 	return b.out
 }
 
-func (b *batcher) Add(ctx context.Context, file *WriteBackPackFile) error {
+func (b *batcher) Add(ctx context.Context, file *workqueue.WriteBackPackFile) error {
 	var err error
 
 	for {
@@ -478,12 +479,12 @@ func (b *batcher) sendCommand(cmd batcherCommand) error {
 	}
 }
 
-func (b *batcher) appendFile(file *WriteBackPackFile) {
+func (b *batcher) appendFile(file *workqueue.WriteBackPackFile) {
 	if len(b.openBatch.Files)+1 <= cap(b.openBatch.Files) {
 		// reuse the existing file, allows reusing (WriteBackPackFile).Checksum
 		b.openBatch.Files = b.openBatch.Files[:len(b.openBatch.Files)+1]
 	} else {
-		b.openBatch.Files = append(b.openBatch.Files, WriteBackPackFile{})
+		b.openBatch.Files = append(b.openBatch.Files, workqueue.WriteBackPackFile{})
 	}
 
 	b.openBatch.Files[len(b.openBatch.Files)-1].DeepCopyFrom(file)

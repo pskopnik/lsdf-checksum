@@ -14,6 +14,7 @@ import (
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
 var (
@@ -213,7 +214,7 @@ func (w *WriteBacker) createWorkerPool() *work.WorkerPool {
 			return next()
 		},
 	)
-	jobName := WriteBackJobName(w.Config.FileSystemName, w.Config.SnapshotName)
+	jobName := workqueue.WriteBackJobName(w.Config.FileSystemName, w.Config.SnapshotName)
 	workerPool.Job(jobName, (*writeBackerContext).Process)
 
 	return workerPool
@@ -400,7 +401,7 @@ type writeBackerContext struct {
 func (w *writeBackerContext) Process(job *work.Job) error {
 	ctx := w.WriteBacker.tomb.Context(nil)
 	// TODO pool
-	writeBackPack := WriteBackPack{}
+	writeBackPack := workqueue.WriteBackPack{}
 
 	err := writeBackPack.FromJobArgs(job.Args)
 	if err != nil {

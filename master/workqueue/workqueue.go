@@ -10,13 +10,8 @@ import (
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
-
-const gocraftWorkNamespaceBase string = "lsdf-checksum/workqueue:work"
-
-func GocraftWorkNamespace(prefix string) string {
-	return prefix + gocraftWorkNamespaceBase
-}
 
 func PerformanceMonitorUnit(fileSystemName, snapshotName string) string {
 	return fileSystemName + "-" + snapshotName
@@ -235,7 +230,7 @@ func (w *WorkQueue) createProducer(controller SchedulingController) *Producer {
 		Merge(&w.Config.Producer).
 		Merge(&ProducerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      GocraftWorkNamespace(w.Config.RedisPrefix),
+			Namespace:      workqueue.GocraftWorkNamespace(w.Config.RedisPrefix),
 
 			SnapshotName: w.Config.SnapshotName,
 
@@ -255,7 +250,7 @@ func (w *WorkQueue) createWriteBacker() *WriteBacker {
 		Merge(&w.Config.WriteBacker).
 		Merge(&WriteBackerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      GocraftWorkNamespace(w.Config.RedisPrefix),
+			Namespace:      workqueue.GocraftWorkNamespace(w.Config.RedisPrefix),
 
 			RunID:        w.Config.RunID,
 			SnapshotName: w.Config.SnapshotName,
@@ -274,7 +269,7 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 		Merge(&w.Config.QueueWatcher).
 		Merge(&QueueWatcherConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      GocraftWorkNamespace(w.Config.RedisPrefix),
+			Namespace:      workqueue.GocraftWorkNamespace(w.Config.RedisPrefix),
 
 			RunID:        w.Config.RunID,
 			SnapshotName: w.Config.SnapshotName,

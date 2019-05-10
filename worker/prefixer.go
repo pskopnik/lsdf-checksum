@@ -10,8 +10,8 @@ import (
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/cache"
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
-	"git.scc.kit.edu/sdm/lsdf-checksum/master/workqueue"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
 type PrefixerConfig struct {

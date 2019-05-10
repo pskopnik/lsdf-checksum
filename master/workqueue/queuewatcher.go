@@ -11,6 +11,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
 // Error variables related to QueueWatcher.
@@ -110,7 +111,7 @@ func (q *QueueWatcher) run() error {
 
 	q.fieldLogger.Info("Waiting for CalculateChecksum jobs to finish processing")
 
-	err = q.waitForJobsFinished(ctx, CalculateChecksumJobName)
+	err = q.waitForJobsFinished(ctx, workqueue.CalculateChecksumJobName)
 	if err != nil {
 		if err == context.Canceled {
 			// Tomb has canceled the context passed to waitForJobsFinished
@@ -124,7 +125,7 @@ func (q *QueueWatcher) run() error {
 
 	q.fieldLogger.Info("Waiting for WriteBack jobs to finish processing")
 
-	err = q.waitForJobsFinished(ctx, WriteBackJobName(q.Config.FileSystemName, q.Config.SnapshotName))
+	err = q.waitForJobsFinished(ctx, workqueue.WriteBackJobName(q.Config.FileSystemName, q.Config.SnapshotName))
 	if err != nil {
 		if err == context.Canceled {
 			// Tomb has canceled the context passed to waitForJobsFinished

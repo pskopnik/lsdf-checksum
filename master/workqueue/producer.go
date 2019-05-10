@@ -9,6 +9,7 @@ import (
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
 //go:generate confions config ProducerConfig
@@ -70,7 +71,7 @@ func (p *Producer) Start(ctx context.Context) {
 
 	queueSchedulerConfig := &QueueSchedulerConfig{
 		Namespace:  p.Config.Namespace,
-		JobName:    CalculateChecksumJobName,
+		JobName:    workqueue.CalculateChecksumJobName,
 		Pool:       p.Config.Pool,
 		Logger:     p.Config.Logger,
 		Controller: p.Config.Controller,
@@ -201,10 +202,10 @@ func (p *Producer) rowFetcher() error {
 func (p *Producer) produce(n uint) (bool, error) {
 	var err error
 	file := meda.File{}
-	workPack := WorkPack{
+	workPack := workqueue.WorkPack{
 		FileSystemName: p.Config.FileSystemName,
 		SnapshotName:   p.Config.SnapshotName,
-		Files:          make([]WorkPackFile, 0, 1),
+		Files:          make([]workqueue.WorkPackFile, 0, 1),
 	}
 	workPackMap := make(map[string]interface{})
 	var totalFileSize, numberOfFiles uint64
@@ -226,7 +227,7 @@ func (p *Producer) produce(n uint) (bool, error) {
 				break
 			}
 
-			workPack.Files = append(workPack.Files, WorkPackFile{
+			workPack.Files = append(workPack.Files, workqueue.WorkPackFile{
 				ID:   file.ID,
 				Path: file.Path,
 			})
@@ -248,7 +249,7 @@ func (p *Producer) produce(n uint) (bool, error) {
 // method.
 // The second parameter, jobArgs, may be passed optionally to avoid
 // reallocating a map on every call.
-func (p *Producer) enqueue(workPack *WorkPack, jobArgs map[string]interface{}) error {
+func (p *Producer) enqueue(workPack *workqueue.WorkPack, jobArgs map[string]interface{}) error {
 	var err error
 
 	if jobArgs == nil {
