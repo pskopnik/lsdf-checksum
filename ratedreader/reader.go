@@ -12,14 +12,13 @@ import (
 )
 
 // DefaultBurstSize is the default size of bursts.
-var DefaultBurstSize int = 32 * 1024
+const DefaultBurstSize int = 32 * 1024 // 32 KiB
 
 var _ io.Reader = &Reader{}
 
 type Reader struct {
 	r       io.Reader
 	limiter rate.Limiter
-	burst   int
 	ctx     context.Context
 }
 
@@ -31,7 +30,6 @@ func NewReaderBurst(rd io.Reader, limit rate.Limit, burst int) *Reader {
 	return &Reader{
 		r:       rd,
 		limiter: *rate.NewLimiter(limit, burst),
-		burst:   burst,
 		ctx:     context.Background(),
 	}
 }
@@ -39,7 +37,7 @@ func NewReaderBurst(rd io.Reader, limit rate.Limit, burst int) *Reader {
 func (r *Reader) Read(p []byte) (int, error) {
 	var err error
 
-	if len(p) <= r.burst {
+	if len(p) <= r.limiter.Burst() {
 		// Fast path
 		err = r.limiter.WaitN(r.ctx, len(p))
 		if err != nil {
@@ -55,13 +53,13 @@ func (r *Reader) Read(p []byte) (int, error) {
 		remaining int = len(p)
 	)
 
-	for remaining > r.burst {
-		err = r.limiter.WaitN(r.ctx, r.burst)
+	for remaining > r.limiter.Burst() {
+		err = r.limiter.WaitN(r.ctx, r.limiter.Burst())
 		if err != nil {
 			return offset, err
 		}
 
-		n, err = r.r.Read(p[offset : offset+r.burst])
+		n, err = r.r.Read(p[offset : offset+r.limiter.Burst()])
 		offset += n
 		remaining -= n
 		if err != nil {
@@ -72,7 +70,7 @@ func (r *Reader) Read(p []byte) (int, error) {
 	if remaining > 0 {
 		err = r.limiter.WaitN(r.ctx, remaining)
 		if err != nil {
-			return 0, err
+			return offset, err
 		}
 
 		n, err = r.r.Read(p[offset : offset+remaining])
