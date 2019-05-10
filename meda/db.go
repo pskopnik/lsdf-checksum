@@ -27,6 +27,7 @@ type Config struct {
 }
 
 var DefaultConfig = &Config{
+	Driver:                "mysql",
 	MaxOpenConns:          100,
 	MaxIdleConns:          50,
 	ConnMaxLifetime:       10 * time.Minute,
