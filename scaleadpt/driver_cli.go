@@ -141,11 +141,11 @@ var (
 	gpfsErrorRegExp = regexp.MustCompile("^GPFS: (?P<messagecode>(?P<first>\\d+)-(?P<second>\\d+))( \\[(?P<severity>.)(:(?P<errcode>\\d+))?\\])?")
 
 	snapdirOneLineRegExp = regexp.MustCompile(
-		`^Snapshot directory for "([^"]+)" is "([^"]+)" \(((root directory only)|(all directories))\)
+		`^(?:Global snapshot|Snapshot) directory for "([^"]+)" is "([^"]+)" \(((root directory only)|(all directories))\)
 $`)
 	snapdirTwoLineRegExp = regexp.MustCompile(
 		`^Fileset snapshot directory for "([^"]+)" is "([^"]+)" \(((root directory only)|(all directories))\)
-Global snapshot directory for "([^"]+)" is "([^"]+)" in ((root fileset)|(all filesets))
+(?:Global snapshot|Snapshot) directory for "([^"]+)" is "([^"]+)" in ((root fileset)|(all filesets))
 $`)
 )
 

@@ -17,6 +17,8 @@ var _ = Describe("CLIDriver", func() {
 `
 				gpfs1Output = `Snapshot directory for "gpfs1" is ".snaps" (all directories)
 `
+				hpssOutput = `Global snapshot directory for "hpss" is ".snapshots" (root directory only)
+`
 			)
 
 			driver := &CLIDriver{}
@@ -33,6 +35,13 @@ var _ = Describe("CLIDriver", func() {
 				GlobalsInFileset: false,
 				Fileset:          ".snaps",
 				AllDirectories:   true,
+			}))
+
+			Ω(driver.parseSnapdirOutput([]byte(hpssOutput), "hpss")).Should(Equal(&SnapshotDirsInfo{
+				Global:           ".snapshots",
+				GlobalsInFileset: false,
+				Fileset:          ".snapshots",
+				AllDirectories:   false,
 			}))
 		})
 
