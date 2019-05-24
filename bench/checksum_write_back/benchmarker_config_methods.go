@@ -5,6 +5,9 @@ func (b *BenchmarkerConfig) CopyFrom(other *BenchmarkerConfig) {
 	b.Logger = other.Logger
 	b.GenerateAndWriteVariation.BatchSize = other.GenerateAndWriteVariation.BatchSize
 	b.GenerateAndWriteVariation.TransactionSize = other.GenerateAndWriteVariation.TransactionSize
+	b.GenerateAndWriteVariation.Concurrent = other.GenerateAndWriteVariation.Concurrent
+	b.GenerateAndWriteVariation.Concurrency = other.GenerateAndWriteVariation.Concurrency
+	b.ChecksumLength = other.ChecksumLength
 }
 
 func (b *BenchmarkerConfig) Merge(other *BenchmarkerConfig) *BenchmarkerConfig {
@@ -19,6 +22,15 @@ func (b *BenchmarkerConfig) Merge(other *BenchmarkerConfig) *BenchmarkerConfig {
 	}
 	if other.GenerateAndWriteVariation.TransactionSize != 0 {
 		b.GenerateAndWriteVariation.TransactionSize = other.GenerateAndWriteVariation.TransactionSize
+	}
+	if other.GenerateAndWriteVariation.Concurrent != false {
+		b.GenerateAndWriteVariation.Concurrent = other.GenerateAndWriteVariation.Concurrent
+	}
+	if other.GenerateAndWriteVariation.Concurrency != 0 {
+		b.GenerateAndWriteVariation.Concurrency = other.GenerateAndWriteVariation.Concurrency
+	}
+	if other.ChecksumLength != 0 {
+		b.ChecksumLength = other.ChecksumLength
 	}
 
 	return b

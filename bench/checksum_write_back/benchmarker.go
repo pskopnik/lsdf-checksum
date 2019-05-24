@@ -84,9 +84,9 @@ type BenchmarkerConfig struct {
 var BenchmarkerDefaultConfig = &BenchmarkerConfig{
 	GenerateAndWriteVariation: RunVariation{
 		BatchSize:       1000,
-		TransactionSize: 1000,
-		Concurrent:      false,
-		Concurrency:     1,
+		TransactionSize: 10,
+		Concurrent:      true,
+		Concurrency:     20,
 	},
 	ChecksumLength: 20,
 }
@@ -240,7 +240,7 @@ const populateFilesQuery = GenericQuery(`
 	INSERT INTO {FILES}
 		(rand, path, modification_time, file_size, last_seen, to_be_read, to_be_compared)
 			SELECT
-				RAND(), path, modification_time, file_size, 1, 1, 1
+				RAND(), path, modification_time, file_size, 1, 1, 0
 			FROM {FILE_DATA}
 	;
 `)
@@ -248,9 +248,10 @@ const populateFilesQuery = GenericQuery(`
 const advanceRunsOfAllFilesQuery = GenericQuery(`
 	UPDATE {FILES}
 		SET
+			modification_time = ADDTIME(files.modification_time, 600),
 			last_seen = 2,
 			to_be_read = 1,
-			to_be_compared = 1
+			to_be_compared = 0
 	;
 `)
 
@@ -301,7 +302,11 @@ func (b *Benchmarker) generateAndWriteFilesChecksums(ctx context.Context, method
 
 	runner := method.CreateRunnerFunc(runnerConfig)
 
-	_, err = runner.Run(ctx)
+	if b.config.GenerateAndWriteVariation.Concurrent {
+		_, err = runner.RunConcurrently(ctx)
+	} else {
+		_, err = runner.Run(ctx)
+	}
 	if err != nil {
 		return err
 	}
