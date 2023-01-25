@@ -1,0 +1,36 @@
+filesystems:
+  # Name of the filesystem (all listed filesystems will be checked).
+  gpfs01:
+    # The mount point of the filesystem (lsfs or /proc/mount).
+    mount_root: /gpfs01
+    # The version of the filesystem (mmlsfs).
+    version: "27.00 (5.1.3.0)"
+    # Information about the snapshot directories (mmsnapdir).
+    snapshot_dirs_info:
+      # Global snapshots directory name.
+      global: .snapshots
+      # Are global snapshots available in the root directory of each
+      # independent fileset?
+      globals_in_fileset: false
+      # Independent filesets' snapshots directory name.
+      fileset: .snapshots
+      # Are snapshot directories present in every directory?
+      all_directories: false
+    # Create a snapshot with this name, retrieve its meta-data and finally
+    # delete it.
+    create_get_delete_snapshot: scaleadpt-tests
+    # Execute a list policy via the Policy Engine and compare the listed files.
+    list_policy:
+      # Subpath in the filesystem for which to execute the list policy.
+      subpath: /test-dir
+      # Is the list of files below "complete", i.e. does it describe all files
+      # in the tree?
+      files_complete: false
+      # Files expected in the file list.
+      files:
+          # Relative path within subpath to the file.
+        - path: file01
+          # File's size in bytes (as reported in the inode).
+          size: 14
+        - path: file02
+          size: 15
