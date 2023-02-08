@@ -468,7 +468,7 @@ func (t *transactioner) commitTx() error {
 	t.txMutex.Unlock()
 
 	if insertChecksumWarningStmt != nil {
-		err := t.insertChecksumWarningStmt.Close()
+		err := insertChecksumWarningStmt.Close()
 		if err != nil && retErr == nil {
 			retErr = errors.Wrap(err, "(*transactioner).commitTx: close insert checksum warning statement")
 		}
