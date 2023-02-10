@@ -383,7 +383,7 @@ func (f *FilesToBeReadFetcher) AppendNext(files []File, ctx context.Context, que
 		if uint64(len(files[baseInd:])) < queryLimit {
 			// not enough files returned as chunk is exhausted, try to fetch
 			// files from next chunk
-			queryLimit = limit - uint64(len(files[baseInd:]))
+			queryLimit -= uint64(len(files[baseInd:]))
 			f.chunkContainsRows = false
 			continue
 		} else {
