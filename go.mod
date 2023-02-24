@@ -30,9 +30,9 @@ require (
 	github.com/thecodeteam/gofsutil v0.1.2 // indirect
 	github.com/tinylib/msgp v1.0.2
 	golang.org/x/exp v0.0.0-20190121172915-509febef88a4
-	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
-	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
-	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
+	golang.org/x/sys v0.5.0
 	golang.org/x/time v0.0.0-20180412165947-fbb02b2291d2
 	gonum.org/v1/gonum v0.0.0-20180823045727-3092bd257723
 	gonum.org/v1/netlib v0.0.0-20180816165226-ebcc3d2662d3 // indirect
