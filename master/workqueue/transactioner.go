@@ -388,9 +388,11 @@ func (t *transactioner) Close() error {
 	var tx *sqlx.Tx
 	var insertChecksumWarningStmt *sqlx.NamedStmt
 
-	t.cancel()
-	// No context, so cannot wait for caller signalled cancel event
-	<-t.tomb.Dead()
+	if t.cancel != nil {
+		t.cancel()
+		// No context, so cannot wait for caller signalled cancel event
+		<-t.tomb.Dead()
+	}
 
 	t.txMutex.Lock()
 	if t.txState == transactionStateIdle || t.txState == transactionStateActive {
@@ -455,9 +457,11 @@ func (t *transactioner) commitTx() error {
 	var tx *sqlx.Tx
 	var insertChecksumWarningStmt *sqlx.NamedStmt
 
-	t.cancel()
-	// No context, so cannot wait for caller signalled cancel event
-	<-t.tomb.Dead()
+	if t.cancel != nil {
+		t.cancel()
+		// No context, so cannot wait for caller signalled cancel event
+		<-t.tomb.Dead()
+	}
 
 	t.txMutex.Lock()
 	if t.txState == transactionStateIdle || t.txState == transactionStateActive {
