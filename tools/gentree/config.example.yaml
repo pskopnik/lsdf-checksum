@@ -1,0 +1,47 @@
+# Root directory (should be empty) where the file tree is generated.
+root_dir: /tmp/tmp.tY7JccJPCL
+# With dry_run: true, no changes to the filesystem are performed.
+dry_run: true
+# Name of the generation model.
+# Only CompleteTree is available.
+model: CompleteTree
+# Specification (parameters) for the model.
+spec:
+  # If left unspecified, a random seed is chosen and printed.
+  #seed: 17822329598560336485
+  # Maximum depth of the generated file tree.
+  max_depth: 5
+  # File name/directory name length.
+  name_length: 20
+  # What to write into the generated file?
+  #   nobytes - files are created empty
+  #   sizestr - the chosen file size is written into the file
+  #   randombytes - random bytes of the chosen file size
+  fill_mode: sizestr
+  # Number of sub-directories per directory is drawn from this.
+  sub_directory_distribution:
+    # Name of the distribution.
+    # Available distributions:
+    #   pareto: params: xm, alpha
+    #   log_normal: params: mu, sigma
+    name: log_normal
+    # Params of the distribution.
+    params:
+      mu: 1
+      sigma: 0.5
+  # Number of files per directory is drawn from this.
+  file_distribution:
+    # See sub_directory_distribution.
+    name: log_normal
+    params:
+      mu: 2
+      sigma: 1.5
+  # Size of each file is drawn from this.
+  file_size_distribution:
+    # See sub_directory_distribution.
+    name: log_normal
+    params:
+      # Lognormal(mu=11, sigma=3)
+      # -> mean file size = 5.14 MiB
+      mu: 11
+      sigma: 3

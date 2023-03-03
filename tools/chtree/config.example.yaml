@@ -1,0 +1,40 @@
+# Root directory which will be walked through.
+root_dir: /tmp/tmp.tY7JccJPCL
+# If left unspecified, a random seed is chosen and printed.
+#seed: 8384577133769050516
+# List of changers.
+# For each file in the tree, each changer will be considered. According to the
+# specified likelihood, the change method will be executed on the file.
+# That means multiple changes on a single file may be performed.
+changers:
+  # A changer using "append" method.
+  # The "append" method will add random bytes after the current end of the file.
+  - append:
+      # Number of bytes which are appended to the file.
+      size: 100
+    # Probability with which this changer will be applied on a file.
+    likelihood: 0.01
+  # A changer using "replace" method.
+  # The "replace" method will replace a random single range of bytes by random
+  # bytes.
+  # If a byte towards the end of the file is chosen as the range start, less
+  # than the specified size may be written and the file size will never be
+  # extended. The method will always replace at least one byte.
+  - replace:
+      # Size of the range (i.e. end pos - start pos) to be changed.
+      size: 100
+    # Optional ID for this changer, useful for the JSON change output.
+    # If not specified, the changer's 0-based index in this list will be used,
+    # e.g "#1" for this one.
+    id: random-replace
+    likelihood: 0.01
+  # A changer using "flipbyte" method.
+  # The "flipbyte" method will choose a random byte in the file, invert its
+  # bits and write it back.
+  # flipbyte has no parameters and `{}` must be specified.
+  - flipbyte: {}
+    likelihood: 0.001
+    # If set to true, the file's mtime will be reset to its previous value after
+    # the change method was executed.
+    # This simulates a silent corruption of the file.
+    corrupt: true

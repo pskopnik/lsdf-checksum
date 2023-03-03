@@ -4,6 +4,7 @@ import (
 	"bufio"
 	cryptoRand "crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"math"
@@ -54,13 +55,16 @@ type Config struct {
 	RootDir string                 `yaml:"root_dir"`
 	Model   string                 `yaml:"model"`
 	Spec    map[string]interface{} `yaml:"spec"`
+	DryRun  bool                   `yaml:"dry_run"`
 }
 
 type Model interface {
-	Generate(rootDir string) error
+	Generate(rootDir string, dryRun bool) (GenerateSummary, error)
 }
 
 type zeroReader struct{}
+
+var _ io.Reader = &zeroReader{}
 
 func (z *zeroReader) Read(p []byte) (int, error) {
 	for i := 0; i < len(p); i++ {
@@ -92,9 +96,26 @@ func FillModeFromString(s string) FillMode {
 	}
 }
 
+type GenerateSummary struct {
+	Files       int64
+	Directories int64
+	FileBytes   int64
+}
+
+func (g *GenerateSummary) AddFile(size int64) {
+	g.Files += 1
+	g.FileBytes += size
+}
+
+func (g *GenerateSummary) AddDirectory() {
+	g.Directories += 1
+}
+
 type CompleteTreeModel struct {
-	src  rand.Source
-	rand *rand.Rand
+	src         rand.Source
+	rand        *rand.Rand
+	contentSrc  rand.Source
+	contentRand *rand.Rand
 
 	maxDepth                 int
 	nameLength               int
@@ -110,8 +131,10 @@ type CompleteTreeModel struct {
 func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 	specMap := objx.Map(spec)
 
+	var seed uint64
 	if v := specMap.Get("seed"); v.IsUint64() {
-		c.src = rand.NewSource(v.Uint64())
+		seed = v.Uint64()
+		log.Println("Using specified seed:", seed)
 	} else {
 		// max is (1 << 64) - 1, resulting in the range [0, 1 << 64) for cryptoRand.Int
 		max := big.NewInt(0).SetUint64(math.MaxUint64)
@@ -121,10 +144,14 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 		}
 		log.Println("Generated new seed:", bigInt.Uint64())
 
-		c.src = rand.NewSource(bigInt.Uint64())
+		seed = bigInt.Uint64()
 	}
 
+	c.src = rand.NewSource(seed)
 	c.rand = rand.New(c.src)
+
+	c.contentSrc = rand.NewSource(seed)
+	c.contentRand = rand.New(c.contentSrc)
 
 	c.maxDepth = specMap.Get("max_depth").Int(1)
 
@@ -161,46 +188,60 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 	return nil
 }
 
-func (c *CompleteTreeModel) Generate(rootDir string) error {
-	err := os.MkdirAll(rootDir, dirPerm)
-	if err != nil {
-		return err
+func (c *CompleteTreeModel) Generate(rootDir string, dryRun bool) (summary GenerateSummary, err error) {
+	if !dryRun {
+		err = os.MkdirAll(rootDir, dirPerm)
+		if err != nil {
+			return
+		}
+
+		var devUrandom *os.File
+		devUrandom, err = os.Open(pathDevUrandom)
+		if err != nil {
+			return
+		}
+		defer devUrandom.Close()
+
+		if c.urandomReader == nil {
+			c.urandomReader = bufio.NewReaderSize(devUrandom, copyBufferSize)
+		} else {
+			c.urandomReader.Reset(devUrandom)
+		}
+		defer c.urandomReader.Reset(nil)
 	}
 
-	devUrandom, err := os.Open(pathDevUrandom)
-	if err != nil {
-		return err
-	}
-	defer devUrandom.Close()
+	err = c.recPopulateDir(rootDir, 1, dryRun, &summary)
 
-	if c.urandomReader == nil {
-		c.urandomReader = bufio.NewReaderSize(devUrandom, copyBufferSize)
-	} else {
-		c.urandomReader.Reset(devUrandom)
-	}
-	defer c.urandomReader.Reset(nil)
-
-	return c.recPopulateDir(rootDir, 1)
+	return
 }
 
-func (c *CompleteTreeModel) recPopulateDir(dir string, depth int) error {
+func (c *CompleteTreeModel) recPopulateDir(dir string, depth int, dryRun bool, summary *GenerateSummary) (err error) {
 	numOfFiles := int(c.fileDistribution.Rand())
 
 	for i := 0; i < numOfFiles; i++ {
+		fileSize := int64(c.fileSizeDistribution.Rand())
+
 		name := c.generateName()
-		_, err := os.Stat(filepath.Join(dir, name))
-		for err == nil || !os.IsNotExist(err) {
-			name = c.generateName()
-			_, err = os.Stat(filepath.Join(dir, name))
-		}
-		if err != nil && !os.IsNotExist(err) {
-			return err
+		path := filepath.Join(dir, name)
+
+		if !dryRun {
+			_, err = os.Stat(path)
+			for err == nil || !os.IsNotExist(err) {
+				name = c.generateName()
+				path = filepath.Join(dir, name)
+				_, err = os.Stat(path)
+			}
+			if err != nil && !os.IsNotExist(err) {
+				return
+			}
+
+			err = c.createFile(path, fileSize)
+			if err != nil {
+				return
+			}
 		}
 
-		err = c.fillFile(filepath.Join(dir, name))
-		if err != nil {
-			return err
-		}
+		summary.AddFile(fileSize)
 	}
 
 	if depth >= c.maxDepth {
@@ -211,16 +252,23 @@ func (c *CompleteTreeModel) recPopulateDir(dir string, depth int) error {
 
 	for i := 0; i < numOfSubDirectories; i++ {
 		name := c.generateName()
-		err := os.Mkdir(filepath.Join(dir, name), dirPerm)
-		for os.IsExist(err) {
-			name = c.generateName()
-			err = os.Mkdir(filepath.Join(dir, name), dirPerm)
-		}
-		if err != nil {
-			return err
+		path := filepath.Join(dir, name)
+
+		if !dryRun {
+			err = os.Mkdir(path, dirPerm)
+			for os.IsExist(err) {
+				name = c.generateName()
+				path = filepath.Join(dir, name)
+				err = os.Mkdir(path, dirPerm)
+			}
+			if err != nil {
+				return err
+			}
 		}
 
-		err = c.recPopulateDir(filepath.Join(dir, name), depth+1)
+		summary.AddDirectory()
+
+		err = c.recPopulateDir(path, depth+1, dryRun, summary)
 		if err != nil {
 			return err
 		}
@@ -229,14 +277,12 @@ func (c *CompleteTreeModel) recPopulateDir(dir string, depth int) error {
 	return nil
 }
 
-func (c *CompleteTreeModel) fillFile(path string) error {
+func (c *CompleteTreeModel) createFile(path string, size int64) error {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, filePerm)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-
-	fileSize := int64(c.fileSizeDistribution.Rand())
 
 	switch c.fillMode {
 	case FM_RANDOMBYTES:
@@ -251,8 +297,8 @@ func (c *CompleteTreeModel) fillFile(path string) error {
 		buf := copyBufferPool.Get().([]byte)
 		defer copyBufferPool.Put(buf)
 
-		for bytesWritten < fileSize {
-			n = min(c.rand.Intn(1024), int(fileSize-bytesWritten))
+		for bytesWritten < size {
+			n = min(c.contentRand.Intn(1024), int(size-bytesWritten))
 
 			written, err = io.CopyBuffer(file, io.LimitReader(c.urandomReader, int64(n)), buf)
 			if err != nil {
@@ -260,7 +306,7 @@ func (c *CompleteTreeModel) fillFile(path string) error {
 			}
 			bytesWritten += written
 
-			n = min(c.rand.Intn(10*1024), int(fileSize-bytesWritten))
+			n = min(c.contentRand.Intn(10*1024), int(size-bytesWritten))
 
 			written, err = io.CopyBuffer(file, io.LimitReader(&c.zeroReader, int64(n)), buf)
 			if err != nil {
@@ -270,7 +316,7 @@ func (c *CompleteTreeModel) fillFile(path string) error {
 		}
 		bufferedFile.Flush()
 	case FM_SIZESTR:
-		_, err = file.Write([]byte(strconv.FormatInt(fileSize, 10)))
+		_, err = file.Write([]byte(strconv.FormatInt(size, 10)))
 	case FM_NOBYTES:
 	}
 
@@ -318,7 +364,8 @@ func DistributionFromSpec(spec map[string]interface{}, src rand.Source) distuv.R
 			Mu:    paramsMap.Get("mu").Float64(float64(paramsMap.Get("mu").Int(0))),
 			Sigma: paramsMap.Get("sigma").Float64(float64(paramsMap.Get("sigma").Int(0))),
 		}
-		log.Printf("%+v", rander)
+	default:
+		panic(fmt.Sprintf("Unknown distribution name: %s", specMap.Get("name").Str()))
 	}
 
 	return rander
@@ -368,6 +415,11 @@ func readConfig(path string) (*Config, error) {
 }
 
 func main() {
+	if len(os.Args) != 2 {
+		fmt.Println("Usage:", os.Args[0], "<config.yaml>")
+		os.Exit(1)
+	}
+
 	config, err := readConfig(os.Args[1])
 	if err != nil {
 		panic(err)
@@ -385,11 +437,18 @@ func main() {
 
 		model = treeModel
 	default:
-		panic("Unknown 'model'")
+		panic(fmt.Sprintf("Unknown model: %s", config.Model))
 	}
 
-	err = model.Generate(config.RootDir)
+	if config.DryRun {
+		log.Printf("Starting generation dry run")
+	} else {
+		log.Printf("Starting generation at %s", config.RootDir)
+	}
+
+	summary, err := model.Generate(config.RootDir, config.DryRun)
 	if err != nil {
 		panic(err)
 	}
+	log.Printf("Summary: %+v", summary)
 }
