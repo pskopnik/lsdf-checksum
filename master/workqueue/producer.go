@@ -183,7 +183,12 @@ func (p *Producer) rowFetcher() error {
 
 			return err
 		}
-		exhausted = len(files) != cap(files)
+		exhausted = len(files) < int(p.Config.FetchRowBatchSize)
+
+		p.fieldLogger.WithFields(log.Fields{
+			"exhausted": exhausted,
+			"count": len(files),
+		}).Info("Fetched files from database")
 
 		for _, file := range files {
 			select {

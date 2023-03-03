@@ -132,6 +132,7 @@ func (b *batcher) Add(ctx context.Context, file *workqueue.WriteBackPackFile) er
 			// TODO measure impact.
 			select {
 			case <-b.tomb.Dying():
+				b.mutex.Unlock()
 				return pkgErrors.Wrap(errBatcherDying, "(*batcher).Add")
 			default:
 			}

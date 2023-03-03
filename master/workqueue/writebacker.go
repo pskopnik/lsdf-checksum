@@ -3,6 +3,7 @@ package workqueue
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -354,15 +355,17 @@ func (w *WriteBacker) collectFilesInBatch(batch *filesBatch) (map[uint64][]byte,
 }
 
 func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File, checksum []byte, transactioner *transactioner) error {
-	w.fieldLogger.WithFields(log.Fields{
+	fieldLogger := w.fieldLogger.WithFields(log.Fields{
 		"file_id":                file.ID,
 		"file_path":              file.Path,
 		"file_modification_time": file.ModificationTime,
 		"file_size":              file.FileSize,
-		"expected_checksum":      file.Checksum,
-		"actual_checksum":        checksum,
+		"expected_checksum":      hex.EncodeToString(file.Checksum),
+		"actual_checksum":        hex.EncodeToString(checksum),
 		"file_last_read":         file.LastRead.Uint64,
-	}).Info("Discovered checksum mismatch, writing checksum warning")
+	})
+
+	fieldLogger.Info("Discovered checksum mismatch, writing checksum warning")
 
 	checksumWarning := meda.ChecksumWarning{
 		FileID:           file.ID,
@@ -379,15 +382,8 @@ func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File,
 	err := transactioner.InsertChecksumWarning(ctx, &checksumWarning)
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*WriteBacker).issueChecksumWarning")
-		w.fieldLogger.WithError(err).WithFields(log.Fields{
+		fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":                 "escalating",
-			"file_id":                file.ID,
-			"file_path":              file.Path,
-			"file_modification_time": file.ModificationTime,
-			"file_size":              file.FileSize,
-			"expected_checksum":      file.Checksum,
-			"actual_checksum":        checksum,
-			"file_last_read":         file.LastRead.Uint64,
 		}).Error("Encountered error while issuing checksum warning")
 	}
 
