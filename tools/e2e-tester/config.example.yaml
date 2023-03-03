@@ -1,0 +1,75 @@
+# Name of the GPFS filesystem on which tests are executed.
+filesystem_name: gpfs01
+# Root directory for the tree of files modified and read in the tests.
+# The directory must be in the filesystem_name filesystem.
+root_dir: /gpfs01/lsdf-checksum/tree/e2e-tester
+# Additional paths for looking up the required binaries.
+# Multiple directories can be separated by colon.
+# These directories will always be checked before the $PATH directories.
+bin_path: /root/bin
+# If true, the checksum database will be cleared, i.e. all tables dropped.
+# The db.datasourcename and db.driver from the checksum.base_config are used.
+# Warning: All tables in the database will be deleted. Only enable this option
+# if you are using a dedicated database for the e2e tests.
+clear_database: false
+gentree:
+  # If true, gentree will not be invoked initially, i.e. test data must already
+  # exist in the root_dir.
+  skip: false
+  # File path to gentree config file used as the base for performing gentree.
+  # The configuration should already have a seed specified!
+  # A temp file containing the same settings (with some overwritten) will be
+  # created.
+  # Overwritten: root_dir
+  base_config: ./gentree.config.yaml
+checksum:
+  # File path to checksum master config file used as the base for performing
+  # checksum runs and related commands.
+  # A temp file containing the same settings (with some overwritten) will be
+  # created.
+  # Overwritten: master.filesystemname, master.filesystemsubpath
+  base_config: ./lsdf-checksum.master.config.yaml
+  # If specified, a debug log for each checksum run will be written here.
+  log_dir: ./e2e-log/
+  # If specified, each checksum run will be invoked with an env variable for
+  # configuring the runtime race detector to write its logs to this directory.
+  # If the binary has been built with -race to this must be passed.
+  # https://go.dev/doc/articles/race_detector
+  race_log_dir: ./e2e-race/
+  # If specified, each checksum run will be invoked with an env variable for
+  # enable outputting of code coverage information to this directory.
+  # https://go.dev/testing/coverage/
+  cover_dir: ./e2e-cover/
+# List of individual e2e test step to be executed.
+# Each step consists of:
+# 1) perform chtree on the root_dir.
+# 2) optional: perform checksum incremental run.
+# 3) perform checksum full run.
+# 4) make sure the checksum warnings match the chtree corruptions exactly.
+#
+# Before the steps are executed, there is always a full run to make sure the
+# checksum database has up-to-date information about the root_dir.
+steps:
+  - corrupt_likelihood: 0
+    change_likelihood: 0.03
+    perform_incremental_run: true
+
+    # Likelihood of a corrupting change to a/each file.
+    # corrupt_likelihood and change_likelihood are statistically independent.
+  - corrupt_likelihood: 0.001
+    # Likelihood of a non-corrupting change to a/each file.
+    change_likelihood: 0.03
+    # If true, an incremental checksum run will be performed (see above).
+    perform_incremental_run: true
+
+  - corrupt_likelihood: 0.001
+    change_likelihood: 0.01
+    perform_incremental_run: true
+
+  - corrupt_likelihood: 0.0001
+    change_likelihood: 0.001
+    perform_incremental_run: true
+
+  - corrupt_likelihood: 0.0001
+    change_likelihood: 0.001
+    perform_incremental_run: false
