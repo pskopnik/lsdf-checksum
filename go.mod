@@ -21,7 +21,7 @@ require (
 	github.com/tinylib/msgp v1.0.2
 	golang.org/x/exp v0.0.0-20190121172915-509febef88a4
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
-	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
+	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
 	golang.org/x/time v0.0.0-20180412165947-fbb02b2291d2
 	gonum.org/v1/gonum v0.0.0-20180823045727-3092bd257723
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
@@ -45,7 +45,7 @@ require (
 	github.com/thecodeteam/gofsutil v0.1.2 // indirect
 	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2 // indirect
 	golang.org/x/net v0.0.0-20190311183353-d8887717615a // indirect
-	golang.org/x/text v0.3.0 // indirect
+	golang.org/x/text v0.3.8 // indirect
 	gonum.org/v1/netlib v0.0.0-20180816165226-ebcc3d2662d3 // indirect
 	google.golang.org/appengine v1.4.0 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
