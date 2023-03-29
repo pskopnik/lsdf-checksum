@@ -3,7 +3,7 @@ package filelist_test
 import (
 	"strings"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/filelist"

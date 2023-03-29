@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"github.com/apex/log"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/master"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"

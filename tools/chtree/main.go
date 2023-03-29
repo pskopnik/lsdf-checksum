@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/exp/rand"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {

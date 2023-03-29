@@ -20,7 +20,7 @@ import (
 	// goErrors "github.com/go-errors/errors"
 	"github.com/stretchr/objx"
 	"gonum.org/v1/gonum/stat/distuv"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var (
