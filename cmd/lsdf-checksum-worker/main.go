@@ -12,7 +12,7 @@ import (
 	"github.com/apex/log/handlers/json"
 	"github.com/apex/log/handlers/logfmt"
 	"github.com/apex/log/handlers/text"
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/alecthomas/kingpin/v2"
 	"gopkg.in/yaml.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/worker"
