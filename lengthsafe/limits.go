@@ -57,11 +57,14 @@ func findSymlinkMax() error {
 	var ok bool
 	var tryLength uint
 
+	// Start by finding lower and upper bound through exponentially increasing steps
 	lower, upper, err := findBounds()
 	if err != nil {
 		return err
 	}
 
+	// Check the two values next to each of the bounds...
+	// E.g. often the limit is 4095, 1 less than the discovered uppoer bound of 4096
 	tryLength, ok, err = searchDirectional(upper, false, 2)
 	if err != nil {
 		return err
@@ -79,6 +82,7 @@ func findSymlinkMax() error {
 		return nil
 	}
 
+	// Finally do a binary search between the bounds
 	tryLength, ok, err = searchBinary(lower, upper)
 	if err != nil {
 		return err
@@ -117,19 +121,16 @@ func findBounds() (lower uint, upper uint, err error) {
 }
 
 func searchDirectional(length uint, forward bool, n uint) (uint, bool, error) {
-	var tryLength, stepOffset int
-	if forward {
-		stepOffset = 1
-	} else {
-		stepOffset = -1
-	}
-
-	tryLength = int(length)
+	tryLength := length
 
 	for i := uint(1); i <= n; i++ {
-		tryLength += stepOffset
+		if forward {
+			tryLength++
+		} else {
+			tryLength--
+		}
 
-		ok, err := trySymlinkLength(uint(tryLength))
+		ok, err := trySymlinkLength(tryLength)
 		if err != nil {
 			return 0, false, err
 		}
@@ -137,7 +138,7 @@ func searchDirectional(length uint, forward bool, n uint) (uint, bool, error) {
 			if forward {
 				tryLength--
 			}
-			return uint(tryLength), true, nil
+			return tryLength, true, nil
 		}
 	}
 
@@ -169,7 +170,7 @@ func searchBinary(start, end uint) (uint, bool, error) {
 
 func trySymlinkLength(length uint) (bool, error) {
 	// The length calculation is: ceil(length / |sampleStr|)
-	oldname := strings.Repeat(sampleStr, ((int(length)-1)/len(sampleStr))+1)[:int(length)]
+	oldname := strings.Repeat(sampleStr, (int(length-1)/len(sampleStr))+1)[:length]
 
 	name, err := osutils.CreateTempSymlink(oldname, lengthsafePrefix, "", "")
 	if err != nil {
