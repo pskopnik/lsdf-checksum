@@ -48,14 +48,14 @@ const insertsPrepareInsertQuery = GenericQuery(`
 	;
 `)
 
-func (d *DB) InsertsPrepareInsert(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {
+func (d *DB) insertsPrepareInsert(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {
 	if preparer == nil {
 		preparer = &d.DB
 	}
 
 	stmt, err := preparer.PrepareNamedContext(ctx, insertsPrepareInsertQuery.SubstituteAll(d))
 	if err != nil {
-		return nil, errors.Wrap(err, "(*DB).InsertsPrepareInsert")
+		return nil, errors.Wrap(err, "(*DB).insertsPrepareInsert")
 	}
 
 	return stmt, nil

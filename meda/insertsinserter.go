@@ -1,22 +1,20 @@
-package medasync
+package meda
 
 import (
 	"context"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-
-	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 )
 
-type insertsInserterConfig struct {
-	DB                 *meda.DB `yaml:"-"`
+type InsertsInserterConfig struct {
 	MaxTransactionSize int
 }
 
-type insertsInserter struct {
-	Config *insertsInserterConfig
+type InsertsInserter struct {
+	Config *InsertsInserterConfig
 	ctx    context.Context
+	db     *DB
 
 	insertsCount int
 
@@ -25,18 +23,7 @@ type insertsInserter struct {
 	txQueryCount   int
 }
 
-// newInsertsInserter creates and returns an insertsTransaction from ctx
-// and config.
-// ctx is used as the transaction context for all transactions begun by the
-// transactioner.
-func newInsertsInserter(ctx context.Context, config *insertsInserterConfig) *insertsInserter {
-	return &insertsInserter{
-		Config: config,
-		ctx:    ctx,
-	}
-}
-
-func (i *insertsInserter) Insert(ctx context.Context, insert *meda.Insert) error {
+func (i *InsertsInserter) Insert(ctx context.Context, insert *Insert) error {
 	if i.tx == nil {
 		err := i.beginTx(ctx)
 		if err != nil {
@@ -62,15 +49,15 @@ func (i *insertsInserter) Insert(ctx context.Context, insert *meda.Insert) error
 	return nil
 }
 
-func (i *insertsInserter) InsertsCount() int {
+func (i *InsertsInserter) InsertsCount() int {
 	return i.insertsCount
 }
 
-func (i *insertsInserter) Commit() error {
+func (i *InsertsInserter) Commit() error {
 	return i.commitTx()
 }
 
-func (i *insertsInserter) Close() error {
+func (i *InsertsInserter) Close() error {
 	var retErr error
 
 	if i.insertPrepStmt != nil {
@@ -101,17 +88,17 @@ func (i *insertsInserter) Close() error {
 // If no error is returned, i.tx and i.insertPrepStmt are valid and
 // txQueryCount is 0.
 // If an error is returned, i.tx and i.insertPrepStmt == nil.
-func (i *insertsInserter) beginTx(ctx context.Context) error {
+func (i *InsertsInserter) beginTx(ctx context.Context) error {
 	var err error
 
-	i.tx, err = i.Config.DB.BeginTxx(i.ctx, nil)
+	i.tx, err = i.db.BeginTxx(i.ctx, nil)
 	i.txQueryCount = 0
 	if err != nil {
 		i.tx = nil
 		return errors.Wrap(err, "(*insertsInserter).beginTx: begin transaction")
 	}
 
-	i.insertPrepStmt, err = i.Config.DB.InsertsPrepareInsert(ctx, i.tx)
+	i.insertPrepStmt, err = i.db.insertsPrepareInsert(ctx, i.tx)
 	if err != nil {
 		_ = i.tx.Rollback()
 		i.tx, i.insertPrepStmt = nil, nil
@@ -125,7 +112,7 @@ func (i *insertsInserter) beginTx(ctx context.Context) error {
 // commitTx attempts to commit the transaction and close resources regardless
 // of whether an error is returned.
 // commitTx always sets i.tx and i.insertPrepStmt == nil.
-func (i *insertsInserter) commitTx() error {
+func (i *InsertsInserter) commitTx() error {
 	var retErr error
 
 	if i.insertPrepStmt != nil {
@@ -148,4 +135,15 @@ func (i *insertsInserter) commitTx() error {
 	}
 
 	return retErr
+}
+
+// NewInsertsInserter returns an InsertsInserter for fast insertion.
+// ctx is used as the transaction context for all transactions begun by the
+// InsertsInserter.
+func (d *DB) NewInsertsInserter(ctx context.Context, config *InsertsInserterConfig) *InsertsInserter {
+	return &InsertsInserter{
+		Config: config,
+		ctx: ctx,
+		db: d,
+	}
 }

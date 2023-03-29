@@ -214,8 +214,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 
 	s.fieldLogger.Info("Starting meta data database inserts")
 
-	inserter := newInsertsInserter(ctx, &insertsInserterConfig{
-		DB:                 s.Config.DB,
+	inserter := s.Config.DB.NewInsertsInserter(ctx, &meda.InsertsInserterConfig{
 		MaxTransactionSize: s.Config.MaxTransactionSize,
 	})
 	defer inserter.Close()
