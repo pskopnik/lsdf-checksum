@@ -12,7 +12,6 @@ require (
 	github.com/gocraft/work v0.5.1
 	github.com/gomodule/redigo v1.8.9
 	github.com/hacdias/fileutils v1.0.0
-	github.com/imdario/mergo v0.3.15
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo/v2 v2.9.2
