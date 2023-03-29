@@ -58,7 +58,7 @@ var _ = Describe("Parser", func() {
 		})
 
 		It("should parse filenames with spaces and symbols", func() {
-			parser := setupParser("1 2 3 |4|2018-05-22 23:01:39.727768| -- /this is a/file /path.with/&a_lot-of/%strange (characters).?ß")
+			parser := setupParser("1 2 3 |4|2018-05-22 23:01:39.727768| -- /this%20is a/file /path.wi%0Ath/&a_lot-of/%25strange (characters).?ß")
 
 			modTime, err := time.Parse("2006-01-02 15:04:05", "2018-05-22 23:01:39.727768")
 			Ω(err).ShouldNot(HaveOccurred())
@@ -69,7 +69,7 @@ var _ = Describe("Parser", func() {
 				SnapshotID:       3,
 				FileSize:         4,
 				ModificationTime: modTime,
-				Path:             "/this is a/file /path.with/&a_lot-of/%strange (characters).?ß",
+				Path:             "/this is a/file /path.wi\nth/&a_lot-of/%strange (characters).?ß",
 			}))
 		})
 

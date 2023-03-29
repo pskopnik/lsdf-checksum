@@ -170,8 +170,6 @@ func (l *DBLockLocker) keepAliver() error {
 			return tomb.ErrDying
 		}
 	}
-
-	return nil
 }
 
 var dbLockLockerQuerySelectOneQuery = GenericQuery(`

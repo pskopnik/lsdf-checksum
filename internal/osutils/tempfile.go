@@ -24,7 +24,7 @@ func NonExistingTempFile(prefix, suffix, dir string) string {
 
 	for !os.IsNotExist(err) {
 		name = prefix + random.String(10)
-		path = filepath.Join(os.TempDir(), name+suffix)
+		path = filepath.Join(dir, name+suffix)
 		_, err = os.Stat(path)
 	}
 

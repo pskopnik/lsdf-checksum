@@ -108,7 +108,7 @@ func (l *LengthSafeFile) prepareSymlinks() error {
 	path := l.openPath
 
 	for {
-		dir, remainder = l.limitPath(path)
+		dir, remainder = splitPathOnSymlinkLimit(path)
 		if len(remainder) == 0 {
 			break
 		}
@@ -126,22 +126,6 @@ func (l *LengthSafeFile) prepareSymlinks() error {
 	l.openPath = path
 
 	return nil
-}
-
-func (l *LengthSafeFile) limitPath(path string) (dir string, remainder string) {
-	if uint(len(path)) <= symlinkMax {
-		return path, ""
-	}
-
-	dir = filepath.Dir(path[:symlinkMax])
-
-	if path[(symlinkMax-1)] == filepath.Separator {
-		remainder = path[symlinkMax:]
-	} else {
-		remainder = filepath.Base(path[:symlinkMax]) + path[symlinkMax:]
-	}
-
-	return
 }
 
 func Open(name string) (*LengthSafeFile, error) {
@@ -178,4 +162,20 @@ func OpenFile(name string, flag int, perm os.FileMode) (*LengthSafeFile, error) 
 	}
 
 	return f, nil
+}
+
+func splitPathOnSymlinkLimit(path string) (dir string, remainder string) {
+	if uint(len(path)) <= symlinkMax {
+		return path, ""
+	}
+
+	dir = filepath.Dir(path[:symlinkMax])
+
+	if path[(symlinkMax-1)] == filepath.Separator {
+		remainder = path[symlinkMax:]
+	} else {
+		remainder = filepath.Base(path[:symlinkMax]) + path[symlinkMax:]
+	}
+
+	return
 }

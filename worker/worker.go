@@ -16,8 +16,8 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
-	"git.scc.kit.edu/sdm/lsdf-checksum/lengthsafe"
-	"git.scc.kit.edu/sdm/lsdf-checksum/ratedreader"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lengthsafe"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/ratedreader"
 	commonRedis "git.scc.kit.edu/sdm/lsdf-checksum/redis"
 	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
