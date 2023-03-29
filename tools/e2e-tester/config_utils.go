@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/stretchr/objx"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func loadConfigFileIntoMap(configPath string) (objx.Map, error) {

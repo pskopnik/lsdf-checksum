@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/filelist"

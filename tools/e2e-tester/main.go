@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	_ "github.com/go-sql-driver/mysql"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
