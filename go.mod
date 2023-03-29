@@ -15,8 +15,8 @@ require (
 	github.com/imdario/mergo v0.3.15
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/onsi/ginkgo v1.7.0
-	github.com/onsi/gomega v1.5.0
+	github.com/onsi/ginkgo/v2 v2.9.2
+	github.com/onsi/gomega v1.27.5
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/objx v0.5.0
 	github.com/tinylib/msgp v1.1.8
@@ -31,7 +31,10 @@ require (
 
 require (
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
-	github.com/hpcloud/tail v1.0.0 // indirect
+	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/pprof v0.0.0-20230323073829-e72429f035bd // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
@@ -43,7 +46,5 @@ require (
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
-	gopkg.in/fsnotify.v1 v1.4.7 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
+	golang.org/x/tools v0.7.0 // indirect
 )
