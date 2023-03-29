@@ -11,6 +11,11 @@ type InsertsInserterConfig struct {
 	MaxTransactionSize int
 }
 
+type InsertsInserterStats struct {
+	InsertsCount int
+}
+
+// InsertsInserter offers fast row insertions into the inserts table.
 type InsertsInserter struct {
 	Config *InsertsInserterConfig
 	ctx    context.Context
@@ -23,17 +28,21 @@ type InsertsInserter struct {
 	txQueryCount   int
 }
 
-func (i *InsertsInserter) Insert(ctx context.Context, insert *Insert) error {
+// Add adds a row to be inserted with the data in insert.
+// The return of Add does not mean the row has been inserted, it may still
+// reside in memory or be uncommitted.
+// The ctx only affects the Add method call.
+func (i *InsertsInserter) Add(ctx context.Context, insert *Insert) error {
 	if i.tx == nil {
-		err := i.beginTx(ctx)
+		err := i.beginTx(i.ctx)
 		if err != nil {
-			return errors.Wrap(err, "(*insertsInserter).Insert")
+			return errors.Wrap(err, "(*insertsInserter).Add")
 		}
 	}
 
 	_, err := i.insertPrepStmt.ExecContext(ctx, insert)
 	if err != nil {
-		return errors.Wrap(err, "(*insertsInserter).Insert: exec write insert statement")
+		return errors.Wrap(err, "(*insertsInserter).Add: exec write insert statement")
 	}
 
 	i.insertsCount += 1
@@ -42,42 +51,25 @@ func (i *InsertsInserter) Insert(ctx context.Context, insert *Insert) error {
 	if i.txQueryCount >= i.Config.MaxTransactionSize {
 		err := i.commitTx()
 		if err != nil {
-			return errors.Wrap(err, "(*insertsInserter).Insert")
+			return errors.Wrap(err, "(*insertsInserter).Add")
 		}
 	}
 
 	return nil
 }
 
-func (i *InsertsInserter) InsertsCount() int {
-	return i.insertsCount
+// Stats returns statistics about the current state of the inserter.
+func (i *InsertsInserter) Stats() InsertsInserterStats {
+	return InsertsInserterStats{
+		InsertsCount: i.insertsCount,
+	}
 }
 
-func (i *InsertsInserter) Commit() error {
-	return i.commitTx()
-}
-
+// Close wraps up all open work and then closes all used resources.
+//
+// Close must always be called to ensure Add()ed rows are actually inserted.
 func (i *InsertsInserter) Close() error {
-	var retErr error
-
-	if i.insertPrepStmt != nil {
-		err := i.insertPrepStmt.Close()
-		i.insertPrepStmt = nil
-		if err != nil && retErr == nil {
-			retErr = errors.Wrap(err, "(*insertsInserter).Close: close insert statement")
-		}
-	}
-
-	if i.tx != nil {
-		err := i.tx.Rollback()
-		i.tx, i.txQueryCount = nil, 0
-		if err != nil && retErr == nil {
-			retErr = errors.Wrap(err, "(*insertsInserter).Close: rollback transaction")
-		}
-	}
-
-	return retErr
-
+	return i.commitTx()
 }
 
 // beginTx begins a new transaction and prepares the insert statement. i.ctx
@@ -137,9 +129,10 @@ func (i *InsertsInserter) commitTx() error {
 	return retErr
 }
 
-// NewInsertsInserter returns an InsertsInserter for fast insertion.
-// ctx is used as the transaction context for all transactions begun by the
-// InsertsInserter.
+// NewInsertsInserter returns an InsertsInserter for fast row insertion.
+//
+// ctx is used for the entire lifetime of the inserter, i.e. cancelling ctx
+// makes the inserter unusable and rolls back currently open transactions.
 func (d *DB) NewInsertsInserter(ctx context.Context, config *InsertsInserterConfig) *InsertsInserter {
 	return &InsertsInserter{
 		Config: config,

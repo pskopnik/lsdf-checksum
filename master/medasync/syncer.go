@@ -250,7 +250,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 			continue
 		}
 
-		err = inserter.Insert(ctx, &meda.Insert{
+		err = inserter.Add(ctx, &meda.Insert{
 			Path:             cleanPath,
 			ModificationTime: meda.Time(fileData.ModificationTime),
 			FileSize:         fileData.FileSize,
@@ -260,13 +260,13 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		}
 	}
 
-	err = inserter.Commit()
+	err = inserter.Close()
 	if err != nil {
 		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
 
 	s.fieldLogger.WithFields(log.Fields{
-		"count": inserter.InsertsCount(),
+		"count": inserter.Stats().InsertsCount,
 	}).Info("Finished meta data database inserts")
 
 	return nil
