@@ -31,10 +31,6 @@ var (
 
 type Parser struct {
 	r *fwd.Reader
-
-	// Loc is used as the location in calls to time.ParseInLocation().
-	// If Loc is nil, time.Parse() is used instead.
-	Loc *time.Location
 }
 
 // NewParser constructs a new Parser reading from the passed in r.
@@ -155,7 +151,7 @@ func (p *Parser) parseCustomAttributes(fileData *FileData) error {
 		return err
 	}
 
-	fileData.ModificationTime, err = readNextTime(p.r, '|', timeLayout, p.Loc)
+	fileData.ModificationTime, err = readNextTime(p.r, '|', timeLayout)
 	if err != nil {
 		return err
 	}
@@ -173,17 +169,17 @@ func (p *Parser) parseCustomAttributes(fileData *FileData) error {
 // It consumes exactly the file name and stops before the newline char but
 // also accept EOF.
 func (p *Parser) parseFilename(fileData *FileData) error {
-	b, err := peekUntilDelim(p.r, '\n', 16384)
+	buf, err := peekUntilDelim(p.r, '\n', 16384)
 	// EOF is allowed here
 	if err != nil && err != io.EOF {
 		return err
 	}
-	_, err = p.r.Skip(len(b))
+	_, err = p.r.Skip(len(buf))
 	if err != nil {
 		return err
 	}
 
-	pathBytes, err := appendUnescapeUrl(make([]byte, 0, len(b)), b)
+	pathBytes, err := appendUnescapeUrl(make([]byte, 0, len(buf)), buf)
 	if err != nil {
 		return err
 	}
@@ -198,13 +194,13 @@ func (p *Parser) parseFilename(fileData *FileData) error {
 // If the read chars don't match this, an error wrapped in ErrFormat is
 // returned.
 func (p *Parser) expectFilenameSeparator() error {
-	b, err := p.r.Next(4)
+	buf, err := p.r.Next(4)
 	if err != nil {
 		return err
 	}
 
-	if !bytes.Equal(b, []byte(" -- ")) {
-		return fmt.Errorf("read '%x' instead of filename separator: %w", b, ErrFormat)
+	if !bytes.Equal(buf, []byte(" -- ")) {
+		return fmt.Errorf("read '%x' instead of filename separator: %w", buf, ErrFormat)
 	}
 
 	return nil
@@ -214,19 +210,19 @@ func (p *Parser) expectFilenameSeparator() error {
 // delim or EOF.
 // The delim is not consumed.
 func readNextUint64(r *fwd.Reader, delim byte) (num uint64, err error) {
-	var b []byte
+	var buf []byte
 
-	b, err = peekUntilDelim(r, delim, 32) // Arbitrary max which should fit all uints
+	buf, err = peekUntilDelim(r, delim, 32) // Arbitrary max which should fit all uints
 	// EOF is allowed here
 	if err != nil && err != io.EOF {
 		return
 	}
 
-	num, err = strconv.ParseUint(string(b), 10, 64)
+	num, err = strconv.ParseUint(string(buf), 10, 64)
 	if err != nil {
 		return
 	}
-	_, err = r.Skip(len(b))
+	_, err = r.Skip(len(buf))
 	if err != nil {
 		// Should never err
 		return
@@ -238,26 +234,21 @@ func readNextUint64(r *fwd.Reader, delim byte) (num uint64, err error) {
 // readNextTime reads the next uint64 from the reader, delimited either by
 // delim or EOF.
 // The delim is not consumed.
-func readNextTime(r *fwd.Reader, delim byte, layout string, loc *time.Location) (t time.Time, err error) {
-	var b []byte
+func readNextTime(r *fwd.Reader, delim byte, layout string) (t time.Time, err error) {
+	var buf []byte
 
-	b, err = peekUntilDelim(r, delim, 64) // Arbitrary max which should fit all date & time
+	buf, err = peekUntilDelim(r, delim, 64) // Arbitrary max which should fit all date & time
 	// EOF is allowed here
 	if err != nil && err != io.EOF {
 		return
 	}
 
-	s := string(b)
-	if loc != nil {
-		t, err = time.ParseInLocation(layout, s, loc)
-	} else {
-		t, err = time.Parse(layout, s)
-	}
+	t, err = time.Parse(layout, string(buf))
 	if err != nil {
 		return
 	}
 
-	_, err = r.Skip(len(b))
+	_, err = r.Skip(len(buf))
 	if err != nil {
 		// Should never err
 		return
