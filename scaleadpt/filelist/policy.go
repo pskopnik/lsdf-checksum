@@ -9,20 +9,23 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
+// ESCAPE enables percent encoding based on RFC3986 and adds all characters
+// after the initial % to the list of unreserved characters (not escaped).
+// The goal is to include all common characters, to reduce unescaping work.
 const escapeRuleContent = `RULE 'escapeRule'
 	EXTERNAL LIST 'files'
-	ESCAPE '%|.,-: '`
+	ESCAPE '%|/,:; @#'`
 const listFilesRuleContent = `RULE 'listFilesRule'
 	LIST 'files'
 	SHOW('|' || varchar(file_size) || '|' || varchar(modification_time) || '|')`
 
 var FileListPolicy = &scaleadpt.Policy{
 	Rules: []*scaleadpt.Rule{
-		&scaleadpt.Rule{
+		{
 			RuleName: "escapeRule",
 			Content:  escapeRuleContent,
 		},
-		&scaleadpt.Rule{
+		{
 			RuleName: "listFilesRule",
 			Content:  listFilesRuleContent,
 		},
@@ -38,9 +41,9 @@ type CloseParser struct {
 }
 
 // Close closes open files and frees temporary resources.
-func (a *CloseParser) Close() error {
-	err := a.file.Close()
-	rErr := os.Remove(a.file.Name())
+func (p *CloseParser) Close() error {
+	err := p.file.Close()
+	rErr := os.Remove(p.file.Name())
 
 	if err != nil {
 		return err
