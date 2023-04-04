@@ -171,6 +171,8 @@ L:
 			// TODO measure impact.
 			select {
 			case <-b.ctx.Done():
+				b.mutex.Unlock()
+
 				return pkgErrors.Wrap(errBatcherDying, "(*Batcher).Close")
 			default:
 			}
@@ -182,22 +184,24 @@ L:
 			// sendCommand is used so that communication with the dispatcher always
 			// follows the same semantic.
 			err = b.sendCommand(batcherCommandShutDown)
+
+			b.mutex.Unlock()
+
 			if err != nil {
 				return pkgErrors.Wrap(err, "(*Batcher).Close: in state close: trigger shut down")
 			}
-
-			b.mutex.Unlock()
 
 			break L
 		case batcherStateOpen:
 			b.initiateQueueingWithLock()
 
 			err = b.sendCommand(batcherCommandDispatchAndShutDown)
+
+			b.mutex.Unlock()
+
 			if err != nil {
 				return pkgErrors.Wrap(err, "(*Batcher).Close: in state open: trigger dispatch and shut down")
 			}
-
-			b.mutex.Unlock()
 
 			break L
 		case batcherStateQueued:
@@ -214,6 +218,7 @@ L:
 			}
 			continue
 		default:
+			b.mutex.Unlock()
 			return pkgErrors.Wrapf(errUnknownBatcherState, "(*Batcher).Close: encountered state %d", b.state)
 		}
 	}
