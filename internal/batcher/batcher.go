@@ -89,7 +89,7 @@ func (b *Batcher[T]) Out() <-chan []T {
 	return b.out
 }
 
-func (b *Batcher[T]) Add(ctx context.Context, item *T) error {
+func (b *Batcher[T]) Add(ctx context.Context, item T) error {
 	var err error
 
 	for {
@@ -439,6 +439,6 @@ func (b *Batcher[T]) sendCommand(cmd batcherCommand) error {
 	}
 }
 
-func (b *Batcher[T]) appendItem(item *T) {
-	b.openBatch = append(b.openBatch, *item)
+func (b *Batcher[T]) appendItem(item T) {
+	b.openBatch = append(b.openBatch, item)
 }
