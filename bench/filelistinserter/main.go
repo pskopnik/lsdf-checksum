@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/pprof"
 
 	_ "github.com/go-sql-driver/mysql"
 	"gopkg.in/yaml.v3"
@@ -20,6 +21,7 @@ type Config struct {
 	FileListPath   string
 	Inserter       meda.InsertsInserterConfig
 	StopAfterNRows int
+	CPUProfile     string
 }
 
 var DefaultConfig = &Config{}
@@ -54,6 +56,16 @@ func main() {
 	config, err := readConfig(os.Args[1])
 	if err != nil {
 		panic(err)
+	}
+
+	if len(config.CPUProfile) > 0 {
+		f, err := os.Create(config.CPUProfile)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	ctx := context.Background()
