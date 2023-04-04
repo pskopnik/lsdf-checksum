@@ -1,7 +1,6 @@
 package filelist
 
 import (
-	"bufio"
 	"os"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/osutils"
@@ -74,9 +73,7 @@ func ApplyPolicy(fs *scaleadpt.FileSystem, opts ...options.PolicyOptioner) (*Clo
 		return nil, err
 	}
 
-	bufferedF := bufio.NewReader(f)
-
-	parser := NewParser(bufferedF)
+	parser := NewParser(f)
 
 	return &CloseParser{
 		Parser: *parser,

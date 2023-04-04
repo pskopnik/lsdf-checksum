@@ -411,7 +411,8 @@ func (c *Checker) checkListPolicy() {
 	defer parser.Close()
 
 	for {
-		fileData, err := parser.ParseLine()
+		var fileData filelist.FileData
+		err := parser.ParseLine(&fileData)
 		if err == io.EOF {
 			break
 		} else if err != nil {
