@@ -7,7 +7,6 @@ import (
 	"time"
 
 	pkgErrors "github.com/pkg/errors"
-	"golang.org/x/sync/errgroup"
 )
 
 // Error variables related to batcher.
@@ -61,9 +60,10 @@ type Batcher[T any] struct {
 
 	out chan []T
 
-	group       *errgroup.Group
-	ctx         context.Context
-	commandChan chan batcherCommand
+	ctx            context.Context
+	commandChan    chan batcherCommand
+	dispatcherDone chan struct{}
+	dispatcherErr  error
 
 	mutex        sync.Mutex
 	state        batcherState
@@ -72,16 +72,15 @@ type Batcher[T any] struct {
 }
 
 func New[T any](ctx context.Context, config *Config) *Batcher[T] {
-	group, myCtx := errgroup.WithContext(ctx)
 	b := &Batcher[T]{
-		Config:      config,
-		group:       group,
-		ctx:         myCtx,
-		out:         make(chan []T, config.BatchBufferSize),
-		commandChan: make(chan batcherCommand),
+		Config:         config,
+		ctx:            ctx,
+		dispatcherDone: make(chan struct{}),
+		out:            make(chan []T, config.BatchBufferSize),
+		commandChan:    make(chan batcherCommand),
 	}
 
-	b.group.Go(b.dispatcher)
+	go b.dispatcher()
 
 	return b
 }
@@ -223,10 +222,16 @@ L:
 		}
 	}
 
-	return b.group.Wait()
+	select {
+	case <-b.dispatcherDone:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	return b.dispatcherErr
 }
 
-func (b *Batcher[T]) dispatcher() error {
+func (b *Batcher[T]) dispatcher() {
 	var err error
 	var ok bool
 	var cmd batcherCommand
@@ -344,8 +349,9 @@ L:
 		}
 	}
 
+	b.dispatcherErr = err
 	close(b.out)
-	return err
+	close(b.dispatcherDone)
 }
 
 // fastSendWithLock attempts to send the openBatch to the out channel. If the
