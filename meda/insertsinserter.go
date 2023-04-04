@@ -2,30 +2,64 @@ package meda
 
 import (
 	"context"
+	"sync/atomic"
+	"time"
 
-	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
+
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/batcher"
 )
 
+//go:generate confions config Config
+
 type InsertsInserterConfig struct {
-	MaxTransactionSize int
+	// RowsPerStmt is the (max) number of rows in a single INSERT statement.
+	RowsPerStmt int
+	// StmtsPerTransaction is the (max) number of INSERT statements per
+	// transaction.
+	StmtsPerTransaction int
+	// Concurrency is the number of concurrently running workers, executing
+	// queries on the database.
+	Concurrency int
+	// MaxWaitTime is the maximum duration a row waits before being included
+	// in a batch and queued for insertion.
+	// A batch is the set of rows inserted in a single transaction.
+	MaxWaitTime time.Duration
+	// BatchQueueSize is the number of batches which may be queued for
+	// inserting.
+	// Recommended values are within [1, Concurrency].
+	BatchQueueSize int
+}
+
+var InsertsInserterDefaultConfig = &InsertsInserterConfig{
+	RowsPerStmt:         2000,
+	StmtsPerTransaction: 1,
+	Concurrency:         1,
+	MaxWaitTime:         time.Minute,
+	BatchQueueSize:      1,
 }
 
 type InsertsInserterStats struct {
-	InsertsCount int
+	InsertsAdded          int
+	InsertsCommitted      int
+	StatementsCommitted   int
+	TransactionsCommitted int
 }
 
 // InsertsInserter offers fast row insertions into the inserts table.
 type InsertsInserter struct {
-	Config *InsertsInserterConfig
-	ctx    context.Context
+	config InsertsInserterConfig
 	db     *DB
 
-	insertsCount int
+	ctx   context.Context
+	group *errgroup.Group
 
-	tx             *sqlx.Tx
-	insertPrepStmt *sqlx.NamedStmt
-	txQueryCount   int
+	batcher *batcher.Batcher[*Insert]
+
+	insertsAdded          atomic.Int64
+	insertsCommitted      atomic.Int64
+	statementsCommitted   atomic.Int64
+	transactionsCommitted atomic.Int64
 }
 
 // Add adds a row to be inserted with the data in insert.
@@ -33,110 +67,136 @@ type InsertsInserter struct {
 // reside in memory or be uncommitted.
 // The ctx only affects the Add method call.
 func (i *InsertsInserter) Add(ctx context.Context, insert *Insert) error {
-	if i.tx == nil {
-		err := i.beginTx(i.ctx)
-		if err != nil {
-			return errors.Wrap(err, "(*insertsInserter).Add")
-		}
-	}
-
-	_, err := i.insertPrepStmt.ExecContext(ctx, insert)
+	err := i.batcher.Add(ctx, insert)
 	if err != nil {
-		return errors.Wrap(err, "(*insertsInserter).Add: exec write insert statement")
+		return err
 	}
 
-	i.insertsCount += 1
-	i.txQueryCount += 1
-
-	if i.txQueryCount >= i.Config.MaxTransactionSize {
-		err := i.commitTx()
-		if err != nil {
-			return errors.Wrap(err, "(*insertsInserter).Add")
-		}
-	}
+	i.insertsAdded.Add(1)
 
 	return nil
 }
 
 // Stats returns statistics about the current state of the inserter.
+// The different metrics within the snapshot may not be consistent.
+// Stats returns valid information also after the inserter has been closed.
 func (i *InsertsInserter) Stats() InsertsInserterStats {
 	return InsertsInserterStats{
-		InsertsCount: i.insertsCount,
+		InsertsAdded:          int(i.insertsAdded.Load()),
+		InsertsCommitted:      int(i.insertsCommitted.Load()),
+		StatementsCommitted:   int(i.statementsCommitted.Load()),
+		TransactionsCommitted: int(i.transactionsCommitted.Load()),
 	}
 }
 
 // Close wraps up all open work and then closes all used resources.
 //
 // Close must always be called to ensure Add()ed rows are actually inserted.
-func (i *InsertsInserter) Close() error {
-	return i.commitTx()
-}
+func (i *InsertsInserter) Close(ctx context.Context) error {
+	var err, rErr error
 
-// beginTx begins a new transaction and prepares the insert statement. i.ctx
-// is used as the context of the transaction created. ctx is used as the
-// context for any statements executed.
-// beginTx does not close a still open transaction. Implied precondition:
-// i.tx and i.insertPrepStmt == nil.
-// If no error is returned, i.tx and i.insertPrepStmt are valid and
-// txQueryCount is 0.
-// If an error is returned, i.tx and i.insertPrepStmt == nil.
-func (i *InsertsInserter) beginTx(ctx context.Context) error {
-	var err error
-
-	i.tx, err = i.db.BeginTxx(i.ctx, nil)
-	i.txQueryCount = 0
+	err = i.batcher.Close(ctx)
 	if err != nil {
-		i.tx = nil
-		return errors.Wrap(err, "(*insertsInserter).beginTx: begin transaction")
+		rErr = err
 	}
 
-	i.insertPrepStmt, err = i.db.insertsPrepareInsert(ctx, i.tx)
-	if err != nil {
-		_ = i.tx.Rollback()
-		i.tx, i.insertPrepStmt = nil, nil
-		return errors.Wrap(err, "(*insertsInserter).beginTx: prepare inserts statement")
+	err = i.group.Wait()
+	if err != nil && rErr == nil {
+		rErr = err
+	}
+
+	return rErr
+}
+
+func (i *InsertsInserter) insertWorker() error {
+	var j int
+	// If i.ctx is cancelled, i.batcher.Out() is closed as well.
+	for batch := range i.batcher.Out() {
+		err := i.insertBatch(i.ctx, batch)
+		if err != nil {
+			return err
+		}
+		j++
 	}
 
 	return nil
 }
 
-// commitTx commits the open transaction and closes all associated resources.
-// commitTx attempts to commit the transaction and close resources regardless
-// of whether an error is returned.
-// commitTx always sets i.tx and i.insertPrepStmt == nil.
-func (i *InsertsInserter) commitTx() error {
-	var retErr error
+const insertsInsertBatchQuery = GenericQuery(`
+	INSERT INTO {INSERTS} (
+			path, modification_time, file_size
+		) VALUES (
+			:path, :modification_time, :file_size
+		)
+	;
+`)
 
-	if i.insertPrepStmt != nil {
-		err := i.insertPrepStmt.Close()
-		i.insertPrepStmt = nil
-		if err != nil && retErr == nil {
-			retErr = errors.Wrap(err, "(*insertsInserter).commitTx: close prepared statement")
-		}
+func (i *InsertsInserter) insertBatch(ctx context.Context, batch []*Insert) error {
+	var totalRows int64
+	var statements int64
+
+	tx, err := i.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
 	}
+	defer tx.Rollback()
 
-	if i.tx != nil {
-		err := i.tx.Commit()
-		i.tx, i.txQueryCount = nil, 0
+	for len(batch) > 0 {
+		stmtBatch := batch
+		if len(batch) > i.config.RowsPerStmt {
+			stmtBatch = stmtBatch[:i.config.RowsPerStmt]
+		}
+
+		res, err := tx.NamedExecContext(
+			ctx,
+			insertsInsertBatchQuery.SubstituteAll(i.db),
+			stmtBatch,
+		)
 		if err != nil {
-			// TODO check for conflicts, re-perform transaction
-			if retErr == nil {
-				retErr = errors.Wrap(err, "(*insertsInserter).commitTx: commit transaction")
-			}
+			return err
 		}
+		ra, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		totalRows += ra
+		statements++
+
+		batch = batch[len(stmtBatch):]
 	}
 
-	return retErr
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	i.insertsCommitted.Add(totalRows)
+	i.statementsCommitted.Add(statements)
+	i.transactionsCommitted.Add(1)
+
+	return nil
 }
 
 // NewInsertsInserter returns an InsertsInserter for fast row insertion.
 //
 // ctx is used for the entire lifetime of the inserter, i.e. cancelling ctx
-// makes the inserter unusable and rolls back currently open transactions.
-func (d *DB) NewInsertsInserter(ctx context.Context, config *InsertsInserterConfig) *InsertsInserter {
-	return &InsertsInserter{
-		Config: config,
-		ctx: ctx,
-		db: d,
+// rolls back currently open transactions and makes the inserter unusable.
+func (d *DB) NewInsertsInserter(ctx context.Context, config InsertsInserterConfig) *InsertsInserter {
+	group, groupCtx := errgroup.WithContext(ctx)
+	i := &InsertsInserter{
+		config: config,
+		group:  group,
+		ctx:    groupCtx,
+		db:     d,
+		batcher: batcher.New[*Insert](groupCtx, &batcher.Config{
+			MaxItems:    config.RowsPerStmt * config.StmtsPerTransaction,
+			MaxWaitTime: config.MaxWaitTime,
+		}),
 	}
+
+	for j := 0; j < config.Concurrency; j++ {
+		group.Go(i.insertWorker)
+	}
+
+	return i
 }
