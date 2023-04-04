@@ -1,8 +1,8 @@
 package medasync
 
 func (c *Config) CopyFrom(other *Config) {
-	c.MaxTransactionSize = other.MaxTransactionSize
 	c.SynchronisationChunkSize = other.SynchronisationChunkSize
+	c.Inserter.CopyFrom(&other.Inserter)
 
 	c.TemporaryDirectory = other.TemporaryDirectory
 	c.GlobalWorkDirectory = other.GlobalWorkDirectory
@@ -19,12 +19,10 @@ func (c *Config) CopyFrom(other *Config) {
 }
 
 func (c *Config) Merge(other *Config) *Config {
-	if other.MaxTransactionSize != 0 {
-		c.MaxTransactionSize = other.MaxTransactionSize
-	}
 	if other.SynchronisationChunkSize != 0 {
 		c.SynchronisationChunkSize = other.SynchronisationChunkSize
 	}
+	c.Inserter.Merge(&other.Inserter)
 
 	if len(other.TemporaryDirectory) > 0 {
 		c.TemporaryDirectory = other.TemporaryDirectory

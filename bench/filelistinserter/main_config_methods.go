@@ -3,8 +3,9 @@ package main
 func (c *Config) CopyFrom(other *Config) {
 	c.DB.CopyFrom(&other.DB)
 	c.FileListPath = other.FileListPath
-	c.MaxTransactionSize = other.MaxTransactionSize
+	c.Inserter.CopyFrom(&other.Inserter)
 	c.StopAfterNRows = other.StopAfterNRows
+	c.CPUProfile = other.CPUProfile
 }
 
 func (c *Config) Merge(other *Config) *Config {
@@ -14,12 +15,14 @@ func (c *Config) Merge(other *Config) *Config {
 		c.FileListPath = other.FileListPath
 	}
 
-	if other.MaxTransactionSize != 0 {
-		c.MaxTransactionSize = other.MaxTransactionSize
-	}
+	c.Inserter.Merge(&other.Inserter)
 
 	if other.StopAfterNRows != 0 {
 		c.StopAfterNRows = other.StopAfterNRows
+	}
+
+	if len(other.CPUProfile) > 0 {
+		c.CPUProfile = other.CPUProfile
 	}
 
 	return c

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -14,17 +13,16 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/filelist"
 )
 
+//go:generate confions config Config
+
 type Config struct {
-	DB                 meda.Config
-	FileListPath       string
-	MaxTransactionSize int
-	StopAfterNRows     int
+	DB             meda.Config
+	FileListPath   string
+	Inserter       meda.InsertsInserterConfig
+	StopAfterNRows int
 }
 
-var DefaultConfig = &Config{
-	DB:                 *meda.DefaultConfig,
-	MaxTransactionSize: 10000,
-}
+var DefaultConfig = &Config{}
 
 func readConfig(path string) (*Config, error) {
 	configFile, err := os.Open(path)
@@ -60,7 +58,11 @@ func main() {
 
 	ctx := context.Background()
 
-	db, err := meda.Open(&config.DB)
+	db, err := meda.Open(
+		meda.DefaultConfig.
+			Clone().
+			Merge(&config.DB),
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -71,7 +73,10 @@ func main() {
 		panic(err)
 	}
 
-	insertFileList(ctx, config, db)
+	err = insertFileList(ctx, config, db)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func insertFileList(ctx context.Context, config *Config, db *meda.DB) error {
@@ -81,19 +86,19 @@ func insertFileList(ctx context.Context, config *Config, db *meda.DB) error {
 	}
 	defer f.Close()
 
-	bufferedF := bufio.NewReader(f)
+	parser := filelist.NewParser(f)
 
-	parser := filelist.NewParser(bufferedF)
-
-	inserter := db.NewInsertsInserter(ctx, &meda.InsertsInserterConfig{
-		MaxTransactionSize: config.MaxTransactionSize,
-	})
-	defer inserter.Close()
+	inserter := db.NewInsertsInserter(ctx, *meda.InsertsInserterDefaultConfig.
+		Clone().
+		Merge(&config.Inserter),
+	)
+	defer inserter.Close(context.Background())
 
 	var count int
 
 	for {
-		fileData, err := parser.ParseLine()
+		var fileData filelist.FileData
+		err := parser.ParseLine(&fileData)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -112,7 +117,7 @@ func insertFileList(ctx context.Context, config *Config, db *meda.DB) error {
 		}
 	}
 
-	err = inserter.Close()
+	err = inserter.Close(ctx)
 	if err != nil {
 		return err
 	}

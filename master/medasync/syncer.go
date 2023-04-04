@@ -40,12 +40,8 @@ func beginTxWithReadCommitted(ctx context.Context, db *meda.DB) (*sqlx.Tx, error
 type Config struct {
 	// Static config
 
-	// MaxTransactionSize is the maximum number of commands per SQL
-	// transaction.
-	// After this number of commands, the transaction will be committed
-	// and a new one will be begun.
-	MaxTransactionSize       int
 	SynchronisationChunkSize uint64
+	Inserter                 meda.InsertsInserterConfig
 
 	// Static Params
 
@@ -68,7 +64,6 @@ type Config struct {
 }
 
 var DefaultConfig = Config{
-	MaxTransactionSize:       10000,
 	SynchronisationChunkSize: 100000,
 }
 
@@ -207,10 +202,11 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) error {
 	s.fieldLogger.Info("Starting meta data database inserts")
 
-	inserter := s.Config.DB.NewInsertsInserter(ctx, &meda.InsertsInserterConfig{
-		MaxTransactionSize: s.Config.MaxTransactionSize,
-	})
-	defer inserter.Close()
+	inserter := s.Config.DB.NewInsertsInserter(ctx, *meda.InsertsInserterDefaultConfig.
+		Clone().
+		Merge(&s.Config.Inserter),
+	)
+	defer inserter.Close(ctx)
 
 	err := s.fetchFileSystemPathInfo()
 	if err != nil {
@@ -254,13 +250,13 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		}
 	}
 
-	err = inserter.Close()
+	err = inserter.Close(ctx)
 	if err != nil {
 		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
 
 	s.fieldLogger.WithFields(log.Fields{
-		"count": inserter.Stats().InsertsCount,
+		"count": inserter.Stats().InsertsCommitted,
 	}).Info("Finished meta data database inserts")
 
 	return nil
