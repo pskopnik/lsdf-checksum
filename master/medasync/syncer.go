@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"io"
 	"path/filepath"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -41,12 +40,8 @@ func beginTxWithReadCommitted(ctx context.Context, db *meda.DB) (*sqlx.Tx, error
 type Config struct {
 	// Static config
 
-	// MaxTransactionSize is the maximum number of commands per SQL
-	// transaction.
-	// After this number of commands, the transaction will be committed
-	// and a new one will be begun.
-	MaxTransactionSize       int
 	SynchronisationChunkSize uint64
+	Inserter                 meda.InsertsInserterConfig
 
 	// Static Params
 
@@ -54,7 +49,6 @@ type Config struct {
 	TemporaryDirectory  string
 	GlobalWorkDirectory string
 	NodeList            []string
-	Location            *time.Location `yaml:"-"`
 
 	// Invocation dependent params
 
@@ -70,9 +64,7 @@ type Config struct {
 }
 
 var DefaultConfig = Config{
-	MaxTransactionSize:       10000,
 	SynchronisationChunkSize: 100000,
-	Location:                 time.UTC,
 }
 
 type Syncer struct {
@@ -116,8 +108,6 @@ func (s *Syncer) Run(ctx context.Context) error {
 
 		return err
 	}
-
-	parser.Loc = s.Config.Location
 
 	err = s.writeInserts(ctx, &parser.Parser)
 	if err != nil {
@@ -210,15 +200,13 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 }
 
 func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) error {
-	var fileData *filelist.FileData
-
 	s.fieldLogger.Info("Starting meta data database inserts")
 
-	inserter := newInsertsInserter(ctx, &insertsInserterConfig{
-		DB:                 s.Config.DB,
-		MaxTransactionSize: s.Config.MaxTransactionSize,
-	})
-	defer inserter.Close()
+	inserter := s.Config.DB.NewInsertsInserter(ctx, *meda.InsertsInserterDefaultConfig.
+		Clone().
+		Merge(&s.Config.Inserter),
+	)
+	defer inserter.Close(ctx)
 
 	err := s.fetchFileSystemPathInfo()
 	if err != nil {
@@ -226,11 +214,12 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 	}
 
 	for {
-		fileData, err = parser.ParseLine()
+		var fileData filelist.FileData
+		err = parser.ParseLine(&fileData)
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return errors.Wrap(err, "(*Syncer).writeInserts: parse file list line")
+			return errors.Wrap(err, "(*Syncer).writeInserts: parse filelist line")
 		}
 
 		cleanPath, err := s.cleanPath(fileData.Path)
@@ -251,7 +240,7 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 			continue
 		}
 
-		err = inserter.Insert(ctx, &meda.Insert{
+		err = inserter.Add(ctx, &meda.Insert{
 			Path:             cleanPath,
 			ModificationTime: meda.Time(fileData.ModificationTime),
 			FileSize:         fileData.FileSize,
@@ -261,13 +250,13 @@ func (s *Syncer) writeInserts(ctx context.Context, parser *filelist.Parser) erro
 		}
 	}
 
-	err = inserter.Commit()
+	err = inserter.Close(ctx)
 	if err != nil {
 		return errors.Wrap(err, "(*Syncer).writeInserts")
 	}
 
 	s.fieldLogger.WithFields(log.Fields{
-		"count": inserter.InsertsCount(),
+		"count": inserter.Stats().InsertsCommitted,
 	}).Info("Finished meta data database inserts")
 
 	return nil

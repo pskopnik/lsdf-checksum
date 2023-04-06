@@ -3,7 +3,6 @@ package meda
 import (
 	"context"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
 
@@ -37,26 +36,4 @@ type Insert struct {
 	Path             string `db:"path"`
 	ModificationTime Time   `db:"modification_time"`
 	FileSize         uint64 `db:"file_size"`
-}
-
-const insertsPrepareInsertQuery = GenericQuery(`
-	INSERT INTO {INSERTS} (
-			path, modification_time, file_size
-		) VALUES (
-			:path, :modification_time, :file_size
-		)
-	;
-`)
-
-func (d *DB) InsertsPrepareInsert(ctx context.Context, preparer NamedPreparerContext) (*sqlx.NamedStmt, error) {
-	if preparer == nil {
-		preparer = &d.DB
-	}
-
-	stmt, err := preparer.PrepareNamedContext(ctx, insertsPrepareInsertQuery.SubstituteAll(d))
-	if err != nil {
-		return nil, errors.Wrap(err, "(*DB).InsertsPrepareInsert")
-	}
-
-	return stmt, nil
 }

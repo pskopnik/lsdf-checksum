@@ -1,0 +1,25 @@
+# Options in meda.Config.
+# See its description for details.
+db:
+  # The datasourcename specifies how to connect to the MySQL/MariaDB database
+  # server and is the only required option.
+  # See https://github.com/go-sql-driver/mysql#dsn-data-source-name
+  datasourcename: "user:password@tcp(mysql_host.tld)/database_name"
+  # datasourcename: "root:@unix(/var/lib/mysql/mysql.sock)/database_name"
+# Path to a filelist file in the scaleadpt/filelist format.
+filelistpath: ./test.list.files
+# Stops reading the filelist (and inserting) after the specified number of
+# lines. If omitted, the entire filelist is read.
+#stopafternrows: 10000000
+# Options in meda.InsertsInserterConfig.
+# See its description for details on the meaning of the options.
+# If omitted, each of those will fall back to a default.
+inserter:
+  rowsperstmt: 2000
+  stmtspertransaction: 1
+  concurrency: 40
+  maxwaittime: 1m
+  batchqueuesize: 1
+# Path to a file where a CPU profile will be written after execution. If
+# omitted, no profile is recorded.
+#cpuprofile: cpu.pprof

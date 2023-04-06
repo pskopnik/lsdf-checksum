@@ -399,8 +399,9 @@ func (c *Checker) checkListPolicy() {
 	}
 
 	specFiles := make(map[string]*SpecListPolicyFile)
-	for _, file := range c.spec.ListPolicy.Files {
-		specFiles[file.Path] = &file
+	for i := range c.spec.ListPolicy.Files {
+		file := &c.spec.ListPolicy.Files[i]
+		specFiles[file.Path] = file
 	}
 
 	parser, err := filelist.ApplyPolicy(c.fs, scaleadpt.PolicyOpt.Subpath(c.spec.ListPolicy.Subpath))
@@ -411,7 +412,8 @@ func (c *Checker) checkListPolicy() {
 	defer parser.Close()
 
 	for {
-		fileData, err := parser.ParseLine()
+		var fileData filelist.FileData
+		err := parser.ParseLine(&fileData)
 		if err == io.EOF {
 			break
 		} else if err != nil {
