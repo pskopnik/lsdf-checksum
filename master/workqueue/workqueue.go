@@ -11,19 +11,20 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue/scheduler"
 )
 
 func PerformanceMonitorUnit(fileSystemName, snapshotName string) string {
 	return fileSystemName + "-" + snapshotName
 }
 
-var _ GetNodesNumer = queueSchedulerGetNodesNumer{}
+var _ GetNodesNumer = queueControllerGetNodesNumer{}
 
-type queueSchedulerGetNodesNumer struct {
-	*QueueScheduler
+type queueControllerGetNodesNumer struct {
+	*scheduler.Scheduler
 }
 
-func (q queueSchedulerGetNodesNumer) GetNodesNum() (uint, error) {
+func (q queueControllerGetNodesNumer) GetNodesNum() (uint, error) {
 	return q.GetNodesNum()
 }
 
@@ -56,12 +57,11 @@ type Config struct {
 
 	WorkersConfig WorkersConfig
 
-	// EWMAScheduler contains the configuration for the EWMAScheduler
-	// SchedulingController. Here only static configuration options should be
-	// set.
+	// EWMAController contains the configuration for the EWMAController.
+	// Here only static configuration options should be set.
 	// All known run time dependent options (database connections, RunID, etc.)
 	// will be overwritten when the final configuration is assembled.
-	EWMAScheduler EWMASchedulerConfig
+	EWMAController scheduler.EWMAControllerConfig
 	// Producer contains the configuration for the Producer. Here only static
 	// configuration options should be set.
 	// All known run time dependent options (database connections, RunID, etc.)
@@ -93,7 +93,7 @@ type WorkQueue struct {
 
 	fieldLogger log.Interface
 
-	schedulingController SchedulingController
+	schedulingController scheduler.Controller
 	producer             *Producer
 	writeBacker          *WriteBacker
 	queueWatcher         *QueueWatcher
@@ -117,7 +117,7 @@ func (w *WorkQueue) Start(ctx context.Context) {
 	w.tomb, _ = tomb.WithContext(ctx)
 
 	w.tomb.Go(func() error {
-		w.schedulingController = w.createEWMAScheduler()
+		w.schedulingController = w.createEWMAController()
 
 		w.producer = w.createProducer(w.schedulingController)
 		w.producer.Start(w.tomb.Context(nil))
@@ -128,7 +128,7 @@ func (w *WorkQueue) Start(ctx context.Context) {
 		w.writeBacker = w.createWriteBacker()
 		w.writeBacker.Start(w.tomb.Context(nil))
 
-		w.performanceMonitor = w.createPerformanceMonitor(w.producer.queueScheduler)
+		w.performanceMonitor = w.createPerformanceMonitor(w.producer.scheduler)
 		w.performanceMonitor.Start(w.tomb.Context(nil))
 
 		w.tomb.Go(w.writeBackerStopper)
@@ -231,16 +231,16 @@ func (w *WorkQueue) performanceMonitorStopper() error {
 	}
 }
 
-func (w *WorkQueue) createEWMAScheduler() *EWMAScheduler {
-	config := EWMASchedulerDefaultConfig.
+func (w *WorkQueue) createEWMAController() *scheduler.EWMAController {
+	config := scheduler.EWMAControllerDefaultConfig.
 		Clone().
-		Merge(&w.Config.EWMAScheduler).
-		Merge(&EWMASchedulerConfig{})
+		Merge(&w.Config.EWMAController).
+		Merge(&scheduler.EWMAControllerConfig{})
 
-	return NewEWMAScheduler(config)
+	return scheduler.NewEWMAController(config)
 }
 
-func (w *WorkQueue) createProducer(controller SchedulingController) *Producer {
+func (w *WorkQueue) createProducer(controller scheduler.Controller) *Producer {
 	config := ProducerDefaultConfig.
 		Clone().
 		Merge(&w.Config.Producer).
@@ -299,7 +299,7 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 	return NewQueueWatcher(config)
 }
 
-func (w *WorkQueue) createPerformanceMonitor(queueScheduler *QueueScheduler) *PerformanceMonitor {
+func (w *WorkQueue) createPerformanceMonitor(queueScheduler *scheduler.Scheduler) *PerformanceMonitor {
 
 	config := PerformanceMonitorDefaultConfig.
 		Clone().
@@ -311,8 +311,8 @@ func (w *WorkQueue) createPerformanceMonitor(queueScheduler *QueueScheduler) *Pe
 
 			Pool:   w.Config.Pool,
 			Logger: w.Config.Logger,
-			GetNodesNumer: queueSchedulerGetNodesNumer{
-				QueueScheduler: queueScheduler,
+			GetNodesNumer: queueControllerGetNodesNumer{
+				Scheduler: queueScheduler,
 			},
 		})
 

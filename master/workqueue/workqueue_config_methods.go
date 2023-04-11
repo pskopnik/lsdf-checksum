@@ -13,7 +13,7 @@ func (c *Config) CopyFrom(other *Config) {
 
 	c.WorkersConfig.CopyFrom(&other.WorkersConfig)
 
-	c.EWMAScheduler.CopyFrom(&other.EWMAScheduler)
+	c.EWMAController.CopyFrom(&other.EWMAController)
 	c.Producer.CopyFrom(&other.Producer)
 	c.QueueWatcher.CopyFrom(&other.QueueWatcher)
 	c.WriteBacker.CopyFrom(&other.WriteBacker)
@@ -47,7 +47,7 @@ func (c *Config) Merge(other *Config) *Config {
 
 	c.WorkersConfig.Merge(&other.WorkersConfig)
 
-	c.EWMAScheduler.Merge(&other.EWMAScheduler)
+	c.EWMAController.Merge(&other.EWMAController)
 	c.Producer.Merge(&other.Producer)
 	c.QueueWatcher.Merge(&other.QueueWatcher)
 	c.WriteBacker.Merge(&other.WriteBacker)

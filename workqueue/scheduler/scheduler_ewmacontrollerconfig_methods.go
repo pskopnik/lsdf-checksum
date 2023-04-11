@@ -1,10 +1,10 @@
-package workqueue
+package scheduler
 
 import (
 	"time"
 )
 
-func (e *EWMASchedulerConfig) CopyFrom(other *EWMASchedulerConfig) {
+func (e *EWMAControllerConfig) CopyFrom(other *EWMAControllerConfig) {
 	e.ConsumptionLifetime = other.ConsumptionLifetime
 
 	e.MinThreshold = other.MinThreshold
@@ -19,7 +19,7 @@ func (e *EWMASchedulerConfig) CopyFrom(other *EWMASchedulerConfig) {
 	e.MaintainingDeviationAlpha = other.MaintainingDeviationAlpha
 }
 
-func (e *EWMASchedulerConfig) Merge(other *EWMASchedulerConfig) *EWMASchedulerConfig {
+func (e *EWMAControllerConfig) Merge(other *EWMAControllerConfig) *EWMAControllerConfig {
 	if other.ConsumptionLifetime != time.Duration(0) {
 		e.ConsumptionLifetime = other.ConsumptionLifetime
 	}
@@ -54,8 +54,8 @@ func (e *EWMASchedulerConfig) Merge(other *EWMASchedulerConfig) *EWMASchedulerCo
 	return e
 }
 
-func (e *EWMASchedulerConfig) Clone() *EWMASchedulerConfig {
-	config := &EWMASchedulerConfig{}
+func (e *EWMAControllerConfig) Clone() *EWMAControllerConfig {
+	config := &EWMAControllerConfig{}
 	config.CopyFrom(e)
 	return config
 }

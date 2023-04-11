@@ -1,4 +1,4 @@
-package workqueue
+package scheduler
 
 import (
 	"context"
@@ -14,9 +14,9 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 )
 
-type SchedulingController interface {
+type Controller interface {
 	// Init is called once: When the QueueScheduler is starting.
-	Init(scheduler *QueueScheduler)
+	Init(scheduler *Scheduler)
 	// Schedule is called by QueueScheduler with a frequency corresponding to
 	// its interval value.
 	// Schedule is never called concurrently, the next call to schedule takes
@@ -32,24 +32,24 @@ type ProductionRequest struct {
 	N uint
 }
 
-//go:generate confions config QueueSchedulerConfig
+//go:generate confions config Config
 
-type QueueSchedulerConfig struct {
+type Config struct {
 	Namespace string
 	JobName   string
 
 	Pool   *redis.Pool   `yaml:"-"`
 	Logger log.Interface `yaml:"-"`
 
-	Controller SchedulingController
+	Controller Controller
 }
 
-var QueueSchedulerDefaultConfig = &QueueSchedulerConfig{}
+var DefaultConfig = &Config{}
 
-type QueueScheduler struct {
+type Scheduler struct {
 	// Config contains the configuration of the QueueScheduler.
 	// Config must not be modified after Start() has been called.
-	Config *QueueSchedulerConfig
+	Config *Config
 
 	tomb *tomb.Tomb
 
@@ -64,18 +64,18 @@ type QueueScheduler struct {
 	interval time.Duration
 }
 
-func NewQueueScheduler(config *QueueSchedulerConfig) *QueueScheduler {
-	return &QueueScheduler{
+func New(config *Config) *Scheduler {
+	return &Scheduler{
 		Config: config,
 		c:      make(chan ProductionRequest),
 	}
 }
 
-func (q *QueueScheduler) Start(ctx context.Context) {
+func (q *Scheduler) Start(ctx context.Context) {
 	q.fieldLogger = q.Config.Logger.WithFields(log.Fields{
 		"namespace": q.Config.Namespace,
 		"jobname":   q.Config.JobName,
-		"component": "workqueue.QueueScheduler",
+		"component": "scheduler.QueueScheduler",
 	})
 
 	q.tomb, _ = tomb.WithContext(ctx)
@@ -88,23 +88,23 @@ func (q *QueueScheduler) Start(ctx context.Context) {
 	q.tomb.Go(q.run)
 }
 
-func (q *QueueScheduler) SignalStop() {
+func (q *Scheduler) SignalStop() {
 	q.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
-func (q *QueueScheduler) Wait() error {
+func (q *Scheduler) Wait() error {
 	return q.tomb.Wait()
 }
 
-func (q *QueueScheduler) Dead() <-chan struct{} {
+func (q *Scheduler) Dead() <-chan struct{} {
 	return q.tomb.Dead()
 }
 
-func (q *QueueScheduler) Err() error {
+func (q *Scheduler) Err() error {
 	return q.tomb.Err()
 }
 
-func (q *QueueScheduler) run() error {
+func (q *Scheduler) run() error {
 	dying := q.tomb.Dying()
 	timer := time.NewTimer(time.Duration(0))
 
@@ -137,32 +137,28 @@ L:
 	return nil
 }
 
-//
 // This method is meant to be part of the lower facing API (towards
 // SchedulingController).
-func (q *QueueScheduler) GetEnqueued() uint {
+func (q *Scheduler) GetEnqueued() uint {
 	return uint(q.enqueuedJobs)
 }
 
-//
 // This method is meant to be part of the lower facing API (towards
 // SchedulingController).
-func (q *QueueScheduler) GetEnqueuedAndReset() uint {
+func (q *Scheduler) GetEnqueuedAndReset() uint {
 	return uint(atomic.SwapUint32(&q.enqueuedJobs, 0))
 }
 
-//
 // This method is meant to be part of the lower facing API (towards
 // SchedulingController).
-func (q *QueueScheduler) SetInterval(interval time.Duration) {
+func (q *Scheduler) SetInterval(interval time.Duration) {
 	q.fieldLogger.WithField("interval", interval).Debug("Setting interval")
 	q.interval = interval
 }
 
-//
 // This method is meant to be part of the lower facing API (towards
 // SchedulingController).
-func (q *QueueScheduler) GetQueueInfo() (count int64, latency int64, err error) {
+func (q *Scheduler) GetQueueInfo() (count int64, latency int64, err error) {
 	queues, err := q.client.Queues()
 	if err != nil {
 		return 0, 0, err
@@ -185,7 +181,7 @@ func (q *QueueScheduler) GetQueueInfo() (count int64, latency int64, err error) 
 //
 // This method is meant to be part of the lower facing API (towards
 // SchedulingController).
-func (q *QueueScheduler) GetWorkerNum() (int, error) {
+func (q *Scheduler) GetWorkerNum() (int, error) {
 	heartbeats, err := q.client.WorkerPoolHeartbeats()
 	if err != nil {
 		return 0, err
@@ -217,7 +213,7 @@ func (q *QueueScheduler) GetWorkerNum() (int, error) {
 //
 // This method is meant to be part of the lower facing API (towards
 // SchedulingController).
-func (q *QueueScheduler) GetWorkerPoolNum() (int, error) {
+func (q *Scheduler) GetWorkerPoolNum() (int, error) {
 	heartbeats, err := q.client.WorkerPoolHeartbeats()
 	if err != nil {
 		return 0, err
@@ -229,7 +225,7 @@ func (q *QueueScheduler) GetWorkerPoolNum() (int, error) {
 //
 // This method is meant to be part of the lower facing API (towards
 // SchedulingController).
-func (q *QueueScheduler) RequestProduction(n uint) {
+func (q *Scheduler) RequestProduction(n uint) {
 	q.fieldLogger.WithField("n", n).Debug("Requesting production")
 	request := ProductionRequest{
 		N: n,
@@ -243,7 +239,7 @@ func (q *QueueScheduler) RequestProduction(n uint) {
 
 //
 // This method is meant to be part of the upper facing API (towards Producer).
-func (q *QueueScheduler) Enqueue(args map[string]interface{}) (*work.Job, error) {
+func (q *Scheduler) Enqueue(args map[string]interface{}) (*work.Job, error) {
 	job, err := q.enqueuer.Enqueue(q.Config.JobName, args)
 	if err != nil {
 		return job, err
@@ -266,13 +262,13 @@ func (q *QueueScheduler) Enqueue(args map[string]interface{}) (*work.Job, error)
 // from the channel.
 //
 // This method is meant to be part of the upper facing API (towards Producer).
-func (q *QueueScheduler) C() <-chan ProductionRequest {
+func (q *Scheduler) C() <-chan ProductionRequest {
 	return q.c
 }
 
-//go:generate confions config EWMASchedulerConfig
+//go:generate confions config EWMAControllerConfig
 
-type EWMASchedulerConfig struct {
+type EWMAControllerConfig struct {
 	ConsumptionLifetime time.Duration
 
 	MinThreshold       uint
@@ -287,7 +283,7 @@ type EWMASchedulerConfig struct {
 	MaintainingDeviationAlpha  float64
 }
 
-var EWMASchedulerDefaultConfig = &EWMASchedulerConfig{
+var EWMAControllerDefaultConfig = &EWMAControllerConfig{
 	ConsumptionLifetime: 10 * time.Second,
 
 	MinThreshold:       4,
@@ -302,24 +298,24 @@ var EWMASchedulerDefaultConfig = &EWMASchedulerConfig{
 	MaintainingDeviationAlpha:  0.1,
 }
 
-type ewmaSchedulerPhase int
+type ewmaControllerPhase int
 
-// Constants related to EWMAScheduler
+// Constants related to EWMAController
 const (
-	espUninitialised ewmaSchedulerPhase = iota
+	espUninitialised ewmaControllerPhase = iota
 	espStartUp
 	espMaintaining
 )
 
-var _ SchedulingController = &EWMAScheduler{}
+var _ Controller = &EWMAController{}
 
-type EWMAScheduler struct {
-	Config *EWMASchedulerConfig
+type EWMAController struct {
+	Config *EWMAControllerConfig
 
-	queueScheduler *QueueScheduler
+	queueScheduler *Scheduler
 	fieldLogger    log.Interface
 
-	phase               ewmaSchedulerPhase
+	phase               ewmaControllerPhase
 	startUpStepCount    uint
 	previousScheduling  time.Time
 	previousQueueLength uint
@@ -330,16 +326,16 @@ type EWMAScheduler struct {
 	consumptionEWMA float64
 }
 
-func NewEWMAScheduler(config *EWMASchedulerConfig) *EWMAScheduler {
-	return &EWMAScheduler{
+func NewEWMAController(config *EWMAControllerConfig) *EWMAController {
+	return &EWMAController{
 		Config: config,
 	}
 }
 
-func (e *EWMAScheduler) Init(queueScheduler *QueueScheduler) {
+func (e *EWMAController) Init(queueScheduler *Scheduler) {
 	e.queueScheduler = queueScheduler
 	e.fieldLogger = queueScheduler.Config.Logger.WithFields(log.Fields{
-		"component": "workqueue.EWMAScheduler",
+		"component": "scheduler.EWMAController",
 	})
 
 	// Initialise state
@@ -353,7 +349,7 @@ func (e *EWMAScheduler) Init(queueScheduler *QueueScheduler) {
 	e.scheduleInit()
 }
 
-func (e *EWMAScheduler) scheduleInit() {
+func (e *EWMAController) scheduleInit() {
 	e.queueScheduler.SetInterval(e.Config.StartUpInterval)
 	workerNum, err := e.queueScheduler.GetWorkerNum()
 	if err != nil {
@@ -380,7 +376,7 @@ func (e *EWMAScheduler) scheduleInit() {
 	}
 }
 
-func (e *EWMAScheduler) Schedule() {
+func (e *EWMAController) Schedule() {
 	now := time.Now()
 	timePassed := now.Sub(e.previousScheduling)
 	e.previousScheduling = now
@@ -493,13 +489,13 @@ func (e *EWMAScheduler) Schedule() {
 // startupThreshold calculates the threshold during the startup phase using
 // only the current number of workers and the StartUpWorkerTheshold config
 // option.
-func (e *EWMAScheduler) startupThreshold(workerNum uint) uint {
+func (e *EWMAController) startupThreshold(workerNum uint) uint {
 	return uint(workerNum) * e.Config.StartUpWorkerTheshold
 }
 
 // maintainingThreshold calculates the threshold during the maintaining phase
 // from the ewma fields which are tracked as part of the state.
-func (e *EWMAScheduler) maintainingThreshold() uint {
+func (e *EWMAController) maintainingThreshold() uint {
 	expDeviation := normaliseDuration(e.Config.MaintainingInterval, time.Second, e.deviationEWMA)
 	expConsumption := normaliseDuration(e.Config.MaintainingInterval, time.Second, e.consumptionEWMA)
 
@@ -520,7 +516,7 @@ func (e *EWMAScheduler) maintainingThreshold() uint {
 // MinWorkerThreshold configuration options.
 //
 // The maximum of all minimum lengths is returned.
-func (e *EWMAScheduler) minLength(calculatedLength uint, workerNum uint) uint {
+func (e *EWMAController) minLength(calculatedLength uint, workerNum uint) uint {
 	// Calculate minLength based on the MinWorkerThreshold config option and the workerNum
 	minLength := uint(math.Ceil(e.Config.MinWorkerThreshold * float64(workerNum)))
 

@@ -10,6 +10,7 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/meda"
 	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue/scheduler"
 )
 
 //go:generate confions config ProducerConfig
@@ -30,7 +31,7 @@ type ProducerConfig struct {
 	DB     *meda.DB      `yaml:"-"`
 	Logger log.Interface `yaml:"-"`
 
-	Controller SchedulingController `yaml:"-"`
+	Controller scheduler.Controller `yaml:"-"`
 }
 
 var ProducerDefaultConfig = &ProducerConfig{
@@ -46,11 +47,11 @@ type Producer struct {
 
 	tomb *tomb.Tomb
 
-	filesChan      chan meda.File
-	lastRand       float64
-	lastID         uint64
-	queueScheduler *QueueScheduler
-	fieldLogger    log.Interface
+	filesChan   chan meda.File
+	lastRand    float64
+	lastID      uint64
+	scheduler   *scheduler.Scheduler
+	fieldLogger log.Interface
 }
 
 func NewProducer(config *ProducerConfig) *Producer {
@@ -69,7 +70,7 @@ func (p *Producer) Start(ctx context.Context) {
 		"component":  "workqueue.Producer",
 	})
 
-	queueSchedulerConfig := &QueueSchedulerConfig{
+	schedulerConfig := &scheduler.Config{
 		Namespace:  p.Config.Namespace,
 		JobName:    workqueue.CalculateChecksumJobName,
 		Pool:       p.Config.Pool,
@@ -81,16 +82,16 @@ func (p *Producer) Start(ctx context.Context) {
 	p.lastID = 0
 	p.filesChan = make(chan meda.File, p.Config.RowBufferSize)
 
-	p.queueScheduler = NewQueueScheduler(queueSchedulerConfig)
+	p.scheduler = scheduler.New(schedulerConfig)
 
 	p.tomb.Go(func() error {
 		p.tomb.Go(p.rowFetcher)
 
 		p.tomb.Go(p.run)
 
-		p.queueScheduler.Start(p.tomb.Context(nil))
+		p.scheduler.Start(p.tomb.Context(nil))
 
-		p.tomb.Go(p.queueSchedulerWaiter)
+		p.tomb.Go(p.schedulerWaiter)
 
 		return nil
 	})
@@ -116,7 +117,7 @@ func (p *Producer) run() error {
 	var err error
 	var exhausted bool
 
-	c := p.queueScheduler.C()
+	c := p.scheduler.C()
 	dying := p.tomb.Dying()
 
 	p.fieldLogger.Info("Starting listening to production requests")
@@ -150,13 +151,13 @@ L:
 		}).Info("Finished listening to production requests")
 	}
 
-	p.queueScheduler.SignalStop()
+	p.scheduler.SignalStop()
 
 	return err
 }
 
-func (p *Producer) queueSchedulerWaiter() error {
-	p.queueScheduler.Wait()
+func (p *Producer) schedulerWaiter() error {
+	p.scheduler.Wait()
 
 	return nil
 }
@@ -187,7 +188,7 @@ func (p *Producer) rowFetcher() error {
 
 		p.fieldLogger.WithFields(log.Fields{
 			"exhausted": exhausted,
-			"count": len(files),
+			"count":     len(files),
 		}).Debug("Fetched files from database")
 
 		for _, file := range files {
@@ -271,7 +272,7 @@ func (p *Producer) enqueue(workPack *workqueue.WorkPack, jobArgs map[string]inte
 	}
 
 	// Enqueue work pack
-	_, err = p.queueScheduler.Enqueue(jobArgs)
+	_, err = p.scheduler.Enqueue(jobArgs)
 	if err != nil {
 		return err
 	}
