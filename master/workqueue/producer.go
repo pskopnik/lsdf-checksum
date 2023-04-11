@@ -188,7 +188,7 @@ func (p *Producer) rowFetcher() error {
 		p.fieldLogger.WithFields(log.Fields{
 			"exhausted": exhausted,
 			"count": len(files),
-		}).Info("Fetched files from database")
+		}).Debug("Fetched files from database")
 
 		for _, file := range files {
 			select {
