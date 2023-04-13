@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"math"
-	"sync/atomic"
 	"time"
 
 	"github.com/apex/log"
@@ -12,24 +11,47 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
 type Controller interface {
-	// Init is called once: When the QueueScheduler is starting.
+	// Init is called once: When the Scheduler is starting.
 	Init(scheduler *Scheduler)
-	// Schedule is called by QueueScheduler with a frequency corresponding to
+	// Schedule is called by Scheduler with a frequency corresponding to
 	// its interval value.
 	// Schedule is never called concurrently, the next call to schedule takes
 	// place `intv` time after the previous call completed.
-	// RequestProduction() is the means of scheduling for the
-	// SchedulingController.
-	// During Schedule, the SchedulingController should request the enqueueing
-	// of new tasks by calling RequestProduction() on the QueueScheduler.
+	// RequestProduction() is the means of scheduling for the Controller.
+	// During Schedule, the Controller should request the enqueueing of new
+	// tasks by calling RequestProduction() on the Scheduler.
 	Schedule()
 }
 
-type ProductionRequest struct {
-	N uint
+type ProductionOrder struct {
+	order     orderBookOrder
+	scheduler *Scheduler
+}
+
+func (p *ProductionOrder) Total() int {
+	return p.order.Total()
+}
+
+func (p *ProductionOrder) Remaining() int {
+	return p.order.Remaining()
+}
+
+func (p *ProductionOrder) Fulfilled() int {
+	return p.order.Fulfilled()
+}
+
+func (p *ProductionOrder) Enqueue(payload workqueue.JobPayload) (*work.Job, error) {
+	job, err := p.scheduler.enqueue(payload)
+	if err != nil {
+		return job, err
+	}
+
+	p.order.Fulfill(1)
+	return job, nil
 }
 
 //go:generate confions config Config
@@ -57,17 +79,15 @@ type Scheduler struct {
 	client      *work.Client
 	fieldLogger log.Interface
 
-	c chan ProductionRequest
-
-	enqueuedJobs uint32
+	orderBook orderBook
 
 	interval time.Duration
 }
 
 func New(config *Config) *Scheduler {
 	return &Scheduler{
-		Config: config,
-		c:      make(chan ProductionRequest),
+		Config:    config,
+		orderBook: *newOrderBook(),
 	}
 }
 
@@ -137,27 +157,18 @@ L:
 	return nil
 }
 
-// This method is meant to be part of the lower facing API (towards
-// SchedulingController).
-func (q *Scheduler) GetEnqueued() uint {
-	return uint(q.enqueuedJobs)
+// This method is part of the lower facing API (towards Controller).
+func (q *Scheduler) GetEnqueued() uint64 {
+	return q.orderBook.Stats().Fulfilled
 }
 
-// This method is meant to be part of the lower facing API (towards
-// SchedulingController).
-func (q *Scheduler) GetEnqueuedAndReset() uint {
-	return uint(atomic.SwapUint32(&q.enqueuedJobs, 0))
-}
-
-// This method is meant to be part of the lower facing API (towards
-// SchedulingController).
+// This method is part of the lower facing API (towards Controller).
 func (q *Scheduler) SetInterval(interval time.Duration) {
 	q.fieldLogger.WithField("interval", interval).Debug("Setting interval")
 	q.interval = interval
 }
 
-// This method is meant to be part of the lower facing API (towards
-// SchedulingController).
+// This method is part of the lower facing API (towards Controller).
 func (q *Scheduler) GetQueueInfo() (count int64, latency int64, err error) {
 	queues, err := q.client.Queues()
 	if err != nil {
@@ -179,8 +190,7 @@ func (q *Scheduler) GetQueueInfo() (count int64, latency int64, err error) {
 // with the queueing system.
 // This is equal to the total currency of the queueing system.
 //
-// This method is meant to be part of the lower facing API (towards
-// SchedulingController).
+// This method is part of the lower facing API (towards Controller).
 func (q *Scheduler) GetWorkerNum() (int, error) {
 	heartbeats, err := q.client.WorkerPoolHeartbeats()
 	if err != nil {
@@ -211,8 +221,7 @@ func (q *Scheduler) GetWorkerNum() (int, error) {
 // Each worker pool may have multiple workers, see GetWorkerNum() to retrieve
 // the total concurrency.
 //
-// This method is meant to be part of the lower facing API (towards
-// SchedulingController).
+// This method is part of the lower facing API (towards Controller).
 func (q *Scheduler) GetWorkerPoolNum() (int, error) {
 	heartbeats, err := q.client.WorkerPoolHeartbeats()
 	if err != nil {
@@ -222,48 +231,66 @@ func (q *Scheduler) GetWorkerPoolNum() (int, error) {
 	return len(heartbeats), nil
 }
 
-//
-// This method is meant to be part of the lower facing API (towards
-// SchedulingController).
+// This method is part of the lower facing API (towards Controller).
 func (q *Scheduler) RequestProduction(n uint) {
 	q.fieldLogger.WithField("n", n).Debug("Requesting production")
-	request := ProductionRequest{
-		N: n,
-	}
 
-	select {
-	case q.c <- request:
-	case <-q.tomb.Dying():
-	}
+	q.orderBook.Add(n)
 }
 
+func (q *Scheduler) RequestProductionUntilThreshold(threshold uint) {
+	q.fieldLogger.WithField("threshold", threshold).Debug("Requesting production until threshold")
+
+	q.orderBook.AddUntilThreshold(threshold)
+}
+
+// AcquireOrder acquires a production order from the internal order book of
+// the Scheduler.
+// The caller must fulfill the order by calling [ProductionOrder.Enqueue]
+// [ProductionOrder.Total] times. The order will contain a maximum of max
+// items.
 //
-// This method is meant to be part of the upper facing API (towards Producer).
-func (q *Scheduler) Enqueue(args map[string]interface{}) (*work.Job, error) {
-	job, err := q.enqueuer.Enqueue(q.Config.JobName, args)
+// This method is part of the upper facing API (towards Producer).
+func (q *Scheduler) AcquireOrder(ctx context.Context, max uint) (ProductionOrder, error) {
+	order, err := q.orderBook.AcquireOrder(ctx, max)
 	if err != nil {
-		return job, err
+		return ProductionOrder{}, err
 	}
 
-	atomic.AddUint32(&q.enqueuedJobs, 1)
-
-	return job, err
+	return ProductionOrder{
+		order:     order,
+		scheduler: q,
+	}, nil
 }
 
-// C returns a channel producers should listen on. When a ProductionRequest
-// with N = 6 is received, 6 items should be enqueued by the Producer (using
-// the Enqueue() method).
-//
-// C returns the same channel for all calls. That means ProdutionRequest
-// are randomly assigned to a producer.
-//
-// Producers should take care to process ProductionRequests quickly (or
-// out-of-line). QueueScheduler blocks until the ProductionRequest is consumed
-// from the channel.
-//
-// This method is meant to be part of the upper facing API (towards Producer).
-func (q *Scheduler) C() <-chan ProductionRequest {
-	return q.c
+type SchedulerStats struct {
+	OrdersInQueue    uint64
+	OrdersInProgress uint64
+	JobsRequested    uint64
+	JobsOrdered      uint64
+	JobsEnqueued     uint64
+}
+
+func (q *Scheduler) Stats() SchedulerStats {
+	stats := q.orderBook.Stats()
+	return SchedulerStats{
+		OrdersInQueue:    stats.InQueue,
+		OrdersInProgress: stats.InProgress,
+		JobsRequested:    stats.Requested,
+		JobsOrdered:      stats.Ordered,
+		JobsEnqueued:     stats.Fulfilled,
+	}
+}
+
+func (q *Scheduler) enqueue(payload workqueue.JobPayload) (*work.Job, error) {
+	args := make(map[string]interface{})
+
+	err := payload.ToJobArgs(args)
+	if err != nil {
+		return nil, err
+	}
+
+	return q.enqueuer.Enqueue(q.Config.JobName, args)
 }
 
 //go:generate confions config EWMAControllerConfig
@@ -315,11 +342,12 @@ type EWMAController struct {
 	queueScheduler *Scheduler
 	fieldLogger    log.Interface
 
-	phase               ewmaControllerPhase
-	startUpStepCount    uint
-	previousScheduling  time.Time
-	previousQueueLength uint
-	threshold           uint
+	phase                   ewmaControllerPhase
+	startUpStepCount        uint
+	previousScheduling      time.Time
+	previousQueueLength     uint
+	previousEnqueuedCounter uint64
+	threshold               uint
 	// deviationEWMA is normalised to deviation (of consumption) per second
 	deviationEWMA float64
 	// consumptionEWMA is normalised to consumption per second
@@ -389,7 +417,9 @@ func (e *EWMAController) Schedule() {
 		return
 	}
 	exhausted := queueLength == 0
-	enqueued := e.queueScheduler.GetEnqueuedAndReset()
+	enqueuedCounter := e.queueScheduler.GetEnqueued()
+	enqueued := enqueuedCounter - e.previousEnqueuedCounter
+	e.previousEnqueuedCounter = enqueuedCounter
 
 	workerNum, err := e.queueScheduler.GetWorkerNum()
 	if err != nil {
@@ -398,10 +428,10 @@ func (e *EWMAController) Schedule() {
 	}
 
 	var consumption uint
-	if e.previousQueueLength+enqueued < uint(queueLength) {
+	if e.previousQueueLength+uint(enqueued) < uint(queueLength) {
 		consumption = 0
 	} else {
-		consumption = e.previousQueueLength + enqueued - uint(queueLength)
+		consumption = e.previousQueueLength + uint(enqueued) - uint(queueLength)
 	}
 
 	deviation := float64(consumption) - normaliseDuration(timePassed, time.Second, e.consumptionEWMA)
@@ -535,13 +565,11 @@ func (e *EWMAController) minLength(calculatedLength uint, workerNum uint) uint {
 	return minLength
 }
 
-//
 // (1 - alpha) * ewma + alpha * value
 func updateEwma(ewma, alpha, value float64) float64 {
 	return (1-alpha)*ewma + alpha*value
 }
 
-//
 // (duration / normalDuration) * factor_1 * factor_2 * ...
 func normaliseDuration(duration, normalDuration time.Duration, factors ...float64) float64 {
 	res := float64(duration.Nanoseconds()) / float64(normalDuration.Nanoseconds())
