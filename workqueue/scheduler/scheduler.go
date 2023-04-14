@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/apex/log"
@@ -78,7 +79,8 @@ type Scheduler struct {
 	client      *work.Client
 	fieldLogger log.Interface
 
-	orderBook orderBook
+	orderBook          orderBook
+	queueObservedEmpty atomic.Uint64
 
 	interval time.Duration
 }
@@ -90,44 +92,44 @@ func New(config *Config) *Scheduler {
 	}
 }
 
-func (q *Scheduler) Start(ctx context.Context) {
-	q.fieldLogger = q.Config.Logger.WithFields(log.Fields{
-		"namespace": q.Config.Namespace,
-		"jobname":   q.Config.JobName,
+func (s *Scheduler) Start(ctx context.Context) {
+	s.fieldLogger = s.Config.Logger.WithFields(log.Fields{
+		"namespace": s.Config.Namespace,
+		"jobname":   s.Config.JobName,
 		"component": "scheduler.QueueScheduler",
 	})
 
-	q.tomb, _ = tomb.WithContext(ctx)
-	q.enqueuer = work.NewEnqueuer(q.Config.Namespace, q.Config.Pool)
-	q.client = work.NewClient(q.Config.Namespace, q.Config.Pool)
+	s.tomb, _ = tomb.WithContext(ctx)
+	s.enqueuer = work.NewEnqueuer(s.Config.Namespace, s.Config.Pool)
+	s.client = work.NewClient(s.Config.Namespace, s.Config.Pool)
 
-	q.fieldLogger.Info("Performing scheduling controller initialisation")
-	q.Config.Controller.Init(q)
+	s.fieldLogger.Info("Performing scheduling controller initialisation")
+	s.Config.Controller.Init(s)
 
-	q.tomb.Go(q.run)
+	s.tomb.Go(s.run)
 }
 
-func (q *Scheduler) SignalStop() {
-	q.tomb.Kill(lifecycle.ErrStopSignalled)
+func (s *Scheduler) SignalStop() {
+	s.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
-func (q *Scheduler) Wait() error {
-	return q.tomb.Wait()
+func (s *Scheduler) Wait() error {
+	return s.tomb.Wait()
 }
 
-func (q *Scheduler) Dead() <-chan struct{} {
-	return q.tomb.Dead()
+func (s *Scheduler) Dead() <-chan struct{} {
+	return s.tomb.Dead()
 }
 
-func (q *Scheduler) Err() error {
-	return q.tomb.Err()
+func (s *Scheduler) Err() error {
+	return s.tomb.Err()
 }
 
-func (q *Scheduler) run() error {
-	dying := q.tomb.Dying()
+func (s *Scheduler) run() error {
+	dying := s.tomb.Dying()
 	timer := time.NewTimer(time.Duration(0))
 
-	q.fieldLogger.Info("Starting scheduling loop")
+	s.fieldLogger.Info("Starting scheduling loop")
 
 	// Exhaust timer
 	if !timer.Stop() {
@@ -135,12 +137,12 @@ func (q *Scheduler) run() error {
 	}
 L:
 	for {
-		timer.Reset(q.interval)
+		timer.Reset(s.interval)
 
 		select {
 		case <-timer.C:
-			q.fieldLogger.Debug("Calling schedule")
-			q.Config.Controller.Schedule()
+			s.fieldLogger.Debug("Calling schedule")
+			s.Config.Controller.Schedule()
 		case <-dying:
 			// Exhaust timer
 			if !timer.Stop() {
@@ -151,31 +153,26 @@ L:
 		}
 	}
 
-	q.fieldLogger.WithField("action", "stopping").Info("Finished scheduling loop")
+	s.fieldLogger.WithField("action", "stopping").Info("Finished scheduling loop")
 
 	return nil
 }
 
 // This method is part of the lower facing API (towards Controller).
-func (q *Scheduler) GetEnqueued() uint64 {
-	return q.orderBook.Stats().Fulfilled
+func (s *Scheduler) SetInterval(interval time.Duration) {
+	s.fieldLogger.WithField("interval", interval).Debug("Setting interval")
+	s.interval = interval
 }
 
 // This method is part of the lower facing API (towards Controller).
-func (q *Scheduler) SetInterval(interval time.Duration) {
-	q.fieldLogger.WithField("interval", interval).Debug("Setting interval")
-	q.interval = interval
-}
-
-// This method is part of the lower facing API (towards Controller).
-func (q *Scheduler) GetQueueInfo() (count int64, latency int64, err error) {
-	queues, err := q.client.Queues()
+func (s *Scheduler) GetQueueInfo() (count int64, latency int64, err error) {
+	queues, err := s.client.Queues()
 	if err != nil {
 		return 0, 0, err
 	}
 
 	for _, queue := range queues {
-		if queue.JobName == q.Config.JobName {
+		if queue.JobName == s.Config.JobName {
 			return queue.Count, queue.Latency, nil
 		}
 	}
@@ -190,8 +187,8 @@ func (q *Scheduler) GetQueueInfo() (count int64, latency int64, err error) {
 // This is equal to the total currency of the queueing system.
 //
 // This method is part of the lower facing API (towards Controller).
-func (q *Scheduler) GetWorkerNum() (int, error) {
-	heartbeats, err := q.client.WorkerPoolHeartbeats()
+func (s *Scheduler) GetWorkerNum() (int, error) {
+	heartbeats, err := s.client.WorkerPoolHeartbeats()
 	if err != nil {
 		return 0, err
 	}
@@ -200,7 +197,7 @@ func (q *Scheduler) GetWorkerNum() (int, error) {
 	for _, heartbeat := range heartbeats {
 		found := false
 		for _, jobName := range heartbeat.JobNames {
-			if jobName == q.Config.JobName {
+			if jobName == s.Config.JobName {
 				found = true
 				break
 			}
@@ -215,32 +212,18 @@ func (q *Scheduler) GetWorkerNum() (int, error) {
 	return workerNum, nil
 }
 
-// GetWorkerPoolNum returns the number of worker pool's currently registered
-// with the queueing system.
-// Each worker pool may have multiple workers, see GetWorkerNum() to retrieve
-// the total concurrency.
-//
 // This method is part of the lower facing API (towards Controller).
-func (q *Scheduler) GetWorkerPoolNum() (int, error) {
-	heartbeats, err := q.client.WorkerPoolHeartbeats()
-	if err != nil {
-		return 0, err
-	}
+func (s *Scheduler) RequestProduction(n uint) {
+	s.fieldLogger.WithField("n", n).Debug("Requesting production")
 
-	return len(heartbeats), nil
+	s.orderBook.Add(n)
 }
 
 // This method is part of the lower facing API (towards Controller).
-func (q *Scheduler) RequestProduction(n uint) {
-	q.fieldLogger.WithField("n", n).Debug("Requesting production")
+func (s *Scheduler) RequestProductionUntilThreshold(threshold uint) {
+	s.fieldLogger.WithField("threshold", threshold).Debug("Requesting production until threshold")
 
-	q.orderBook.Add(n)
-}
-
-func (q *Scheduler) RequestProductionUntilThreshold(threshold uint) {
-	q.fieldLogger.WithField("threshold", threshold).Debug("Requesting production until threshold")
-
-	q.orderBook.AddUntilThreshold(threshold)
+	s.orderBook.AddUntilThreshold(threshold)
 }
 
 // AcquireOrder acquires a production order from the internal order book of
@@ -250,38 +233,40 @@ func (q *Scheduler) RequestProductionUntilThreshold(threshold uint) {
 // items.
 //
 // This method is part of the upper facing API (towards Producer).
-func (q *Scheduler) AcquireOrder(ctx context.Context, max uint) (ProductionOrder, error) {
-	order, err := q.orderBook.AcquireOrder(ctx, max)
+func (s *Scheduler) AcquireOrder(ctx context.Context, max uint) (ProductionOrder, error) {
+	order, err := s.orderBook.AcquireOrder(ctx, max)
 	if err != nil {
 		return ProductionOrder{}, err
 	}
 
 	return ProductionOrder{
 		order:     order,
-		scheduler: q,
+		scheduler: s,
 	}, nil
 }
 
 type SchedulerStats struct {
-	OrdersInQueue    uint64
-	OrdersInProgress uint64
-	JobsRequested    uint64
-	JobsOrdered      uint64
-	JobsEnqueued     uint64
+	OrdersInQueue      uint64
+	OrdersInProgress   uint64
+	JobsRequested      uint64
+	JobsOrdered        uint64
+	JobsEnqueued       uint64
+	QueueObservedEmpty uint64
 }
 
-func (q *Scheduler) Stats() SchedulerStats {
-	stats := q.orderBook.Stats()
+func (s *Scheduler) Stats() SchedulerStats {
+	stats := s.orderBook.Stats()
 	return SchedulerStats{
-		OrdersInQueue:    stats.InQueue,
-		OrdersInProgress: stats.InProgress,
-		JobsRequested:    stats.Requested,
-		JobsOrdered:      stats.Ordered,
-		JobsEnqueued:     stats.Fulfilled,
+		OrdersInQueue:      stats.InQueue,
+		OrdersInProgress:   stats.InProgress,
+		JobsRequested:      stats.Requested,
+		JobsOrdered:        stats.Ordered,
+		JobsEnqueued:       stats.Fulfilled,
+		QueueObservedEmpty: s.queueObservedEmpty.Load(),
 	}
 }
 
-func (q *Scheduler) enqueue(payload workqueue.JobPayload) (*work.Job, error) {
+func (s *Scheduler) enqueue(payload workqueue.JobPayload) (*work.Job, error) {
 	args := make(map[string]interface{})
 
 	err := payload.ToJobArgs(args)
@@ -289,5 +274,18 @@ func (q *Scheduler) enqueue(payload workqueue.JobPayload) (*work.Job, error) {
 		return nil, err
 	}
 
-	return q.enqueuer.Enqueue(q.Config.JobName, args)
+	job, err := s.enqueuer.Enqueue(s.Config.JobName, args)
+	if err != nil {
+		return nil, err
+	}
+
+	queueLength, _, err := s.GetQueueInfo()
+	if err != nil {
+		return nil, err
+	}
+	if queueLength <= 1 {
+		s.queueObservedEmpty.Add(1)
+	}
+
+	return job, nil
 }

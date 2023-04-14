@@ -53,19 +53,26 @@ var _ Controller = &EWMAController{}
 type EWMAController struct {
 	Config *EWMAControllerConfig
 
-	queueScheduler *Scheduler
-	fieldLogger    log.Interface
+	scheduler   *Scheduler
+	fieldLogger log.Interface
 
-	phase                   ewmaControllerPhase
-	startUpStepCount        uint
-	previousScheduling      time.Time
-	previousQueueLength     uint
-	previousEnqueuedCounter uint64
-	threshold               uint
-	// deviationEWMA is normalised to deviation (of consumption) per second
-	deviationEWMA float64
-	// consumptionEWMA is normalised to consumption per second
+	phase            ewmaControllerPhase
+	startUpStepCount uint
+
+	previousScheduling           time.Time
+	previousQueueLength          uint
+	previousEnqueuedCounter      uint64
+	previousObservedEmptyCounter uint64
+
+	// consumptionEWMA is the normalised consumption (jobs dequeued from the
+	// queue) per second.
 	consumptionEWMA float64
+	// deviationEWMA is the normalised deviation (of consumption) per second.
+	deviationEWMA float64
+
+	// threshold is the targeted length of the queue. This is the main output
+	// variable of the controller.
+	threshold uint
 }
 
 func NewEWMAController(config *EWMAControllerConfig) *EWMAController {
@@ -75,7 +82,7 @@ func NewEWMAController(config *EWMAControllerConfig) *EWMAController {
 }
 
 func (e *EWMAController) Init(queueScheduler *Scheduler) {
-	e.queueScheduler = queueScheduler
+	e.scheduler = queueScheduler
 	e.fieldLogger = queueScheduler.Config.Logger.WithFields(log.Fields{
 		"component": "scheduler.EWMAController",
 	})
@@ -92,19 +99,24 @@ func (e *EWMAController) Init(queueScheduler *Scheduler) {
 }
 
 func (e *EWMAController) scheduleInit() {
-	e.queueScheduler.SetInterval(e.Config.StartUpInterval)
-	workerNum, err := e.queueScheduler.GetWorkerNum()
+	e.scheduler.SetInterval(e.Config.StartUpInterval)
+	workerNum, err := e.scheduler.GetWorkerNum()
 	if err != nil {
 		workerNum = 0
 	}
 
 	e.threshold = e.minLength(uint(workerNum)*e.Config.StartUpWorkerTheshold, uint(workerNum))
-	e.fieldLogger.WithField("threshold", e.threshold).WithField("phase", "startup").Debug("Calculated initial threshold")
 
-	queueLength, _, err := e.queueScheduler.GetQueueInfo()
+	e.fieldLogger.WithFields(log.Fields{
+		"threshold": e.threshold,
+		"phase":     "startup",
+	}).
+		Debug("Calculated initial threshold")
+
+	queueLength, _, err := e.scheduler.GetQueueInfo()
 	if err != nil {
-		e.fieldLogger.WithError(err).WithField("action", "skipping").Debug("No scheduling possible, couldn't get queueLength")
-		// No scheduling possible
+		e.fieldLogger.WithError(err).WithField("action", "skipping").
+			Debug("No scheduling possible, couldn't get queueLength")
 		return
 	}
 
@@ -114,7 +126,7 @@ func (e *EWMAController) scheduleInit() {
 		"worker_num":   workerNum,
 	}).Debug("Planning production request")
 	if queueLength < int64(e.threshold) {
-		e.queueScheduler.RequestProduction(e.threshold - uint(queueLength))
+		e.scheduler.RequestProductionUntilThreshold(e.threshold - uint(queueLength))
 	}
 }
 
@@ -123,21 +135,27 @@ func (e *EWMAController) Schedule() {
 	timePassed := now.Sub(e.previousScheduling)
 	e.previousScheduling = now
 
-	queueLength, _, err := e.queueScheduler.GetQueueInfo()
+	schedulerStats := e.scheduler.Stats()
+
+	queueLength, _, err := e.scheduler.GetQueueInfo()
 	if err != nil {
 		e.fieldLogger.WithError(err).WithField("action", "skipping").
 			Debug("No scheduling possible, couldn't get queueLength")
-		// No scheduling possible
 		return
 	}
-	exhausted := queueLength == 0
-	enqueuedCounter := e.queueScheduler.GetEnqueued()
+
+	enqueuedCounter := schedulerStats.JobsEnqueued
 	enqueued := enqueuedCounter - e.previousEnqueuedCounter
 	e.previousEnqueuedCounter = enqueuedCounter
 
-	workerNum, err := e.queueScheduler.GetWorkerNum()
+	observedEmptyCounter := schedulerStats.QueueObservedEmpty
+	exhausted := observedEmptyCounter > e.previousObservedEmptyCounter
+	e.previousObservedEmptyCounter = observedEmptyCounter
+
+	workerNum, err := e.scheduler.GetWorkerNum()
 	if err != nil {
-		// No scheduling possible
+		e.fieldLogger.WithError(err).WithField("action", "skipping").
+			Debug("No scheduling possible, couldn't get workerNum")
 		return
 	}
 
@@ -163,6 +181,7 @@ func (e *EWMAController) Schedule() {
 		"queue_length":          queueLength,
 		"exhausted":             exhausted,
 		"enqueued":              enqueued,
+		"outstanding_orders":    schedulerStats.OrdersInQueue + schedulerStats.OrdersInProgress,
 		"worker_num":            workerNum,
 		"consumption":           consumption,
 		"deviation":             deviation,
@@ -175,35 +194,38 @@ func (e *EWMAController) Schedule() {
 	e.previousQueueLength = uint(queueLength)
 
 	if exhausted {
+		// FUTR: Consider returning to startup phase, with more frequent probing?
+
 		prevThreshold := e.threshold
-		if e.threshold == 0 {
-			e.threshold = 1
-		} else {
-			e.threshold *= 2
-		}
+		e.threshold = e.minLength(2*consumption, uint(workerNum))
+
 		e.fieldLogger.WithFields(log.Fields{
 			"previous_threshold": prevThreshold,
 			"threshold":          e.threshold,
-		}).Debug("Exhausted, doubled threshold")
+			"consumption":        consumption,
+			"enqueued":           enqueued,
+			"outstanding_orders": schedulerStats.OrdersInQueue + schedulerStats.OrdersInProgress,
+			"queue_length":       queueLength,
+		}).Debug("Exhausted, setting threshold to at least double the consumption")
 	} else {
 		switch e.phase {
 		case espStartUp:
 			e.startUpStepCount++
-			e.threshold = e.minLength(e.startupThreshold(uint(workerNum)), uint(workerNum))
-
-			e.fieldLogger.WithFields(log.Fields{
-				"threshold": e.threshold,
-				"phase":     "startup",
-			}).Debug("Calculated threshold")
-			if e.startUpStepCount >= e.Config.StartUpSteps {
+			if e.startUpStepCount < e.Config.StartUpSteps {
+				e.threshold = e.minLength(e.startupThreshold(uint(workerNum)), uint(workerNum))
+				e.fieldLogger.WithFields(log.Fields{
+					"threshold": e.threshold,
+					"phase":     "startup",
+				}).Debug("Calculated threshold")
+			} else {
 				e.phase = espMaintaining
-				e.queueScheduler.SetInterval(e.Config.MaintainingInterval)
+				e.scheduler.SetInterval(e.Config.MaintainingInterval)
 
 				e.threshold = e.minLength(e.maintainingThreshold(), uint(workerNum))
 				e.fieldLogger.WithFields(log.Fields{
 					"threshold": e.threshold,
 					"phase":     "startup",
-				}).Debug("Switching to maintaining phase")
+				}).Debug("Switched to maintaining phase and calculated threshold")
 			}
 		case espMaintaining:
 			e.threshold = e.minLength(e.maintainingThreshold(), uint(workerNum))
@@ -226,7 +248,7 @@ func (e *EWMAController) Schedule() {
 		"worker_num":   workerNum,
 	}).Debug("Planning production request")
 	if queueLength < int64(e.threshold) {
-		e.queueScheduler.RequestProduction(e.threshold - uint(queueLength))
+		e.scheduler.RequestProductionUntilThreshold(e.threshold - uint(queueLength))
 	}
 }
 
