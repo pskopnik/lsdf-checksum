@@ -3,13 +3,15 @@ package workqueue
 import (
 	"encoding/base64"
 	"errors"
+
+	"github.com/tinylib/msgp/msgp"
 )
 
 // Error variables related to workqueue jobs definitions and encoding.
 var (
-	ErrTailingBytes        = errors.New("encoding format error: Unexpected tailing bytes")
-	ErrPackKeyNotFound     = errors.New("pack key not found in Job's Args")
-	ErrPackValueCastFailed = errors.New("failed to cast value of pack key in Job's Args")
+	ErrTrailingBytes          = errors.New("encoding format error: Unexpected trailing bytes")
+	ErrPayloadKeyNotFound     = errors.New("payload key not found in Job's Args")
+	ErrPayloadValueCastFailed = errors.New("failed to cast value of payload key in Job's Args")
 )
 
 const (
@@ -17,12 +19,16 @@ const (
 
 	writeBackJobNameBase string = "WriteBack"
 
-	WorkPackJobArgsKey      string = "pack"
-	WriteBackPackJobArgsKey string = "pack"
+	PayloadJobArgsKey string = "pl"
 )
 
 func WriteBackJobName(fileSystemName, snapshotName string) string {
 	return writeBackJobNameBase + "-" + fileSystemName + "-" + snapshotName
+}
+
+type JobPayload interface {
+	ToJobArgs(jobArgs map[string]interface{}) error
+	FromJobArgs(jobArgs map[string]interface{}) error
 }
 
 //go:generate msgp
@@ -39,49 +45,11 @@ type WorkPack struct {
 }
 
 func (w *WorkPack) ToJobArgs(jobArgs map[string]interface{}) error {
-	msgpBuf, err := w.MarshalMsg(nil)
-	if err != nil {
-		return err
-	}
-
-	base64BufLen := base64.RawStdEncoding.EncodedLen(len(msgpBuf))
-	base64Buf := make([]byte, base64BufLen)
-
-	base64.RawStdEncoding.Encode(base64Buf, msgpBuf)
-
-	jobArgs[WorkPackJobArgsKey] = string(base64Buf)
-
-	return nil
+	return marshalPayloadToJobArgs(jobArgs, w)
 }
 
 func (w *WorkPack) FromJobArgs(jobArgs map[string]interface{}) error {
-	packJobArgIntf, ok := jobArgs[WorkPackJobArgsKey]
-	if !ok {
-		return ErrPackKeyNotFound
-	}
-	packJobArg, ok := packJobArgIntf.(string)
-	if !ok {
-		return ErrPackValueCastFailed
-	}
-
-	base64Buf := []byte(packJobArg)
-	msgpBufLen := base64.RawStdEncoding.DecodedLen(len(base64Buf))
-	msgpBuf := make([]byte, msgpBufLen)
-
-	_, err := base64.RawStdEncoding.Decode(msgpBuf, base64Buf)
-	if err != nil {
-		return err
-	}
-
-	msgpBuf, err = w.UnmarshalMsg(msgpBuf)
-	if err != nil {
-		return err
-	}
-	if len(msgpBuf) != 0 {
-		return ErrTailingBytes
-	}
-
-	return nil
+	return unmarshalPayloadFromJobArgs(jobArgs, w)
 }
 
 type WriteBackPackFile struct {
@@ -99,7 +67,23 @@ type WriteBackPack struct {
 }
 
 func (w *WriteBackPack) ToJobArgs(jobArgs map[string]interface{}) error {
-	msgpBuf, err := w.MarshalMsg(nil)
+	return marshalPayloadToJobArgs(jobArgs, w)
+}
+
+func (w *WriteBackPack) FromJobArgs(jobArgs map[string]interface{}) error {
+	return unmarshalPayloadFromJobArgs(jobArgs, w)
+}
+
+func cleanJobArgs(jobArgs map[string]interface{}) {
+	for key := range jobArgs {
+		if key != PayloadJobArgsKey {
+			delete(jobArgs, key)
+		}
+	}
+}
+
+func marshalPayloadToJobArgs[T msgp.Marshaler](jobArgs map[string]interface{}, payload T) error {
+	msgpBuf, err := payload.MarshalMsg(nil)
 	if err != nil {
 		return err
 	}
@@ -109,19 +93,20 @@ func (w *WriteBackPack) ToJobArgs(jobArgs map[string]interface{}) error {
 
 	base64.RawStdEncoding.Encode(base64Buf, msgpBuf)
 
-	jobArgs[WriteBackPackJobArgsKey] = string(base64Buf)
+	cleanJobArgs(jobArgs)
+	jobArgs[PayloadJobArgsKey] = base64Buf
 
 	return nil
 }
 
-func (w *WriteBackPack) FromJobArgs(jobArgs map[string]interface{}) error {
-	packJobArgIntf, ok := jobArgs[WriteBackPackJobArgsKey]
+func unmarshalPayloadFromJobArgs[T msgp.Unmarshaler](jobArgs map[string]interface{}, payload T) error {
+	packJobArgIntf, ok := jobArgs[PayloadJobArgsKey]
 	if !ok {
-		return ErrPackKeyNotFound
+		return ErrPayloadKeyNotFound
 	}
 	packJobArg, ok := packJobArgIntf.(string)
 	if !ok {
-		return ErrPackValueCastFailed
+		return ErrPayloadValueCastFailed
 	}
 
 	base64Buf := []byte(packJobArg)
@@ -133,12 +118,12 @@ func (w *WriteBackPack) FromJobArgs(jobArgs map[string]interface{}) error {
 		return err
 	}
 
-	msgpBuf, err = w.UnmarshalMsg(msgpBuf)
+	msgpBuf, err = payload.UnmarshalMsg(msgpBuf)
 	if err != nil {
 		return err
 	}
 	if len(msgpBuf) != 0 {
-		return ErrTailingBytes
+		return ErrTrailingBytes
 	}
 
 	return nil

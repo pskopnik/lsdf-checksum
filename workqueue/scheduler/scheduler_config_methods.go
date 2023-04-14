@@ -1,6 +1,6 @@
-package workqueue
+package scheduler
 
-func (q *QueueSchedulerConfig) CopyFrom(other *QueueSchedulerConfig) {
+func (q *Config) CopyFrom(other *Config) {
 	q.Namespace = other.Namespace
 	q.JobName = other.JobName
 
@@ -10,7 +10,7 @@ func (q *QueueSchedulerConfig) CopyFrom(other *QueueSchedulerConfig) {
 	q.Controller = other.Controller
 }
 
-func (q *QueueSchedulerConfig) Merge(other *QueueSchedulerConfig) *QueueSchedulerConfig {
+func (q *Config) Merge(other *Config) *Config {
 	if len(other.Namespace) > 0 {
 		q.Namespace = other.Namespace
 	}
@@ -32,8 +32,8 @@ func (q *QueueSchedulerConfig) Merge(other *QueueSchedulerConfig) *QueueSchedule
 	return q
 }
 
-func (q *QueueSchedulerConfig) Clone() *QueueSchedulerConfig {
-	config := &QueueSchedulerConfig{}
+func (q *Config) Clone() *Config {
+	config := &Config{}
 	config.CopyFrom(q)
 	return config
 }
