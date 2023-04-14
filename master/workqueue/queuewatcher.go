@@ -111,7 +111,7 @@ func (q *QueueWatcher) run() error {
 
 	q.fieldLogger.Info("Waiting for CalculateChecksum jobs to finish processing")
 
-	err = q.waitForJobsFinished(ctx, workqueue.CalculateChecksumJobName)
+	err = q.waitForJobsFinished(ctx, workqueue.ComputeChecksumJobName)
 	if err != nil {
 		if err == context.Canceled {
 			// Tomb has canceled the context passed to waitForJobsFinished

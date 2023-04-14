@@ -71,7 +71,7 @@ func (p *Producer) Start(ctx context.Context) {
 
 	schedulerConfig := &scheduler.Config{
 		Namespace:  p.Config.Namespace,
-		JobName:    workqueue.CalculateChecksumJobName,
+		JobName:    workqueue.ComputeChecksumJobName,
 		Pool:       p.Config.Pool,
 		Logger:     p.Config.Logger,
 		Controller: p.Config.Controller,

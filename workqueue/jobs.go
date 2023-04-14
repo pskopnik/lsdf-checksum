@@ -15,7 +15,7 @@ var (
 )
 
 const (
-	CalculateChecksumJobName string = "CalculateChecksum"
+	ComputeChecksumJobName string = "ComputeChecksum"
 
 	writeBackJobNameBase string = "WriteBack"
 
