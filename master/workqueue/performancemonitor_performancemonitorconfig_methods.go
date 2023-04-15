@@ -7,13 +7,13 @@ import (
 func (p *PerformanceMonitorConfig) CopyFrom(other *PerformanceMonitorConfig) {
 	p.MaxThroughput = other.MaxThroughput
 	p.CheckInterval = other.CheckInterval
-	p.Prefix = other.Prefix
 
-	p.Unit = other.Unit
+	p.PauseQueueLength = other.PauseQueueLength
+	p.ResumeQueueLength = other.ResumeQueueLength
 
-	p.Pool = other.Pool
+	p.Workqueue = other.Workqueue
+	p.Publisher = other.Publisher
 	p.Logger = other.Logger
-	p.GetNodesNumer = other.GetNodesNumer
 }
 
 func (p *PerformanceMonitorConfig) Merge(other *PerformanceMonitorConfig) *PerformanceMonitorConfig {
@@ -23,22 +23,22 @@ func (p *PerformanceMonitorConfig) Merge(other *PerformanceMonitorConfig) *Perfo
 	if other.CheckInterval != time.Duration(0) {
 		p.CheckInterval = other.CheckInterval
 	}
-	if len(other.Prefix) > 0 {
-		p.Prefix = other.Prefix
+
+	if other.MaxThroughput != 0 {
+		p.MaxThroughput = other.MaxThroughput
+	}
+	if other.MaxThroughput != 0 {
+		p.MaxThroughput = other.MaxThroughput
 	}
 
-	if len(other.Unit) > 0 {
-		p.Unit = other.Unit
+	if other.Workqueue != nil {
+		p.Workqueue = other.Workqueue
 	}
-
-	if other.Pool != nil {
-		p.Pool = other.Pool
+	if other.Publisher != nil {
+		p.Publisher = other.Publisher
 	}
 	if other.Logger != nil {
 		p.Logger = other.Logger
-	}
-	if other.GetNodesNumer != nil {
-		p.GetNodesNumer = other.GetNodesNumer
 	}
 
 	return p
