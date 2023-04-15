@@ -14,20 +14,6 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue/scheduler"
 )
 
-//go:generate confions config WorkersConfig
-
-type WorkersConfig struct {
-	MaxFails          int
-	PauseQueueLength  int
-	ResumeQueueLength int
-}
-
-var WorkersDefaultConfig = &WorkersConfig{
-	MaxFails:          5,
-	PauseQueueLength:  100,
-	ResumeQueueLength: 50,
-}
-
 //go:generate confions config Config
 
 type Config struct {
@@ -40,8 +26,6 @@ type Config struct {
 	DB     *meda.DB      `yaml:"-"`
 	Logger log.Interface `yaml:"-"`
 	Pool   *redis.Pool   `yaml:"-"`
-
-	WorkersConfig WorkersConfig
 
 	// EWMAController contains the configuration for the EWMAController.
 	// Here only static configuration options should be set.
