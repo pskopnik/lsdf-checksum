@@ -95,7 +95,7 @@ func marshalPayloadToJobArgs[T msgp.Marshaler](jobArgs map[string]interface{}, p
 	base64.RawStdEncoding.Encode(base64Buf, msgpBuf)
 
 	cleanJobArgs(jobArgs)
-	jobArgs[PayloadJobArgsKey] = base64Buf
+	jobArgs[PayloadJobArgsKey] = string(base64Buf)
 
 	return nil
 }
