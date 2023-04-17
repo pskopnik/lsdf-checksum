@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -54,7 +55,7 @@ func (p *ProductionOrder[T]) Fulfilled() int {
 func (p *ProductionOrder[T]) Enqueue(payload T) (*work.Job, error) {
 	job, err := p.scheduler.enqueue(payload)
 	if err != nil {
-		return job, err
+		return job, fmt.Errorf("ProductionOrder.Enqueue: %w", err)
 	}
 
 	p.order.Fulfill(1)
@@ -188,7 +189,7 @@ func (s *Scheduler[T]) RequestProductionUntilThreshold(threshold uint) {
 func (s *Scheduler[T]) AcquireOrder(ctx context.Context, max uint) (ProductionOrder[T], error) {
 	order, err := s.orderBook.AcquireOrder(ctx, max)
 	if err != nil {
-		return ProductionOrder[T]{}, err
+		return ProductionOrder[T]{}, fmt.Errorf("Scheduler.AcquireOrder: %w", err)
 	}
 
 	return ProductionOrder[T]{
@@ -221,12 +222,12 @@ func (s *Scheduler[T]) Stats() SchedulerStats {
 func (s *Scheduler[T]) enqueue(payload T) (*work.Job, error) {
 	job, err := s.queue.Enqueuer().Enqueue(payload)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Scheduler.enqueue: %w", err)
 	}
 
 	info, err := s.queue.GetQueueInfo()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Scheduler.enqueue: %w", err)
 	}
 	if info.QueuedJobs <= 1 {
 		s.queueObservedEmpty.Add(1)

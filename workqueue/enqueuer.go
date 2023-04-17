@@ -1,6 +1,8 @@
 package workqueue
 
 import (
+	"fmt"
+
 	"github.com/gocraft/work"
 )
 
@@ -19,12 +21,12 @@ func (e *Enqueuer[T]) Enqueue(payload T) (*work.Job, error) {
 
 	err := payload.ToJobArgs(args)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Enqueuer.Enqueue: %w", err)
 	}
 
 	job, err := e.enqueuer.Enqueue(e.queueName, args)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Enqueuer.Enqueue: %w", err)
 	}
 
 	return job, nil

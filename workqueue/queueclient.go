@@ -1,6 +1,7 @@
 package workqueue
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -33,7 +34,7 @@ type QueueInfo struct {
 func (q *QueueClient[T]) GetQueueInfo() (QueueInfo, error) {
 	queues, err := q.w.client.Queues()
 	if err != nil {
-		return QueueInfo{}, err
+		return QueueInfo{}, fmt.Errorf("QueueClient.GetQueueInfo: %w", err)
 	}
 
 	for _, queue := range queues {
@@ -60,7 +61,7 @@ type QueueWorkerInfo struct {
 func (q *QueueClient[T]) GetWorkerInfo() (QueueWorkerInfo, error) {
 	heartbeats, err := q.w.client.WorkerPoolHeartbeats()
 	if err != nil {
-		return QueueWorkerInfo{}, err
+		return QueueWorkerInfo{}, fmt.Errorf("QueueClient.GetWorkerInfo: %w", err)
 	}
 
 	deadThreshold := time.Now().Add(-workerPoolDeadAge).Unix()
@@ -101,7 +102,7 @@ func (q *QueueClient[T]) Pause() error {
 	// the specific value does not matter
 	_, err := conn.Do("SET", q.pauseKey(), "1")
 	if err != nil {
-		return err
+		return fmt.Errorf("QueueClient.Pause: %w", err)
 	}
 
 	return nil
@@ -113,7 +114,7 @@ func (q *QueueClient[T]) Unpause() error {
 
 	_, err := conn.Do("DEL", q.pauseKey())
 	if err != nil {
-		return err
+		return fmt.Errorf("QueueClient.Unpause: %w", err)
 	}
 
 	return nil

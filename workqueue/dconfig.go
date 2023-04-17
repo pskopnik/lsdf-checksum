@@ -2,6 +2,7 @@ package workqueue
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gomodule/redigo/redis"
 )
@@ -76,7 +77,7 @@ func (d *DConfigPublisher) MutatePublishData(f func(*DConfigData)) error {
 
 	_, err := conn.Do("HSET", redis.Args{}.Add(dConfigDataKeyFromW(d.w)).AddFlat(newData)...)
 	if err != nil {
-		return err
+		return fmt.Errorf("DConfigPublisher.MutatePublishData: %w", err)
 	}
 
 	return nil
