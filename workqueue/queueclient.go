@@ -7,6 +7,14 @@ import (
 // gocraft/work uses 10 seconds
 const workerPoolDeadAge = 30 * time.Second
 
+type QueueQuerier interface {
+	Name() string
+	GetQueueInfo() (QueueInfo, error)
+	GetWorkerInfo() (QueueWorkerInfo, error)
+}
+
+var _ QueueQuerier = &QueueClient[*WorkPack]{}
+
 type QueueClient[T JobPayload] struct {
 	name string
 

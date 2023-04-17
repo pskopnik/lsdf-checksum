@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/apex/log"
-	"github.com/gomodule/redigo/redis"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
@@ -26,11 +25,10 @@ type ProducerConfig struct {
 
 	SnapshotName string
 
-	Pool   *redis.Pool   `yaml:"-"`
-	DB     *meda.DB      `yaml:"-"`
-	Logger log.Interface `yaml:"-"`
-
-	Controller scheduler.Controller `yaml:"-"`
+	DB         *meda.DB                                    `yaml:"-"`
+	Queue      *workqueue.QueueClient[*workqueue.WorkPack] `yaml:"-"`
+	Logger     log.Interface                               `yaml:"-"`
+	Controller scheduler.Controller                        `yaml:"-"`
 }
 
 var ProducerDefaultConfig = &ProducerConfig{
@@ -44,12 +42,12 @@ type Producer struct {
 	Config *ProducerConfig
 
 	tomb *tomb.Tomb
-	ctx context.Context
+	ctx  context.Context
 
 	filesChan   chan meda.File
 	lastRand    float64
 	lastID      uint64
-	scheduler   *scheduler.Scheduler
+	scheduler   *scheduler.Scheduler[*workqueue.WorkPack]
 	fieldLogger log.Interface
 }
 
@@ -69,19 +67,14 @@ func (p *Producer) Start(ctx context.Context) {
 		"component":  "workqueue.Producer",
 	})
 
-	schedulerConfig := &scheduler.Config{
-		Namespace:  p.Config.Namespace,
-		JobName:    workqueue.ComputeChecksumJobName,
-		Pool:       p.Config.Pool,
-		Logger:     p.Config.Logger,
-		Controller: p.Config.Controller,
-	}
-
 	p.lastRand = -1
 	p.lastID = 0
 	p.filesChan = make(chan meda.File, p.Config.FetchRowBatchSize)
 
-	p.scheduler = scheduler.New(schedulerConfig)
+	p.scheduler = scheduler.New(p.Config.Queue, scheduler.Config{
+		Logger:     p.Config.Logger,
+		Controller: p.Config.Controller,
+	})
 
 	p.tomb.Go(func() error {
 		p.tomb.Go(p.rowFetcher)
@@ -115,7 +108,7 @@ func (p *Producer) Err() error {
 func (p *Producer) run() error {
 	var err error
 	var exhausted bool
-	var order scheduler.ProductionOrder
+	var order scheduler.ProductionOrder[*workqueue.WorkPack]
 
 	p.fieldLogger.Info("Starting listening for production orders")
 
@@ -199,7 +192,7 @@ func (p *Producer) rowFetcher() error {
 	return nil
 }
 
-func (p *Producer) fulfill(order *scheduler.ProductionOrder) (bool, error) {
+func (p *Producer) fulfill(order *scheduler.ProductionOrder[*workqueue.WorkPack]) (bool, error) {
 	var err error
 	file := meda.File{}
 	workPack := workqueue.WorkPack{

@@ -11,10 +11,9 @@ func (p *ProducerConfig) CopyFrom(other *ProducerConfig) {
 
 	p.SnapshotName = other.SnapshotName
 
-	p.Pool = other.Pool
 	p.DB = other.DB
+	p.Queue = other.Queue
 	p.Logger = other.Logger
-
 	p.Controller = other.Controller
 }
 
@@ -43,16 +42,15 @@ func (p *ProducerConfig) Merge(other *ProducerConfig) *ProducerConfig {
 		p.SnapshotName = other.SnapshotName
 	}
 
-	if other.Pool != nil {
-		p.Pool = other.Pool
-	}
 	if other.DB != nil {
 		p.DB = other.DB
+	}
+	if other.Queue != nil {
+		p.Queue = other.Queue
 	}
 	if other.Logger != nil {
 		p.Logger = other.Logger
 	}
-
 	if other.Controller != nil {
 		p.Controller = other.Controller
 	}

@@ -94,7 +94,7 @@ func (w *WorkQueue) Start(ctx context.Context) {
 
 		w.schedulingController = w.createEWMAController()
 
-		w.producer = w.createProducer(w.schedulingController)
+		w.producer = w.createProducer(w.workqueue, w.schedulingController)
 		w.producer.Start(w.tomb.Context(nil))
 
 		w.queueWatcher = w.createQueueWatcher(w.producer.Dead())
@@ -219,12 +219,14 @@ func (w *WorkQueue) createEWMAController() *scheduler.EWMAController {
 	config := scheduler.EWMAControllerDefaultConfig.
 		Clone().
 		Merge(&w.Config.EWMAController).
-		Merge(&scheduler.EWMAControllerConfig{})
+		Merge(&scheduler.EWMAControllerConfig{
+			Logger: w.Config.Logger,
+		})
 
 	return scheduler.NewEWMAController(config)
 }
 
-func (w *WorkQueue) createProducer(controller scheduler.Controller) *Producer {
+func (w *WorkQueue) createProducer(wq *workqueue.Workqueue, controller scheduler.Controller) *Producer {
 	config := ProducerDefaultConfig.
 		Clone().
 		Merge(&w.Config.Producer).
@@ -234,10 +236,9 @@ func (w *WorkQueue) createProducer(controller scheduler.Controller) *Producer {
 
 			SnapshotName: w.Config.SnapshotName,
 
-			Pool:   w.Config.Pool,
-			DB:     w.Config.DB,
-			Logger: w.Config.Logger,
-
+			DB:         w.Config.DB,
+			Queue:      wq.Queues().ComputeChecksum(),
+			Logger:     w.Config.Logger,
 			Controller: controller,
 		})
 
