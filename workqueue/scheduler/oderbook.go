@@ -8,7 +8,7 @@ import (
 type orderBookOrder struct {
 	total     int
 	fulfilled int
-	queue     *orderBook
+	book     *orderBook
 }
 
 func (o *orderBookOrder) Total() int {
@@ -25,8 +25,8 @@ func (o *orderBookOrder) Fulfilled() int {
 
 func (o *orderBookOrder) Fulfill(n int) {
 	o.fulfilled += n
-	o.queue.fulfilled.Add(uint64(n))
-	o.queue.inProgress.Add(uint64(-n))
+	o.book.fulfilled.Add(uint64(n))
+	o.book.inProgress.Add(uint64(-n))
 }
 
 // orderBook coordinates fulfillment of counted orders between components.
@@ -131,7 +131,10 @@ func (o *orderBook) AcquireOrder(ctx context.Context, max uint) (orderBookOrder,
 			if newInQueue > 0 {
 				o.notify()
 			}
-			return orderBookOrder{total: int(c)}, nil
+			return orderBookOrder{
+				total: int(c),
+				book: o,
+			}, nil
 		}
 	}
 }

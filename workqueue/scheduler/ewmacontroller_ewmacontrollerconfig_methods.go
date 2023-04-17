@@ -17,6 +17,8 @@ func (e *EWMAControllerConfig) CopyFrom(other *EWMAControllerConfig) {
 	e.MaintainingInterval = other.MaintainingInterval
 	e.MaintainingDeviationFactor = other.MaintainingDeviationFactor
 	e.MaintainingDeviationAlpha = other.MaintainingDeviationAlpha
+
+	e.Logger = other.Logger
 }
 
 func (e *EWMAControllerConfig) Merge(other *EWMAControllerConfig) *EWMAControllerConfig {
@@ -49,6 +51,10 @@ func (e *EWMAControllerConfig) Merge(other *EWMAControllerConfig) *EWMAControlle
 	}
 	if other.MaintainingDeviationAlpha != 0 {
 		e.MaintainingDeviationAlpha = other.MaintainingDeviationAlpha
+	}
+
+	if other.Logger != nil {
+		e.Logger = other.Logger
 	}
 
 	return e
