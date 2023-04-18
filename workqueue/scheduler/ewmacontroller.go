@@ -124,7 +124,7 @@ func (e *EWMAController) scheduleInit() {
 	e.fieldLogger.WithFields(log.Fields{
 		"queue_length": queueLength,
 		"threshold":    e.threshold,
-		"worker_count":   workerCount,
+		"worker_count": workerCount,
 	}).Debug("Planning production request")
 	if queueLength < uint64(e.threshold) {
 		e.scheduler.RequestProductionUntilThreshold(e.threshold - uint(queueLength))
@@ -185,7 +185,7 @@ func (e *EWMAController) Schedule() {
 		"exhausted":             exhausted,
 		"enqueued":              enqueued,
 		"outstanding_orders":    schedulerStats.OrdersInQueue + schedulerStats.OrdersInProgress,
-		"worker_count":            workerCount,
+		"worker_count":          workerCount,
 		"consumption":           consumption,
 		"deviation":             deviation,
 		"consumption_alpha":     consumptionAlpha,
@@ -200,7 +200,11 @@ func (e *EWMAController) Schedule() {
 		// FUTR: Consider returning to startup phase, with more frequent probing?
 
 		prevThreshold := e.threshold
-		e.threshold = e.minLength(2*consumption, uint(workerCount))
+		threshold := 2 * consumption
+		if prevThreshold > threshold {
+			threshold = prevThreshold
+		}
+		e.threshold = e.minLength(threshold, uint(workerCount))
 
 		e.fieldLogger.WithFields(log.Fields{
 			"previous_threshold": prevThreshold,
@@ -248,7 +252,7 @@ func (e *EWMAController) Schedule() {
 	e.fieldLogger.WithFields(log.Fields{
 		"queue_length": queueLength,
 		"threshold":    e.threshold,
-		"worker_count":   workerCount,
+		"worker_count": workerCount,
 	}).Debug("Planning production request")
 	if queueLength < uint64(e.threshold) {
 		e.scheduler.RequestProductionUntilThreshold(e.threshold - uint(queueLength))
