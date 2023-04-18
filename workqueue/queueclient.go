@@ -32,22 +32,11 @@ type QueueInfo struct {
 }
 
 func (q *QueueClient[T]) GetQueueInfo() (QueueInfo, error) {
-	queues, err := q.w.client.Queues()
+	info, err := gocraftWorkQueueInfo(q.w.pool, q.w.workNamespace, q.name)
 	if err != nil {
 		return QueueInfo{}, fmt.Errorf("QueueClient.GetQueueInfo: %w", err)
 	}
-
-	for _, queue := range queues {
-		if queue.JobName == q.name {
-			return QueueInfo{
-				QueuedJobs: uint64(queue.Count),
-				Latency:    uint64(queue.Latency),
-			}, nil
-		}
-	}
-
-	// The queue has not been found, that means it has not been initialised yet.
-	return QueueInfo{}, nil
+	return info, nil
 }
 
 type QueueWorkerInfo struct {
@@ -99,8 +88,9 @@ func (q *QueueClient[T]) Pause() error {
 	conn := q.w.pool.Get()
 	defer conn.Close()
 
-	// the specific value does not matter
-	_, err := conn.Do("SET", q.pauseKey(), "1")
+	pauseKey := gocraftWorkJobPauseKey(q.w.workNamespace, q.name)
+	// the key's value does not matter
+	_, err := conn.Do("SET", pauseKey, "1")
 	if err != nil {
 		return fmt.Errorf("QueueClient.Pause: %w", err)
 	}
@@ -112,24 +102,13 @@ func (q *QueueClient[T]) Unpause() error {
 	conn := q.w.pool.Get()
 	defer conn.Close()
 
-	_, err := conn.Do("DEL", q.pauseKey())
+	pauseKey := gocraftWorkJobPauseKey(q.w.workNamespace, q.name)
+	_, err := conn.Do("DEL", pauseKey)
 	if err != nil {
 		return fmt.Errorf("QueueClient.Unpause: %w", err)
 	}
 
 	return nil
-}
-
-func (q *QueueClient[T]) pauseKey() string {
-	// From gocraft/work.redisKeyJobsPaused
-
-	namespace := q.w.workNamespace
-	l := len(namespace)
-	if l > 0 && namespace[l-1] == ':' {
-		namespace = namespace[:l-1]
-	}
-
-	return namespace + ":jobs:" + q.name + ":paused"
 }
 
 func (q *QueueClient[T]) Enqueuer() *Enqueuer[T] {

@@ -18,20 +18,26 @@ const (
 
 func GocraftWorkNamespace(prefix string) string {
 	l := len(prefix)
-	if len(prefix) > 0 && prefix[l-1] == ':' {
-		prefix = prefix[:l-1]
+	if l > 0 {
+		if prefix[l-1] == ':' {
+			prefix = prefix[:l-1]
+		}
+		return prefix + ":" + gocraftWorkNamespaceBase
+	} else {
+		return gocraftWorkNamespaceBase
 	}
-
-	return prefix + ":" + gocraftWorkNamespaceBase
 }
 
 func dConfigNamespace(prefix string) string {
 	l := len(prefix)
-	if len(prefix) > 0 && prefix[l-1] == ':' {
-		prefix = prefix[:l-1]
+	if l > 0 {
+		if prefix[l-1] == ':' {
+			prefix = prefix[:l-1]
+		}
+		return prefix + ":" + dconfigNamespaceBase
+	} else {
+		return dconfigNamespaceBase
 	}
-
-	return prefix + ":" + dconfigNamespaceBase
 }
 
 // Workqueue is a client to a single workqueue instance under control of a
