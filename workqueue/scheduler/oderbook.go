@@ -8,7 +8,7 @@ import (
 type orderBookOrder struct {
 	total     int
 	fulfilled int
-	book     *orderBook
+	book      *orderBook
 }
 
 func (o *orderBookOrder) Total() int {
@@ -133,7 +133,7 @@ func (o *orderBook) AcquireOrder(ctx context.Context, max uint) (orderBookOrder,
 			}
 			return orderBookOrder{
 				total: int(c),
-				book: o,
+				book:  o,
 			}, nil
 		}
 	}

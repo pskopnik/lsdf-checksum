@@ -85,8 +85,8 @@ type Scheduler[T workqueue.JobPayload] struct {
 
 func New[T workqueue.JobPayload](queue *workqueue.QueueClient[T], config Config) *Scheduler[T] {
 	return &Scheduler[T]{
-		config: config,
-		queue: queue,
+		config:    config,
+		queue:     queue,
 		orderBook: *newOrderBook(),
 	}
 }
