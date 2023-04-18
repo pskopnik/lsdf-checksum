@@ -3,6 +3,7 @@ package workqueue
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 
 	"github.com/tinylib/msgp/msgp"
 )
@@ -15,7 +16,7 @@ var (
 )
 
 const (
-	CalculateChecksumJobName string = "CalculateChecksum"
+	ComputeChecksumJobName string = "ComputeChecksum"
 
 	writeBackJobNameBase string = "WriteBack"
 
@@ -85,7 +86,7 @@ func cleanJobArgs(jobArgs map[string]interface{}) {
 func marshalPayloadToJobArgs[T msgp.Marshaler](jobArgs map[string]interface{}, payload T) error {
 	msgpBuf, err := payload.MarshalMsg(nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshalPayloadToJobArgs: %w", err)
 	}
 
 	base64BufLen := base64.RawStdEncoding.EncodedLen(len(msgpBuf))
@@ -94,7 +95,7 @@ func marshalPayloadToJobArgs[T msgp.Marshaler](jobArgs map[string]interface{}, p
 	base64.RawStdEncoding.Encode(base64Buf, msgpBuf)
 
 	cleanJobArgs(jobArgs)
-	jobArgs[PayloadJobArgsKey] = base64Buf
+	jobArgs[PayloadJobArgsKey] = string(base64Buf)
 
 	return nil
 }
@@ -102,11 +103,11 @@ func marshalPayloadToJobArgs[T msgp.Marshaler](jobArgs map[string]interface{}, p
 func unmarshalPayloadFromJobArgs[T msgp.Unmarshaler](jobArgs map[string]interface{}, payload T) error {
 	packJobArgIntf, ok := jobArgs[PayloadJobArgsKey]
 	if !ok {
-		return ErrPayloadKeyNotFound
+		return fmt.Errorf("unmarshalPayloadFromJobArgs: %w", ErrPayloadKeyNotFound)
 	}
 	packJobArg, ok := packJobArgIntf.(string)
 	if !ok {
-		return ErrPayloadValueCastFailed
+		return fmt.Errorf("unmarshalPayloadFromJobArgs: %w", ErrPayloadValueCastFailed)
 	}
 
 	base64Buf := []byte(packJobArg)
@@ -115,15 +116,15 @@ func unmarshalPayloadFromJobArgs[T msgp.Unmarshaler](jobArgs map[string]interfac
 
 	_, err := base64.RawStdEncoding.Decode(msgpBuf, base64Buf)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshalPayloadFromJobArgs: %w", err)
 	}
 
 	msgpBuf, err = payload.UnmarshalMsg(msgpBuf)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshalPayloadFromJobArgs: %w", err)
 	}
 	if len(msgpBuf) != 0 {
-		return ErrTrailingBytes
+		return fmt.Errorf("unmarshalPayloadFromJobArgs: %w", ErrTrailingBytes)
 	}
 
 	return nil

@@ -101,6 +101,8 @@ func runChecksumRun(binPath string, config checksumRunConfig) error {
 			if exitErr.ExitCode() == 66 && config.RaceLogPath != "" {
 				// Simply ignore for now
 			} else {
+				// Will read entire file
+				logFile.Seek(0, io.SeekStart)
 				lastLogLines, _ := readLastLines(logFile, 20)
 				return fmt.Errorf("runChecksumRun: process exit: %w. "+
 					"Last lines of log output:\n%s\n"+
@@ -134,6 +136,7 @@ func readLastLines(r io.Reader, n int) (string, error) {
 		}
 		lastLinesC <- line
 	}
+	close(lastLinesC)
 
 	builder := strings.Builder{}
 	for line := range lastLinesC {

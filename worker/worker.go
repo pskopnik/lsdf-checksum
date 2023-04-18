@@ -118,7 +118,7 @@ func (w *Worker) runWorkerPool() error {
 			return next()
 		},
 	)
-	jobName := workqueue.CalculateChecksumJobName
+	jobName := workqueue.ComputeChecksumJobName
 	w.workerPool.Job(jobName, (*workerContext).CalculateChecksum)
 
 	w.workerPool.Start()

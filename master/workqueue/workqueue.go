@@ -14,34 +14,6 @@ import (
 	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue/scheduler"
 )
 
-func PerformanceMonitorUnit(fileSystemName, snapshotName string) string {
-	return fileSystemName + "-" + snapshotName
-}
-
-var _ GetNodesNumer = queueControllerGetNodesNumer{}
-
-type queueControllerGetNodesNumer struct {
-	*scheduler.Scheduler
-}
-
-func (q queueControllerGetNodesNumer) GetNodesNum() (uint, error) {
-	return q.GetNodesNum()
-}
-
-//go:generate confions config WorkersConfig
-
-type WorkersConfig struct {
-	MaxFails          int
-	PauseQueueLength  int
-	ResumeQueueLength int
-}
-
-var WorkersDefaultConfig = &WorkersConfig{
-	MaxFails:          5,
-	PauseQueueLength:  100,
-	ResumeQueueLength: 50,
-}
-
 //go:generate confions config Config
 
 type Config struct {
@@ -54,8 +26,6 @@ type Config struct {
 	DB     *meda.DB      `yaml:"-"`
 	Logger log.Interface `yaml:"-"`
 	Pool   *redis.Pool   `yaml:"-"`
-
-	WorkersConfig WorkersConfig
 
 	// EWMAController contains the configuration for the EWMAController.
 	// Here only static configuration options should be set.
@@ -93,6 +63,8 @@ type WorkQueue struct {
 
 	fieldLogger log.Interface
 
+	workqueue            *workqueue.Workqueue
+	publisher            *workqueue.DConfigPublisher
 	schedulingController scheduler.Controller
 	producer             *Producer
 	writeBacker          *WriteBacker
@@ -117,9 +89,12 @@ func (w *WorkQueue) Start(ctx context.Context) {
 	w.tomb, _ = tomb.WithContext(ctx)
 
 	w.tomb.Go(func() error {
+		w.workqueue = w.createWorkqueue()
+		w.publisher = w.workqueue.DConfig().StartPublisher(w.tomb.Context(nil))
+
 		w.schedulingController = w.createEWMAController()
 
-		w.producer = w.createProducer(w.schedulingController)
+		w.producer = w.createProducer(w.workqueue, w.schedulingController)
 		w.producer.Start(w.tomb.Context(nil))
 
 		w.queueWatcher = w.createQueueWatcher(w.producer.Dead())
@@ -128,7 +103,7 @@ func (w *WorkQueue) Start(ctx context.Context) {
 		w.writeBacker = w.createWriteBacker()
 		w.writeBacker.Start(w.tomb.Context(nil))
 
-		w.performanceMonitor = w.createPerformanceMonitor(w.producer.scheduler)
+		w.performanceMonitor = w.createPerformanceMonitor(w.workqueue, w.publisher)
 		w.performanceMonitor.Start(w.tomb.Context(nil))
 
 		w.tomb.Go(w.writeBackerStopper)
@@ -231,16 +206,27 @@ func (w *WorkQueue) performanceMonitorStopper() error {
 	}
 }
 
+func (w *WorkQueue) createWorkqueue() *workqueue.Workqueue {
+	return workqueue.New(
+		w.Config.Pool,
+		w.Config.RedisPrefix,
+		w.Config.FileSystemName,
+		w.Config.SnapshotName,
+	)
+}
+
 func (w *WorkQueue) createEWMAController() *scheduler.EWMAController {
 	config := scheduler.EWMAControllerDefaultConfig.
 		Clone().
 		Merge(&w.Config.EWMAController).
-		Merge(&scheduler.EWMAControllerConfig{})
+		Merge(&scheduler.EWMAControllerConfig{
+			Logger: w.Config.Logger,
+		})
 
 	return scheduler.NewEWMAController(config)
 }
 
-func (w *WorkQueue) createProducer(controller scheduler.Controller) *Producer {
+func (w *WorkQueue) createProducer(wq *workqueue.Workqueue, controller scheduler.Controller) *Producer {
 	config := ProducerDefaultConfig.
 		Clone().
 		Merge(&w.Config.Producer).
@@ -250,10 +236,9 @@ func (w *WorkQueue) createProducer(controller scheduler.Controller) *Producer {
 
 			SnapshotName: w.Config.SnapshotName,
 
-			Pool:   w.Config.Pool,
-			DB:     w.Config.DB,
-			Logger: w.Config.Logger,
-
+			DB:         w.Config.DB,
+			Queue:      wq.Queues().ComputeChecksum(),
+			Logger:     w.Config.Logger,
 			Controller: controller,
 		})
 
@@ -299,21 +284,17 @@ func (w *WorkQueue) createQueueWatcher(productionExhausted <-chan struct{}) *Que
 	return NewQueueWatcher(config)
 }
 
-func (w *WorkQueue) createPerformanceMonitor(queueScheduler *scheduler.Scheduler) *PerformanceMonitor {
-
+func (w *WorkQueue) createPerformanceMonitor(
+	wq *workqueue.Workqueue,
+	publisher *workqueue.DConfigPublisher,
+) *PerformanceMonitor {
 	config := PerformanceMonitorDefaultConfig.
 		Clone().
 		Merge(&w.Config.PerformanceMonitor).
 		Merge(&PerformanceMonitorConfig{
-			Prefix: w.Config.RedisPrefix,
-
-			Unit: PerformanceMonitorUnit(w.Config.FileSystemName, w.Config.SnapshotName),
-
-			Pool:   w.Config.Pool,
-			Logger: w.Config.Logger,
-			GetNodesNumer: queueControllerGetNodesNumer{
-				Scheduler: queueScheduler,
-			},
+			Workqueue: wq,
+			Publisher: publisher,
+			Logger:    w.Config.Logger,
 		})
 
 	return NewPerformanceMonitor(config)

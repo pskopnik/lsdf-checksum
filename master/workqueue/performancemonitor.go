@@ -2,44 +2,35 @@ package workqueue
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/apex/log"
-	"github.com/gomodule/redigo/redis"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
+	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
-
-const (
-	performanceNamespaceBase string = "lsdf-checksum/workqueue:performance"
-	maxNodeThroughputSubkey  string = "max_node_throughput"
-)
-
-func MaxNodeThroughputKey(prefix, unit string) string {
-	return prefix + performanceNamespaceBase + ":" + unit + ":" + maxNodeThroughputSubkey
-}
-
-type GetNodesNumer interface {
-	GetNodesNum() (uint, error)
-}
 
 //go:generate confions config PerformanceMonitorConfig
 
 type PerformanceMonitorConfig struct {
 	MaxThroughput uint64
 	CheckInterval time.Duration
-	Prefix        string
 
-	Unit string
+	PauseQueueLength  int
+	ResumeQueueLength int
 
-	Pool          *redis.Pool   `yaml:"-"`
-	Logger        log.Interface `yaml:"-"`
-	GetNodesNumer GetNodesNumer `yaml:"-"`
+	Workqueue *workqueue.Workqueue        `yaml:"-"`
+	Publisher *workqueue.DConfigPublisher `yaml:"-"`
+	Logger    log.Interface               `yaml:"-"`
 }
 
 var PerformanceMonitorDefaultConfig = &PerformanceMonitorConfig{
 	CheckInterval: 5 * time.Second,
+
+	PauseQueueLength:  10000,
+	ResumeQueueLength: 1000,
 }
 
 type PerformanceMonitor struct {
@@ -47,7 +38,7 @@ type PerformanceMonitor struct {
 
 	tomb *tomb.Tomb
 
-	lastMaxNodeThroughput uint64
+	isPaused bool
 
 	fieldLogger log.Interface
 }
@@ -60,8 +51,6 @@ func NewPerformanceMonitor(config *PerformanceMonitorConfig) *PerformanceMonitor
 
 func (p *PerformanceMonitor) Start(ctx context.Context) {
 	p.fieldLogger = p.Config.Logger.WithFields(log.Fields{
-		"unit":      p.Config.Unit,
-		"prefix":    p.Config.Prefix,
 		"component": "workqueue.PerformanceMonitor",
 	})
 
@@ -148,11 +137,18 @@ func (p *PerformanceMonitor) computeAll() error {
 		}
 	}
 
+	if p.Config.PauseQueueLength > 0 {
+		err = p.pauseQueueForBackpressure()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (p *PerformanceMonitor) computeMaxNodeThroughput() error {
-	nodesNum, err := p.Config.GetNodesNumer.GetNodesNum()
+	info, err := p.Config.Workqueue.Queues().ComputeChecksum().GetWorkerInfo()
 	if err != nil {
 		p.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "skipping",
@@ -161,27 +157,55 @@ func (p *PerformanceMonitor) computeMaxNodeThroughput() error {
 		return nil
 	}
 
-	maxNodeThroughput := p.Config.MaxThroughput / uint64(nodesNum)
-	if maxNodeThroughput == p.lastMaxNodeThroughput {
+	// TODO: Should this be spread across nodes or workers (threads)?
+	maxNodeThroughput := p.Config.MaxThroughput / uint64(info.NodeNum)
+
+	err = p.Config.Publisher.MutatePublishData(func(d *workqueue.DConfigData) {
+		d.MaxNodeThroughput = maxNodeThroughput
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *PerformanceMonitor) pauseQueueForBackpressure() error {
+	info, err := p.Config.Workqueue.Queues().WriteBack().GetQueueInfo()
+	if err != nil {
+		p.fieldLogger.WithError(err).WithFields(log.Fields{
+			"action": "skipping",
+		}).Warn("Encountered error while fetching queue info")
+
 		return nil
 	}
 
-	key := MaxNodeThroughputKey(p.Config.Prefix, p.Config.Unit)
+	fieldLogger := p.fieldLogger.WithFields(log.Fields{
+		"pause_queue_length":  p.Config.PauseQueueLength,
+		"resume_queue_length": p.Config.ResumeQueueLength,
+		"queue_length":        info.QueuedJobs,
+		"is_paused":           p.isPaused,
+	})
 
-	conn := p.Config.Pool.Get()
-	defer conn.Close()
-
-	_, err = conn.Do("SET", key, maxNodeThroughput)
-	if err != nil {
-		p.fieldLogger.WithError(err).WithFields(log.Fields{
-			"action":              "escalating",
-			"key":                 key,
-			"max_node_throughput": maxNodeThroughput,
-		}).Error("Encountered error while setting max_node_throughput in the database")
-
-		return err
+	if p.isPaused {
+		if info.QueuedJobs < uint64(p.Config.ResumeQueueLength) {
+			fieldLogger.Debug("Unpausing queue for backpressure")
+			err := p.Config.Workqueue.Queues().ComputeChecksum().Unpause()
+			if err != nil {
+				return fmt.Errorf("pauseQueueForBackpressure: unpausing queue: %w", err)
+			}
+			p.isPaused = false
+		}
+	} else {
+		if info.QueuedJobs > uint64(p.Config.PauseQueueLength) {
+			fieldLogger.Debug("Pausing queue for backpressure")
+			err := p.Config.Workqueue.Queues().ComputeChecksum().Pause()
+			if err != nil {
+				return fmt.Errorf("pauseQueueForBackpressure: pausing queue: %w", err)
+			}
+			p.isPaused = true
+		}
 	}
-	p.lastMaxNodeThroughput = maxNodeThroughput
 
 	return nil
 }

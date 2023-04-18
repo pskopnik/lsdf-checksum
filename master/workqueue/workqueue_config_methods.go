@@ -11,8 +11,6 @@ func (c *Config) CopyFrom(other *Config) {
 	c.Logger = other.Logger
 	c.Pool = other.Pool
 
-	c.WorkersConfig.CopyFrom(&other.WorkersConfig)
-
 	c.EWMAController.CopyFrom(&other.EWMAController)
 	c.Producer.CopyFrom(&other.Producer)
 	c.QueueWatcher.CopyFrom(&other.QueueWatcher)
@@ -44,8 +42,6 @@ func (c *Config) Merge(other *Config) *Config {
 	if other.Pool != nil {
 		c.Pool = other.Pool
 	}
-
-	c.WorkersConfig.Merge(&other.WorkersConfig)
 
 	c.EWMAController.Merge(&other.EWMAController)
 	c.Producer.Merge(&other.Producer)

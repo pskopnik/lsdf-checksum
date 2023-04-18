@@ -2,21 +2,29 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
 	"github.com/apex/log"
 	"github.com/gocraft/work"
-	"github.com/gomodule/redigo/redis"
 	"gopkg.in/tomb.v2"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
+type ControllerScheduler interface {
+	SetInterval(interval time.Duration)
+	GetQueue() workqueue.QueueQuerier
+	RequestProduction(n uint)
+	RequestProductionUntilThreshold(threshold uint)
+	Stats() SchedulerStats
+}
+
 type Controller interface {
 	// Init is called once: When the Scheduler is starting.
-	Init(scheduler *Scheduler)
+	Init(scheduler ControllerScheduler)
 	// Schedule is called by Scheduler with a frequency corresponding to
 	// its interval value.
 	// Schedule is never called concurrently, the next call to schedule takes
@@ -27,56 +35,46 @@ type Controller interface {
 	Schedule()
 }
 
-type ProductionOrder struct {
+type ProductionOrder[T workqueue.JobPayload] struct {
 	order     orderBookOrder
-	scheduler *Scheduler
+	scheduler *Scheduler[T]
 }
 
-func (p *ProductionOrder) Total() int {
+func (p *ProductionOrder[T]) Total() int {
 	return p.order.Total()
 }
 
-func (p *ProductionOrder) Remaining() int {
+func (p *ProductionOrder[T]) Remaining() int {
 	return p.order.Remaining()
 }
 
-func (p *ProductionOrder) Fulfilled() int {
+func (p *ProductionOrder[T]) Fulfilled() int {
 	return p.order.Fulfilled()
 }
 
-func (p *ProductionOrder) Enqueue(payload workqueue.JobPayload) (*work.Job, error) {
+func (p *ProductionOrder[T]) Enqueue(payload T) (*work.Job, error) {
 	job, err := p.scheduler.enqueue(payload)
 	if err != nil {
-		return job, err
+		return job, fmt.Errorf("ProductionOrder.Enqueue: %w", err)
 	}
 
 	p.order.Fulfill(1)
 	return job, nil
 }
 
-//go:generate confions config Config
-
 type Config struct {
-	Namespace string
-	JobName   string
-
-	Pool   *redis.Pool   `yaml:"-"`
-	Logger log.Interface `yaml:"-"`
-
 	Controller Controller
+	Logger     log.Interface
 }
 
-var DefaultConfig = &Config{}
+var _ ControllerScheduler = &Scheduler[*workqueue.WorkPack]{}
 
-type Scheduler struct {
-	// Config contains the configuration of the QueueScheduler.
-	// Config must not be modified after Start() has been called.
-	Config *Config
+type Scheduler[T workqueue.JobPayload] struct {
+	config Config
 
 	tomb *tomb.Tomb
 
-	enqueuer    *work.Enqueuer
-	client      *work.Client
+	queue       *workqueue.QueueClient[T]
 	fieldLogger log.Interface
 
 	orderBook          orderBook
@@ -85,47 +83,45 @@ type Scheduler struct {
 	interval time.Duration
 }
 
-func New(config *Config) *Scheduler {
-	return &Scheduler{
-		Config:    config,
+func New[T workqueue.JobPayload](queue *workqueue.QueueClient[T], config Config) *Scheduler[T] {
+	return &Scheduler[T]{
+		config: config,
+		queue: queue,
 		orderBook: *newOrderBook(),
 	}
 }
 
-func (s *Scheduler) Start(ctx context.Context) {
-	s.fieldLogger = s.Config.Logger.WithFields(log.Fields{
-		"namespace": s.Config.Namespace,
-		"jobname":   s.Config.JobName,
+func (s *Scheduler[T]) Start(ctx context.Context) {
+	s.fieldLogger = s.config.Logger.WithFields(log.Fields{
+		"queue":     s.queue.Name(),
 		"component": "scheduler.QueueScheduler",
 	})
 
 	s.tomb, _ = tomb.WithContext(ctx)
-	s.enqueuer = work.NewEnqueuer(s.Config.Namespace, s.Config.Pool)
-	s.client = work.NewClient(s.Config.Namespace, s.Config.Pool)
 
 	s.fieldLogger.Info("Performing scheduling controller initialisation")
-	s.Config.Controller.Init(s)
+	s.config.Controller.Init(s)
 
 	s.tomb.Go(s.run)
 }
 
-func (s *Scheduler) SignalStop() {
+func (s *Scheduler[T]) SignalStop() {
 	s.tomb.Kill(lifecycle.ErrStopSignalled)
 }
 
-func (s *Scheduler) Wait() error {
+func (s *Scheduler[T]) Wait() error {
 	return s.tomb.Wait()
 }
 
-func (s *Scheduler) Dead() <-chan struct{} {
+func (s *Scheduler[T]) Dead() <-chan struct{} {
 	return s.tomb.Dead()
 }
 
-func (s *Scheduler) Err() error {
+func (s *Scheduler[T]) Err() error {
 	return s.tomb.Err()
 }
 
-func (s *Scheduler) run() error {
+func (s *Scheduler[T]) run() error {
 	dying := s.tomb.Dying()
 	timer := time.NewTimer(time.Duration(0))
 
@@ -142,7 +138,7 @@ L:
 		select {
 		case <-timer.C:
 			s.fieldLogger.Debug("Calling schedule")
-			s.Config.Controller.Schedule()
+			s.config.Controller.Schedule()
 		case <-dying:
 			// Exhaust timer
 			if !timer.Stop() {
@@ -159,68 +155,25 @@ L:
 }
 
 // This method is part of the lower facing API (towards Controller).
-func (s *Scheduler) SetInterval(interval time.Duration) {
+func (s *Scheduler[T]) SetInterval(interval time.Duration) {
 	s.fieldLogger.WithField("interval", interval).Debug("Setting interval")
 	s.interval = interval
 }
 
 // This method is part of the lower facing API (towards Controller).
-func (s *Scheduler) GetQueueInfo() (count int64, latency int64, err error) {
-	queues, err := s.client.Queues()
-	if err != nil {
-		return 0, 0, err
-	}
-
-	for _, queue := range queues {
-		if queue.JobName == s.Config.JobName {
-			return queue.Count, queue.Latency, nil
-		}
-	}
-
-	// The queue has not been found, that means it has not been initialised
-	// yet.
-	return 0, 0, nil
-}
-
-// GetWorkerNum returns the number of (alive) workers currently registered
-// with the queueing system.
-// This is equal to the total currency of the queueing system.
-//
-// This method is part of the lower facing API (towards Controller).
-func (s *Scheduler) GetWorkerNum() (int, error) {
-	heartbeats, err := s.client.WorkerPoolHeartbeats()
-	if err != nil {
-		return 0, err
-	}
-
-	workerNum := 0
-	for _, heartbeat := range heartbeats {
-		found := false
-		for _, jobName := range heartbeat.JobNames {
-			if jobName == s.Config.JobName {
-				found = true
-				break
-			}
-		}
-		if !found {
-			continue
-		}
-
-		workerNum += int(heartbeat.Concurrency)
-	}
-
-	return workerNum, nil
+func (s *Scheduler[T]) GetQueue() workqueue.QueueQuerier {
+	return s.queue
 }
 
 // This method is part of the lower facing API (towards Controller).
-func (s *Scheduler) RequestProduction(n uint) {
+func (s *Scheduler[T]) RequestProduction(n uint) {
 	s.fieldLogger.WithField("n", n).Debug("Requesting production")
 
 	s.orderBook.Add(n)
 }
 
 // This method is part of the lower facing API (towards Controller).
-func (s *Scheduler) RequestProductionUntilThreshold(threshold uint) {
+func (s *Scheduler[T]) RequestProductionUntilThreshold(threshold uint) {
 	s.fieldLogger.WithField("threshold", threshold).Debug("Requesting production until threshold")
 
 	s.orderBook.AddUntilThreshold(threshold)
@@ -233,13 +186,13 @@ func (s *Scheduler) RequestProductionUntilThreshold(threshold uint) {
 // items.
 //
 // This method is part of the upper facing API (towards Producer).
-func (s *Scheduler) AcquireOrder(ctx context.Context, max uint) (ProductionOrder, error) {
+func (s *Scheduler[T]) AcquireOrder(ctx context.Context, max uint) (ProductionOrder[T], error) {
 	order, err := s.orderBook.AcquireOrder(ctx, max)
 	if err != nil {
-		return ProductionOrder{}, err
+		return ProductionOrder[T]{}, fmt.Errorf("Scheduler.AcquireOrder: %w", err)
 	}
 
-	return ProductionOrder{
+	return ProductionOrder[T]{
 		order:     order,
 		scheduler: s,
 	}, nil
@@ -254,7 +207,7 @@ type SchedulerStats struct {
 	QueueObservedEmpty uint64
 }
 
-func (s *Scheduler) Stats() SchedulerStats {
+func (s *Scheduler[T]) Stats() SchedulerStats {
 	stats := s.orderBook.Stats()
 	return SchedulerStats{
 		OrdersInQueue:      stats.InQueue,
@@ -266,24 +219,17 @@ func (s *Scheduler) Stats() SchedulerStats {
 	}
 }
 
-func (s *Scheduler) enqueue(payload workqueue.JobPayload) (*work.Job, error) {
-	args := make(map[string]interface{})
-
-	err := payload.ToJobArgs(args)
+func (s *Scheduler[T]) enqueue(payload T) (*work.Job, error) {
+	job, err := s.queue.Enqueuer().Enqueue(payload)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Scheduler.enqueue: %w", err)
 	}
 
-	job, err := s.enqueuer.Enqueue(s.Config.JobName, args)
+	info, err := s.queue.GetQueueInfo()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Scheduler.enqueue: %w", err)
 	}
-
-	queueLength, _, err := s.GetQueueInfo()
-	if err != nil {
-		return nil, err
-	}
-	if queueLength <= 1 {
+	if info.QueuedJobs <= 1 {
 		s.queueObservedEmpty.Add(1)
 	}
 
