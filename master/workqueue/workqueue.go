@@ -243,9 +243,7 @@ func (w *WorkQueue) createProducer(wq *workqueue.Workqueue, controller scheduler
 		Merge(&w.Config.Producer).
 		Merge(&ProducerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      workqueue.GocraftWorkNamespace(w.Config.RedisPrefix),
-
-			SnapshotName: w.Config.SnapshotName,
+			SnapshotName:   w.Config.SnapshotName,
 
 			DB:         w.Config.DB,
 			Queue:      wq.Queues().ComputeChecksum(),

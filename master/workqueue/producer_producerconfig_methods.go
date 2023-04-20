@@ -7,8 +7,6 @@ func (p *ProducerConfig) CopyFrom(other *ProducerConfig) {
 	p.FetchRowBatchSize = other.FetchRowBatchSize
 
 	p.FileSystemName = other.FileSystemName
-	p.Namespace = other.Namespace
-
 	p.SnapshotName = other.SnapshotName
 
 	p.DB = other.DB
@@ -34,10 +32,6 @@ func (p *ProducerConfig) Merge(other *ProducerConfig) *ProducerConfig {
 	if len(other.FileSystemName) > 0 {
 		p.FileSystemName = other.FileSystemName
 	}
-	if len(other.Namespace) > 0 {
-		p.Namespace = other.Namespace
-	}
-
 	if len(other.SnapshotName) > 0 {
 		p.SnapshotName = other.SnapshotName
 	}
