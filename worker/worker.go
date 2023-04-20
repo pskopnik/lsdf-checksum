@@ -137,7 +137,7 @@ func (w *Worker) runWorkerPool() error {
 		},
 	)
 
-	w.workerPool.Job(workqueue.ComputeChecksumJobName, (*workerContext).CalculateChecksum)
+	w.workerPool.Job(workqueue.ComputeChecksumJobName, (*workerContext).ComputeChecksum)
 
 	w.workerPool.Start()
 
@@ -196,7 +196,7 @@ type workerContext struct {
 	buffer []byte
 }
 
-func (w *workerContext) CalculateChecksum(job *work.Job) error {
+func (w *workerContext) ComputeChecksum(job *work.Job) error {
 	var workPack workqueue.WorkPack
 
 	fieldLogger := w.Worker.fieldLogger.WithFields(log.Fields{
