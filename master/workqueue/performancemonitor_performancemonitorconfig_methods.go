@@ -5,8 +5,9 @@ import (
 )
 
 func (p *PerformanceMonitorConfig) CopyFrom(other *PerformanceMonitorConfig) {
+	p.ProbeInterval = other.ProbeInterval
+
 	p.MaxThroughput = other.MaxThroughput
-	p.CheckInterval = other.CheckInterval
 
 	p.PauseQueueLength = other.PauseQueueLength
 	p.ResumeQueueLength = other.ResumeQueueLength
@@ -17,18 +18,19 @@ func (p *PerformanceMonitorConfig) CopyFrom(other *PerformanceMonitorConfig) {
 }
 
 func (p *PerformanceMonitorConfig) Merge(other *PerformanceMonitorConfig) *PerformanceMonitorConfig {
-	if other.MaxThroughput != 0 {
-		p.MaxThroughput = other.MaxThroughput
-	}
-	if other.CheckInterval != time.Duration(0) {
-		p.CheckInterval = other.CheckInterval
+	if other.ProbeInterval != time.Duration(0) {
+		p.ProbeInterval = other.ProbeInterval
 	}
 
 	if other.MaxThroughput != 0 {
 		p.MaxThroughput = other.MaxThroughput
 	}
-	if other.MaxThroughput != 0 {
-		p.MaxThroughput = other.MaxThroughput
+
+	if other.PauseQueueLength != 0 {
+		p.PauseQueueLength = other.PauseQueueLength
+	}
+	if other.ResumeQueueLength != 0 {
+		p.ResumeQueueLength = other.ResumeQueueLength
 	}
 
 	if other.Workqueue != nil {
