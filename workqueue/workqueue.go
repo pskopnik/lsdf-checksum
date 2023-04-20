@@ -6,7 +6,9 @@ package workqueue
 
 import (
 	"sync"
+	"time"
 
+	"github.com/apex/log"
 	"github.com/gocraft/work"
 	"github.com/gomodule/redigo/redis"
 )
@@ -40,10 +42,24 @@ func dConfigNamespace(prefix string) string {
 	}
 }
 
+//go:generate confions config Config
+
+type Config struct {
+	Pool                 *redis.Pool
+	Prefix               string
+	Logger               log.Interface
+	DConfigProbeInterval time.Duration
+}
+
+var DefaultConfig = Config{
+	DConfigProbeInterval: 10 * time.Second,
+}
+
 // Workqueue is a client to a single workqueue instance under control of a
 // coordinator/master.
 type Workqueue struct {
-	pool *redis.Pool
+	config Config
+	pool   *redis.Pool
 
 	instKey        string
 	fileSystemName string
@@ -56,16 +72,16 @@ type Workqueue struct {
 	enqueuer         *work.Enqueuer
 }
 
-func New(pool *redis.Pool, prefix, fileSystemName, snapshotName string) *Workqueue {
-	namespace := GocraftWorkNamespace(prefix)
+func New(fileSystemName, snapshotName string, config Config) *Workqueue {
+	namespace := GocraftWorkNamespace(config.Prefix)
 
 	return &Workqueue{
-		pool:             pool,
+		pool:             config.Pool,
 		fileSystemName:   fileSystemName,
 		snapshotName:     snapshotName,
 		workNamespace:    namespace,
-		dconfigNamespace: dConfigNamespace(prefix),
-		client:           work.NewClient(namespace, pool),
+		dconfigNamespace: dConfigNamespace(config.Prefix),
+		client:           work.NewClient(namespace, config.Pool),
 	}
 }
 

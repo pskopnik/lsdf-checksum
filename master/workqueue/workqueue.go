@@ -27,6 +27,11 @@ type Config struct {
 	Logger log.Interface `yaml:"-"`
 	Pool   *redis.Pool   `yaml:"-"`
 
+	// Workqueue contains the configuration for the Workqueue.
+	// Here only static configuration options should be set.
+	// All known run time dependent options (database connections, RunID, etc.)
+	// will be overwritten when the final configuration is assembled.
+	Workqueue workqueue.Config
 	// EWMAController contains the configuration for the EWMAController.
 	// Here only static configuration options should be set.
 	// All known run time dependent options (database connections, RunID, etc.)
@@ -208,10 +213,16 @@ func (w *WorkQueue) performanceMonitorStopper() error {
 
 func (w *WorkQueue) createWorkqueue() *workqueue.Workqueue {
 	return workqueue.New(
-		w.Config.Pool,
-		w.Config.RedisPrefix,
 		w.Config.FileSystemName,
 		w.Config.SnapshotName,
+		*workqueue.DefaultConfig.
+			Clone().
+			Merge(&w.Config.Workqueue).
+			Merge(&workqueue.Config{
+				Pool:   w.Config.Pool,
+				Prefix: w.Config.RedisPrefix,
+				Logger: w.Config.Logger,
+			}),
 	)
 }
 
