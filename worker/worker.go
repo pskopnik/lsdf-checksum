@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"crypto/sha1"
-	"hash"
 	"io"
 	"path/filepath"
 	"time"
@@ -15,46 +14,56 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"gopkg.in/tomb.v2"
 
-	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lengthsafe"
+	"git.scc.kit.edu/sdm/lsdf-checksum/internal/lifecycle"
 	"git.scc.kit.edu/sdm/lsdf-checksum/internal/ratedreader"
 	commonRedis "git.scc.kit.edu/sdm/lsdf-checksum/redis"
 	"git.scc.kit.edu/sdm/lsdf-checksum/workqueue"
 )
 
-const bufferSize int = 32 * 1024
-
 type Config struct {
 	Concurrency   int
 	MaxThroughput int
+	FileReadSize  int
 
 	Logger log.Interface `yaml:"-"`
 
 	Redis       commonRedis.Config
 	RedisPrefix string
+
+	Workqueue workqueue.Config
+
+	PrefixTTL                time.Duration
+	PrefixerReapingInterval  time.Duration
+	WorkqueueReapingInterval time.Duration
 }
 
 var DefaultConfig = &Config{
-	Concurrency:   1,
-	MaxThroughput: 10 * 1024 * 1024,
+	Concurrency:              1,
+	MaxThroughput:            10 * 1024 * 1024,
+	FileReadSize:             32 * 1024,
+	PrefixTTL:                30 * time.Minute,
+	PrefixerReapingInterval:  time.Hour,
+	WorkqueueReapingInterval: time.Hour,
 }
 
 type Worker struct {
 	Config *Config
 
+	ctx  context.Context
 	tomb *tomb.Tomb
 
 	pool       *redis.Pool
 	workerPool *work.WorkerPool
-	enqueuer   *work.Enqueuer
 
-	prefixer *Prefixer
+	workqueues WorkqueuesKeeper
+	prefixer   *Prefixer
+
+	localLimiter *rate.Limiter
 
 	// Pools
 
-	ratedReaders chan *ratedreader.Reader
-	hashers      chan hash.Hash
-	buffers      chan []byte
+	buffers chan []byte
 
 	fieldLogger log.Interface
 }
@@ -70,7 +79,16 @@ func (w *Worker) Start(ctx context.Context) {
 		"component": "worker.Worker",
 	})
 
-	w.tomb, _ = tomb.WithContext(ctx)
+	limit := rate.Inf
+	if w.Config.MaxThroughput > 0 {
+		limit = rate.Limit(w.Config.MaxThroughput)
+	}
+	w.localLimiter = rate.NewLimiter(limit, w.Config.FileReadSize)
+
+	w.tomb, w.ctx = tomb.WithContext(ctx)
+
+	w.workqueues = *w.createWorkqueuesKeeper()
+	w.workqueues.Start()
 
 	w.prefixer = w.createPrefixer()
 	w.prefixer.Start(w.tomb.Context(nil))
@@ -109,17 +127,16 @@ func (w *Worker) Err() error {
 
 func (w *Worker) runWorkerPool() error {
 	gocraftWorkNamespace := workqueue.GocraftWorkNamespace(w.Config.RedisPrefix)
-	w.enqueuer = work.NewEnqueuer(gocraftWorkNamespace, w.pool)
 
 	w.workerPool = work.NewWorkerPool(workerContext{}, uint(w.Config.Concurrency), gocraftWorkNamespace, w.pool)
 	w.workerPool.Middleware(
-		func(workerCtx *workerContext, job *work.Job, next work.NextMiddlewareFunc) error {
+		func(workerCtx *workerContext, _ *work.Job, next work.NextMiddlewareFunc) error {
 			workerCtx.Worker = w
 			return next()
 		},
 	)
-	jobName := workqueue.ComputeChecksumJobName
-	w.workerPool.Job(jobName, (*workerContext).CalculateChecksum)
+
+	w.workerPool.Job(workqueue.ComputeChecksumJobName, (*workerContext).CalculateChecksum)
 
 	w.workerPool.Start()
 
@@ -144,30 +161,30 @@ func (w *Worker) createRedisPool() (*redis.Pool, error) {
 	return pool, nil
 }
 
+func (w *Worker) createWorkqueuesKeeper() *WorkqueuesKeeper {
+	return NewWorkqueuesKeeper(WorkqueuesKeeperConfig{
+		Context:         w.ctx,
+		Pool:            w.pool,
+		Prefix:          w.Config.RedisPrefix,
+		FileReadSize:    w.Config.FileReadSize,
+		Logger:          w.Config.Logger,
+		Workqueue:       w.Config.Workqueue,
+		ReapingInterval: w.Config.WorkqueueReapingInterval,
+	})
+}
+
 func (w *Worker) createPrefixer() *Prefixer {
 	return NewPrefixer(&PrefixerConfig{
-		TTL:             30 * time.Minute,
-		ReapingInterval: time.Hour,
+		TTL:             w.Config.PrefixTTL,
+		ReapingInterval: w.Config.PrefixerReapingInterval,
 		Logger:          w.Config.Logger,
 	})
 }
 
 func (w *Worker) initPools() {
-	w.ratedReaders = make(chan *ratedreader.Reader, w.Config.Concurrency)
-	for i := 0; i < w.Config.Concurrency; i++ {
-		reader := ratedreader.NewReader(nil, rate.Limit(float64(w.Config.MaxThroughput)/float64(w.Config.Concurrency)))
-		w.ratedReaders <- reader
-	}
-
-	w.hashers = make(chan hash.Hash, w.Config.Concurrency)
-	for i := 0; i < w.Config.Concurrency; i++ {
-		hasher := sha1.New()
-		w.hashers <- hasher
-	}
-
 	w.buffers = make(chan []byte, w.Config.Concurrency)
 	for i := 0; i < w.Config.Concurrency; i++ {
-		buffer := make([]byte, bufferSize)
+		buffer := make([]byte, w.Config.FileReadSize)
 		w.buffers <- buffer
 	}
 }
@@ -175,100 +192,99 @@ func (w *Worker) initPools() {
 type workerContext struct {
 	Worker *Worker
 
-	hasher hash.Hash
-	reader *ratedreader.Reader
 	buffer []byte
 }
 
 func (w *workerContext) CalculateChecksum(job *work.Job) error {
-	workPack := workqueue.WorkPack{}
+	var workPack workqueue.WorkPack
 
-	w.Worker.fieldLogger.WithFields(log.Fields{
-		"args":     job.Args,
+	fieldLogger := w.Worker.fieldLogger.WithFields(log.Fields{
 		"job_name": job.Name,
-	}).Debug("Received work")
+	})
+	fieldLogger.WithFields(log.Fields{
+		"args": job.Args,
+	}).Debug("Starting processing job")
 
 	err := workPack.FromJobArgs(job.Args)
 	if err != nil {
-		w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
-			"action":   "skipping",
-			"args":     job.Args,
-			"job_name": job.Name,
+		fieldLogger.WithError(err).WithFields(log.Fields{
+			"action": "failing-job",
+			"args":   job.Args,
 		}).Warn("Encountered error during WorkPack unmarshaling")
+
+		return err
+	}
+
+	fieldLogger = fieldLogger.WithFields(log.Fields{
+		"filesystem": workPack.FileSystemName,
+		"snapshot":   workPack.SnapshotName,
+	})
+
+	wqCtx, err := w.Worker.workqueues.Get(workPack.FileSystemName, workPack.SnapshotName)
+	if err != nil {
+		fieldLogger.WithError(err).WithFields(log.Fields{
+			"action": "failing-job",
+		}).Warn("Encountered error while getting workqueue instance")
 
 		return err
 	}
 
 	prefix, err := w.Worker.prefixer.Prefix(&workPack)
 	if err != nil {
-		w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
-			"action":     "skipping",
-			"filesystem": workPack.FileSystemName,
-			"snapshot":   workPack.SnapshotName,
-			"job_name":   job.Name,
+		fieldLogger.WithError(err).WithFields(log.Fields{
+			"action": "failing-job",
 		}).Warn("Encountered error while determining path prefix")
 
 		return err
 	}
 
-	writeBackPack := workqueue.WriteBackPack{}
+	var writeBackPack workqueue.WriteBackPack
 	writeBackPack.Files = make([]workqueue.WriteBackPackFile, 0, len(workPack.Files))
 
 	w.getFromPools()
 
 	for _, file := range workPack.Files {
 		path := filepath.Join(prefix, file.Path)
+		fieldLogger := fieldLogger.WithFields(log.Fields{
+			"id":   file.ID,
+			"path": path,
+		})
+
 		fileReader, err := lengthsafe.Open(path)
 		if err != nil {
-			w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
-				"action":     "skipping",
-				"filesystem": workPack.FileSystemName,
-				"snapshot":   workPack.SnapshotName,
-				"job_name":   job.Name,
-				"id":         file.ID,
-				"path":       path,
+			fieldLogger.WithError(err).WithFields(log.Fields{
+				"action": "failing-job",
 			}).Warn("Encountered error while opening file")
 			continue
 		}
 
-		w.reader.ResetReader(fileReader)
-		w.hasher.Reset()
+		limiters := [...]*rate.Limiter{
+			w.Worker.localLimiter,
+			wqCtx.Limiter,
+		}
+		reader := ratedreader.NewMultiReader(fileReader, limiters[:])
+		hasher := sha1.New()
 
-		n, err := io.CopyBuffer(w.hasher, w.reader, w.buffer)
+		n, err := io.CopyBuffer(hasher, reader, w.buffer)
 		if err != nil {
 			_ = fileReader.Close()
-			w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
-				"action":     "skipping",
-				"filesystem": workPack.FileSystemName,
-				"snapshot":   workPack.SnapshotName,
-				"job_name":   job.Name,
-				"id":         file.ID,
-				"path":       path,
+			fieldLogger.WithError(err).WithFields(log.Fields{
+				"action": "failing-job",
 			}).Warn("Encountered error while calculating hashsum of file")
 			continue
 		}
 
 		err = fileReader.Close()
 		if err != nil {
-			w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
-				"action":     "skipping",
-				"filesystem": workPack.FileSystemName,
-				"snapshot":   workPack.SnapshotName,
-				"job_name":   job.Name,
-				"id":         file.ID,
-				"path":       path,
+			fieldLogger.WithError(err).WithFields(log.Fields{
+				"action": "failing-job",
 			}).Warn("Encountered error while closing file")
 			continue
 		}
 
-		checksum := w.hasher.Sum(nil)
+		checksum := hasher.Sum(nil)
 
-		w.Worker.fieldLogger.WithFields(log.Fields{
-			"filesystem": workPack.FileSystemName,
-			"snapshot":   workPack.SnapshotName,
-			"job_name":   job.Name,
-			"id":         file.ID,
-			"path":       path,
+		fieldLogger.WithFields(log.Fields{
 			"bytes_read": n,
 			"checksum":   checksum,
 		}).Debug("Read file")
@@ -281,13 +297,10 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 
 	w.returnToPools()
 
-	err = w.enqueueWriteBackPack(&workPack, &writeBackPack)
+	_, err = wqCtx.WriteBackEnqueuer.Enqueue(&writeBackPack)
 	if err != nil {
-		w.Worker.fieldLogger.WithError(err).WithFields(log.Fields{
-			"action":          "skipping",
-			"filesystem":      workPack.FileSystemName,
-			"snapshot":        workPack.SnapshotName,
-			"job_name":        job.Name,
+		fieldLogger.WithError(err).WithFields(log.Fields{
+			"action":          "failing-job",
 			"write_back_pack": &writeBackPack,
 		}).Warn("Encountered error while enqueueing WriteBackPack")
 		return err
@@ -297,37 +310,9 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 }
 
 func (w *workerContext) getFromPools() {
-	w.reader = <-w.Worker.ratedReaders
-	w.hasher = <-w.Worker.hashers
 	w.buffer = <-w.Worker.buffers
 }
 
 func (w *workerContext) returnToPools() {
-	w.reader.ResetReader(nil)
-	w.Worker.ratedReaders <- w.reader
-
-	w.hasher.Reset()
-	w.Worker.hashers <- w.hasher
-
 	w.Worker.buffers <- w.buffer
-}
-
-func (w *workerContext) enqueueWriteBackPack(workPack *workqueue.WorkPack, writeBackPack *workqueue.WriteBackPack) error {
-	var err error
-
-	jobName := workqueue.WriteBackJobName(workPack.FileSystemName, workPack.SnapshotName)
-
-	jobArgs := make(map[string]interface{})
-
-	err = writeBackPack.ToJobArgs(jobArgs)
-	if err != nil {
-		return err
-	}
-
-	_, err = w.Worker.enqueuer.Enqueue(jobName, jobArgs)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

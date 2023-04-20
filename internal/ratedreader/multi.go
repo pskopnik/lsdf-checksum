@@ -12,12 +12,12 @@ var _ io.Reader = &MultiReader{}
 
 type MultiReader struct {
 	r        io.Reader
-	limiters []rate.Limiter
+	limiters []*rate.Limiter
 	minBurst int
 	ctx      context.Context
 }
 
-func NewMultiReader(rd io.Reader, limiters []rate.Limiter) *MultiReader {
+func NewMultiReader(rd io.Reader, limiters []*rate.Limiter) *MultiReader {
 	if len(limiters) == 0 {
 		panic("NewMultiReader: must be initialised with at least one limiter")
 	}
