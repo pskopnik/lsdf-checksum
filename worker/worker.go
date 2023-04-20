@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"crypto/sha1"
+	"fmt"
 	"io"
 	"path/filepath"
 	"time"
@@ -200,10 +201,8 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 
 	fieldLogger := w.Worker.fieldLogger.WithFields(log.Fields{
 		"job_name": job.Name,
+		"job_id":   job.ID,
 	})
-	fieldLogger.WithFields(log.Fields{
-		"args": job.Args,
-	}).Debug("Starting processing job")
 
 	err := workPack.FromJobArgs(job.Args)
 	if err != nil {
@@ -219,6 +218,7 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 		"filesystem": workPack.FileSystemName,
 		"snapshot":   workPack.SnapshotName,
 	})
+	fieldLogger.Debug("Starting processing job")
 
 	wqCtx, err := w.Worker.workqueues.Get(workPack.FileSystemName, workPack.SnapshotName)
 	if err != nil {
@@ -241,7 +241,13 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 	var writeBackPack workqueue.WriteBackPack
 	writeBackPack.Files = make([]workqueue.WriteBackPackFile, 0, len(workPack.Files))
 
+	// gets expensive objects from pool and stores in w
 	w.getFromPools()
+
+	limiters := [...]*rate.Limiter{
+		w.Worker.localLimiter,
+		wqCtx.Limiter,
+	}
 
 	for _, file := range workPack.Files {
 		path := filepath.Join(prefix, file.Path)
@@ -250,44 +256,18 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 			"path": path,
 		})
 
-		fileReader, err := lengthsafe.Open(path)
+		n, checksum, err := w.readFileAndComputeChecksum(path, limiters[:])
 		if err != nil {
 			fieldLogger.WithError(err).WithFields(log.Fields{
 				"action": "failing-job",
-			}).Warn("Encountered error while opening file")
+			}).Warn("Encountered error while computing checksum of file")
 			continue
 		}
-
-		limiters := [...]*rate.Limiter{
-			w.Worker.localLimiter,
-			wqCtx.Limiter,
-		}
-		reader := ratedreader.NewMultiReader(fileReader, limiters[:])
-		hasher := sha1.New()
-
-		n, err := io.CopyBuffer(hasher, reader, w.buffer)
-		if err != nil {
-			_ = fileReader.Close()
-			fieldLogger.WithError(err).WithFields(log.Fields{
-				"action": "failing-job",
-			}).Warn("Encountered error while calculating hashsum of file")
-			continue
-		}
-
-		err = fileReader.Close()
-		if err != nil {
-			fieldLogger.WithError(err).WithFields(log.Fields{
-				"action": "failing-job",
-			}).Warn("Encountered error while closing file")
-			continue
-		}
-
-		checksum := hasher.Sum(nil)
 
 		fieldLogger.WithFields(log.Fields{
 			"bytes_read": n,
 			"checksum":   checksum,
-		}).Debug("Read file")
+		}).Debug("Read file and computed checksum")
 
 		writeBackPack.Files = append(writeBackPack.Files, workqueue.WriteBackPackFile{
 			ID:       file.ID,
@@ -307,6 +287,33 @@ func (w *workerContext) CalculateChecksum(job *work.Job) error {
 	}
 
 	return nil
+}
+
+func (w *workerContext) readFileAndComputeChecksum(
+	path string, limiters []*rate.Limiter,
+) (int64, []byte, error) {
+	fileReader, err := lengthsafe.Open(path)
+	if err != nil {
+		return 0, nil, fmt.Errorf("opening file: %w", err)
+	}
+	defer fileReader.Close()
+
+	reader := ratedreader.NewMultiReader(fileReader, limiters[:])
+	hasher := sha1.New()
+
+	n, err := io.CopyBuffer(hasher, reader, w.buffer)
+	if err != nil {
+		return 0, nil, fmt.Errorf("reading file and computing checksum: %w", err)
+	}
+
+	err = fileReader.Close()
+	if err != nil {
+		return 0, nil, fmt.Errorf("closing file: %w", err)
+	}
+
+	checksum := hasher.Sum(nil)
+
+	return n, checksum, nil
 }
 
 func (w *workerContext) getFromPools() {
