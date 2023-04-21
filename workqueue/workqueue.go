@@ -76,6 +76,7 @@ func New(fileSystemName, snapshotName string, config Config) *Workqueue {
 	namespace := GocraftWorkNamespace(config.Prefix)
 
 	return &Workqueue{
+		config:           config,
 		pool:             config.Pool,
 		fileSystemName:   fileSystemName,
 		snapshotName:     snapshotName,
