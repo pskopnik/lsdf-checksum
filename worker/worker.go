@@ -88,9 +88,6 @@ func (w *Worker) Start(ctx context.Context) {
 
 	w.tomb, w.ctx = tomb.WithContext(ctx)
 
-	w.workqueues = *w.createWorkqueuesKeeper()
-	w.workqueues.Start()
-
 	w.prefixer = w.createPrefixer()
 	w.prefixer.Start(w.tomb.Context(nil))
 
@@ -103,6 +100,9 @@ func (w *Worker) Start(ctx context.Context) {
 		}
 
 		w.pool = pool
+
+		w.workqueues = *w.createWorkqueuesKeeper()
+		w.workqueues.Start()
 
 		w.tomb.Go(w.runWorkerPool)
 
