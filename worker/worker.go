@@ -57,7 +57,7 @@ type Worker struct {
 	pool       *redis.Pool
 	workerPool *work.WorkerPool
 
-	workqueues WorkqueuesKeeper
+	workqueues *WorkqueuesKeeper
 	prefixer   *Prefixer
 
 	localLimiter *rate.Limiter
@@ -101,7 +101,7 @@ func (w *Worker) Start(ctx context.Context) {
 
 		w.pool = pool
 
-		w.workqueues = *w.createWorkqueuesKeeper()
+		w.workqueues = w.createWorkqueuesKeeper(w.ctx, w.pool)
 		w.workqueues.Start()
 
 		w.tomb.Go(w.runWorkerPool)
@@ -162,10 +162,10 @@ func (w *Worker) createRedisPool() (*redis.Pool, error) {
 	return pool, nil
 }
 
-func (w *Worker) createWorkqueuesKeeper() *WorkqueuesKeeper {
+func (w *Worker) createWorkqueuesKeeper(ctx context.Context, pool *redis.Pool) *WorkqueuesKeeper {
 	return NewWorkqueuesKeeper(WorkqueuesKeeperConfig{
-		Context:         w.ctx,
-		Pool:            w.pool,
+		Context:         ctx,
+		Pool:            pool,
 		Prefix:          w.Config.RedisPrefix,
 		FileReadSize:    w.Config.FileReadSize,
 		Logger:          w.Config.Logger,
