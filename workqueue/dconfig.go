@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	ErrConflictOutdated = errors.New("conflict, changes build on outdated version")
+	ErrConflictOutdated   = errors.New("conflict, changes build on outdated version")
+	ErrDConfigNotExistent = errors.New("DConfig does not exist (not published)")
 )
 
 func dConfigDataKey(namespace, fileSystemName, snapshotName string) string {
@@ -48,6 +49,10 @@ func (d DConfigClient) GetData() (DConfigData, error) {
 	err = redis.ScanStruct(repl, &data)
 	if err != nil {
 		return DConfigData{}, fmt.Errorf("DConfigClient.GetData: parsing Redis reply: %w", err)
+	}
+
+	if data.Epoch == 0 {
+		return DConfigData{}, fmt.Errorf("DConfigClient.GetData: %w", ErrDConfigNotExistent)
 	}
 
 	return data, nil
