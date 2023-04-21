@@ -3,6 +3,7 @@ package workqueue
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/apex/log"
 	"github.com/gomodule/redigo/redis"
@@ -94,8 +95,16 @@ func (w *WorkQueue) Start(ctx context.Context) {
 	w.tomb, _ = tomb.WithContext(ctx)
 
 	w.tomb.Go(func() error {
+		var err error
+
 		w.workqueue = w.createWorkqueue()
-		w.publisher = w.workqueue.DConfig().StartPublisher(w.tomb.Context(nil))
+		w.publisher, err = w.workqueue.DConfig().StartPublisher(
+			w.tomb.Context(nil),
+			w.createInitialDConfigData(),
+		)
+		if err != nil {
+			return fmt.Errorf("WorkQueue.Start: starting dconfig publisher: %w", err)
+		}
 
 		w.schedulingController = w.createEWMAController()
 
@@ -224,6 +233,10 @@ func (w *WorkQueue) createWorkqueue() *workqueue.Workqueue {
 				Logger: w.Config.Logger,
 			}),
 	)
+}
+
+func (w *WorkQueue) createInitialDConfigData() workqueue.DConfigData {
+	return workqueue.DConfigData{}
 }
 
 func (w *WorkQueue) createEWMAController() *scheduler.EWMAController {
