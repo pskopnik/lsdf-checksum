@@ -3,6 +3,7 @@ package workqueue
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/apex/log"
 	"github.com/gomodule/redigo/redis"
@@ -27,6 +28,11 @@ type Config struct {
 	Logger log.Interface `yaml:"-"`
 	Pool   *redis.Pool   `yaml:"-"`
 
+	// Workqueue contains the configuration for the Workqueue.
+	// Here only static configuration options should be set.
+	// All known run time dependent options (database connections, RunID, etc.)
+	// will be overwritten when the final configuration is assembled.
+	Workqueue workqueue.Config
 	// EWMAController contains the configuration for the EWMAController.
 	// Here only static configuration options should be set.
 	// All known run time dependent options (database connections, RunID, etc.)
@@ -89,8 +95,16 @@ func (w *WorkQueue) Start(ctx context.Context) {
 	w.tomb, _ = tomb.WithContext(ctx)
 
 	w.tomb.Go(func() error {
+		var err error
+
 		w.workqueue = w.createWorkqueue()
-		w.publisher = w.workqueue.DConfig().StartPublisher(w.tomb.Context(nil))
+		w.publisher, err = w.workqueue.DConfig().StartPublisher(
+			w.tomb.Context(nil),
+			w.createInitialDConfigData(),
+		)
+		if err != nil {
+			return fmt.Errorf("WorkQueue.Start: starting dconfig publisher: %w", err)
+		}
 
 		w.schedulingController = w.createEWMAController()
 
@@ -208,11 +222,21 @@ func (w *WorkQueue) performanceMonitorStopper() error {
 
 func (w *WorkQueue) createWorkqueue() *workqueue.Workqueue {
 	return workqueue.New(
-		w.Config.Pool,
-		w.Config.RedisPrefix,
 		w.Config.FileSystemName,
 		w.Config.SnapshotName,
+		*workqueue.DefaultConfig.
+			Clone().
+			Merge(&w.Config.Workqueue).
+			Merge(&workqueue.Config{
+				Pool:   w.Config.Pool,
+				Prefix: w.Config.RedisPrefix,
+				Logger: w.Config.Logger,
+			}),
 	)
+}
+
+func (w *WorkQueue) createInitialDConfigData() workqueue.DConfigData {
+	return workqueue.DConfigData{}
 }
 
 func (w *WorkQueue) createEWMAController() *scheduler.EWMAController {
@@ -232,9 +256,7 @@ func (w *WorkQueue) createProducer(wq *workqueue.Workqueue, controller scheduler
 		Merge(&w.Config.Producer).
 		Merge(&ProducerConfig{
 			FileSystemName: w.Config.FileSystemName,
-			Namespace:      workqueue.GocraftWorkNamespace(w.Config.RedisPrefix),
-
-			SnapshotName: w.Config.SnapshotName,
+			SnapshotName:   w.Config.SnapshotName,
 
 			DB:         w.Config.DB,
 			Queue:      wq.Queues().ComputeChecksum(),

@@ -81,7 +81,7 @@ func (t Time) Value() (driver.Value, error) {
 // values! However, the most common mysql database driver does not support
 // uint64 at all.
 //
-//     https://github.com/go-sql-driver/mysql/issues/715
+//	https://github.com/go-sql-driver/mysql/issues/715
 type NullUint64 struct {
 	Uint64 uint64
 	Valid  bool

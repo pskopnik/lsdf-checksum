@@ -15,8 +15,9 @@ import (
 //go:generate confions config PerformanceMonitorConfig
 
 type PerformanceMonitorConfig struct {
+	ProbeInterval time.Duration
+
 	MaxThroughput uint64
-	CheckInterval time.Duration
 
 	PauseQueueLength  int
 	ResumeQueueLength int
@@ -27,7 +28,7 @@ type PerformanceMonitorConfig struct {
 }
 
 var PerformanceMonitorDefaultConfig = &PerformanceMonitorConfig{
-	CheckInterval: 5 * time.Second,
+	ProbeInterval: 5 * time.Second,
 
 	PauseQueueLength:  10000,
 	ResumeQueueLength: 1000,
@@ -99,7 +100,7 @@ func (p *PerformanceMonitor) run() error {
 	}
 L:
 	for {
-		timer.Reset(p.Config.CheckInterval)
+		timer.Reset(p.Config.ProbeInterval)
 
 		select {
 		case <-timer.C:
@@ -160,8 +161,14 @@ func (p *PerformanceMonitor) computeMaxNodeThroughput() error {
 	// TODO: Should this be spread across nodes or workers (threads)?
 	maxNodeThroughput := p.Config.MaxThroughput / uint64(info.NodeNum)
 
-	err = p.Config.Publisher.MutatePublishData(func(d *workqueue.DConfigData) {
-		d.MaxNodeThroughput = maxNodeThroughput
+	_, err = p.Config.Publisher.MutatePublishData(func(d *workqueue.DConfigData) {
+		if d.MaxNodeThroughput != maxNodeThroughput {
+			p.fieldLogger.WithError(err).WithFields(log.Fields{
+				"old_max_node_throughput": d.MaxNodeThroughput,
+				"new_max_node_throughput": maxNodeThroughput,
+			}).Debug("Updating max_node_throughput performance constraint")
+			d.MaxNodeThroughput = maxNodeThroughput
+		}
 	})
 	if err != nil {
 		return err

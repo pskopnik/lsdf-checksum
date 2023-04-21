@@ -109,7 +109,7 @@ func (q *QueueWatcher) run() error {
 
 	ctx := q.tomb.Context(nil)
 
-	q.fieldLogger.Info("Waiting for CalculateChecksum jobs to finish processing")
+	q.fieldLogger.Info("Waiting for ComputeChecksum jobs to finish processing")
 
 	err = q.waitForJobsFinished(ctx, workqueue.ComputeChecksumJobName)
 	if err != nil {
@@ -119,7 +119,7 @@ func (q *QueueWatcher) run() error {
 			return tomb.ErrDying
 		}
 		q.fieldLogger.WithError(err).WithField("action", "stopping").
-			Error("Encountered error while waiting for CalculateChecksum jobs to finish processing")
+			Error("Encountered error while waiting for ComputeChecksum jobs to finish processing")
 		return err
 	}
 

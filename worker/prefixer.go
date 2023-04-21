@@ -133,36 +133,36 @@ func (p *Prefixer) Prefix(workPack *workqueue.WorkPack) (string, error) {
 
 func (p *Prefixer) reaper() error {
 	dying := p.tomb.Dying()
-	timer := time.NewTimer(time.Duration(0))
-
-	p.fieldLogger.Info("Starting reaper loop")
-
+	timer := time.NewTimer(0)
 	// Exhaust timer
 	if !timer.Stop() {
 		<-timer.C
 	}
+
+	p.fieldLogger.Info("Starting reaper loop")
+
 L:
 	for {
 		timer.Reset(p.Config.ReapingInterval)
 
 		select {
 		case <-timer.C:
-			p.fieldLogger.Debug("Starting reap")
+			p.fieldLogger.Debug("Starting reaping")
 
 			entriesRemoved := p.reap()
 
-			p.fieldLogger.WithField("entries_removed", entriesRemoved).Debug("Finished reap")
+			p.fieldLogger.WithFields(log.Fields{
+				"entries_removed": entriesRemoved,
+			}).Debug("Finished reaping")
 		case <-dying:
-			// Exhaust timer
-			if !timer.Stop() {
-				<-timer.C
-			}
-
+			_ = timer.Stop()
 			break L
 		}
 	}
 
-	p.fieldLogger.WithField("action", "stopping").Info("Finished reaper loop")
+	p.fieldLogger.WithFields(log.Fields{
+		"action": "stopping",
+	}).Info("Finished reaper loop")
 
 	return nil
 }

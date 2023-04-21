@@ -21,8 +21,6 @@ type ProducerConfig struct {
 	FetchRowBatchSize     uint64
 
 	FileSystemName string
-	Namespace      string
-
 	SnapshotName string
 
 	DB         *meda.DB                                    `yaml:"-"`
@@ -63,7 +61,6 @@ func (p *Producer) Start(ctx context.Context) {
 	p.fieldLogger = p.Config.Logger.WithFields(log.Fields{
 		"snapshot":   p.Config.SnapshotName,
 		"filesystem": p.Config.FileSystemName,
-		"namespace":  p.Config.Namespace,
 		"component":  "workqueue.Producer",
 	})
 

@@ -275,7 +275,7 @@ When the queue becomes empty, an exponential increase of the queue length perfor
 
 Consumption on this queue may be paused to enforce backpressure when Write Back Jobs are not processed fast enough (see section below on Managing Performance).
 
-The job name of Checksum Jobs is `CalculateChecksum` and it contains some common information about all files (filesystem name and snapshot name) and the list of files to be read and checksums of their content computed.
+The job name of Checksum Jobs is `ComputeChecksum` and it contains some common information about all files (filesystem name and snapshot name) and the list of files to be read and checksums of their content computed.
 Each file in the list consists of the relative path inside the snapshot's directory and the id of the file in the meta data database.
 The id is not required by workers but is included in the Write Back Job.
 

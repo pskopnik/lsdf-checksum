@@ -30,10 +30,10 @@ func appendUnescapeUrl(dst, in []byte) ([]byte, error) {
 		}
 
 		dst = append(dst, in[:ind]...)
-		if ind + 2 >= len(in) {
+		if ind+2 >= len(in) {
 			return dst, errInvalidEscape
 		}
-		dst = append(dst, hexToInt(in[ind+1])<<4 + hexToInt(in[ind+2]))
+		dst = append(dst, hexToInt(in[ind+1])<<4+hexToInt(in[ind+2]))
 
 		in = in[ind+3:]
 	}

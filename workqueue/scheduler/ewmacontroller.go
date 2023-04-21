@@ -159,7 +159,7 @@ func (e *EWMAController) Schedule() {
 	e.previousEnqueuedCounter = enqueuedCounter
 
 	observedEmptyCounter := schedulerStats.QueueObservedEmpty
-	exhausted := observedEmptyCounter > e.previousObservedEmptyCounter
+	exhausted := observedEmptyCounter > e.previousObservedEmptyCounter || queueLength == 0
 	e.previousObservedEmptyCounter = observedEmptyCounter
 
 	var consumption uint

@@ -27,7 +27,7 @@ func (s *Snapshot) Delete() error {
 // It contains all information in the output of the mmsnapdir command, see the
 // reference for more details:
 //
-//    https://www.ibm.com/support/knowledgecenter/en/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/bl1adm_mmsnapdir.htm
+//	https://www.ibm.com/support/knowledgecenter/en/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/bl1adm_mmsnapdir.htm
 type SnapshotDirsInfo struct {
 	// Global is the name of the global snapshots subdirectory.
 	Global string

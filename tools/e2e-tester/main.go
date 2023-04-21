@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"gopkg.in/yaml.v3"
 	_ "github.com/go-sql-driver/mysql"
+	"gopkg.in/yaml.v3"
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
 )
@@ -168,7 +168,7 @@ func clearDatabase(driver, dataSourceName string) error {
 		}
 	}
 
-	_, err = tx.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS = 1;");
+	_, err = tx.ExecContext(ctx, "SET FOREIGN_KEY_CHECKS = 1;")
 	if err != nil {
 		return fmt.Errorf("clearDatabase: enable foreign key checks: %w", err)
 	}

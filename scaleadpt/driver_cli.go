@@ -40,7 +40,7 @@ const gpfsMountType = "gpfs"
 // The implementation is an adapted copy of the gofsutil's
 // defaultEntryScanFunc, see:
 //
-//    https://github.com/akutz/gofsutil/blob/master/gofsutil_mount.go#L99
+//	https://github.com/akutz/gofsutil/blob/master/gofsutil_mount.go#L99
 func gpfsEntryScan(ctx context.Context, entry gofsutil.Entry, cache map[string]gofsutil.Entry) (gofsutil.Info, bool, error) {
 	var info gofsutil.Info
 
@@ -105,8 +105,8 @@ var _ error = &CLIGPFSError{}
 
 // CLIGPFSError is an error type containing GPFS specific information.
 //
-//   https://www.ibm.com/support/knowledgecenter/en/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/bl1pdg_message.htm
-//   https://www.ibm.com/support/knowledgecenter/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/bl1pdg_messageseveritytags.htm
+//	https://www.ibm.com/support/knowledgecenter/en/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/bl1pdg_message.htm
+//	https://www.ibm.com/support/knowledgecenter/STXKQY_4.2.3/com.ibm.spectrum.scale.v4r23.doc/bl1pdg_messageseveritytags.htm
 type CLIGPFSError struct {
 	CLIError
 
@@ -716,14 +716,14 @@ func (g *gpfsCmdOutReader) ReadRow() ([]string, error) {
 //
 // Scan allows simplified access similar to bufio.Scanner.
 //
-//    for reader.Scan() {
-//    	row := reader.Row()
+//	for reader.Scan() {
+//		row := reader.Row()
 //
-//    	// do something with row
-//    }
-//    if err = reader.Err(); err != nil {
-//    	return nil, err
-//    }
+//		// do something with row
+//	}
+//	if err = reader.Err(); err != nil {
+//		return nil, err
+//	}
 func (g *gpfsCmdOutReader) Scan() bool {
 	row, err := g.ReadRow()
 	if err != nil {

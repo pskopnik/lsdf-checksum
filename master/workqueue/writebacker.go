@@ -383,7 +383,7 @@ func (w *WriteBacker) issueChecksumWarning(ctx context.Context, file *meda.File,
 	if err != nil {
 		err = pkgErrors.Wrap(err, "(*WriteBacker).issueChecksumWarning")
 		fieldLogger.WithError(err).WithFields(log.Fields{
-			"action":                 "escalating",
+			"action": "escalating",
 		}).Error("Encountered error while issuing checksum warning")
 	}
 
