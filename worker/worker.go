@@ -238,6 +238,7 @@ func (w *workerContext) ComputeChecksum(job *work.Job) error {
 		return err
 	}
 
+	var filesBytesRead int64
 	var writeBackPack workqueue.WriteBackPack
 	writeBackPack.Files = make([]workqueue.WriteBackPackFile, 0, len(workPack.Files))
 
@@ -269,6 +270,7 @@ func (w *workerContext) ComputeChecksum(job *work.Job) error {
 			"checksum":   checksum,
 		}).Debug("Read file and computed checksum")
 
+		filesBytesRead += n
 		writeBackPack.Files = append(writeBackPack.Files, workqueue.WriteBackPackFile{
 			ID:       file.ID,
 			Checksum: checksum,
@@ -277,12 +279,17 @@ func (w *workerContext) ComputeChecksum(job *work.Job) error {
 
 	w.returnToPools()
 
+	fieldLogger.WithFields(log.Fields{
+		"files_count":      len(writeBackPack.Files),
+		"files_bytes_read": filesBytesRead,
+	}).Debug("Enqueuing write back job for compute checksum job")
+
 	_, err = wqCtx.WriteBackEnqueuer.Enqueue(&writeBackPack)
 	if err != nil {
 		fieldLogger.WithError(err).WithFields(log.Fields{
 			"action":          "failing-job",
 			"write_back_pack": &writeBackPack,
-		}).Warn("Encountered error while enqueueing WriteBackPack")
+		}).Warn("Encountered error while enqueuing WriteBackPack")
 		return err
 	}
 

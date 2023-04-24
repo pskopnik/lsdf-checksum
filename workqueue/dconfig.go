@@ -59,11 +59,7 @@ func (d DConfigClient) GetData() (DConfigData, error) {
 }
 
 func (d DConfigClient) StartPublisher(ctx context.Context, data DConfigData) (*DConfigPublisher, error) {
-	publisher := &DConfigPublisher{
-		ctx: ctx,
-		w:   d.w,
-	}
-
+	publisher := newDConfigPublisher(ctx, d.w)
 	err := publisher.publishData(&data, 0)
 	if err != nil {
 		return nil, fmt.Errorf("DConfigClient.StartPublisher: %w", err)
@@ -73,20 +69,33 @@ func (d DConfigClient) StartPublisher(ctx context.Context, data DConfigData) (*D
 }
 
 func (d DConfigClient) StartConsumer(ctx context.Context) (*DConfigConsumer, error) {
-	w := newDConfigConsumer(ctx, d.w)
-	err := w.start()
+	consumer := newDConfigConsumer(ctx, d.w)
+	err := consumer.start()
 	if err != nil {
 		return nil, fmt.Errorf("DConfigClient.StartConsumer: %w", err)
 	}
-	return w, nil
+	return consumer, nil
 }
 
 type DConfigPublisher struct {
-	ctx context.Context
-	w   *Workqueue
+	ctx         context.Context
+	w           *Workqueue
+	fieldLogger log.Interface
 
 	m    sync.Mutex
 	data DConfigData
+}
+
+func newDConfigPublisher(ctx context.Context, w *Workqueue) *DConfigPublisher {
+	return &DConfigPublisher{
+		ctx: ctx,
+		w:   w,
+		fieldLogger: w.config.Logger.WithFields(log.Fields{
+			"component":  "workqueue.DConfigPublisher",
+			"filesystem": w.fileSystemName,
+			"snapshot":   w.snapshotName,
+		}),
+	}
 }
 
 // publishData uploads data and updates the copy kept by the publisher. Only
@@ -103,6 +112,10 @@ func (d *DConfigPublisher) publishData(data *DConfigData, baseEpoch uint64) erro
 
 	conn := d.w.pool.Get()
 	defer conn.Close()
+
+	d.fieldLogger.WithFields(log.Fields{
+		"new_epoch": data.Epoch,
+	}).Debug("Publishing dconfig data")
 
 	_, err := conn.Do("HSET", redis.Args{}.Add(dConfigDataKeyFromW(d.w)).AddFlat(data)...)
 	if err != nil {
@@ -174,7 +187,7 @@ type DConfigConsumer struct {
 func newDConfigConsumer(ctx context.Context, w *Workqueue) *DConfigConsumer {
 	ctx, cancel := context.WithCancel(ctx)
 
-	consumer := &DConfigConsumer{
+	return &DConfigConsumer{
 		client: w.DConfig(),
 		fieldLogger: w.config.Logger.WithFields(log.Fields{
 			"component":  "workqueue.DConfigConsumer",
@@ -186,8 +199,6 @@ func newDConfigConsumer(ctx context.Context, w *Workqueue) *DConfigConsumer {
 		cancel:        cancel,
 		done:          make(chan struct{}),
 	}
-
-	return consumer
 }
 
 func (d *DConfigConsumer) start() error {
@@ -198,6 +209,10 @@ func (d *DConfigConsumer) start() error {
 		return fmt.Errorf("DConfigConsumer.start: get initial data: %w", err)
 	}
 	d.publisher.Publish(data)
+
+	d.fieldLogger.WithFields(log.Fields{
+		"new_epoch": data.Epoch,
+	}).Debug("Probed dconfig data initially")
 
 	go d.run()
 	return nil
@@ -222,6 +237,10 @@ L:
 				continue
 			}
 			if data.Epoch != d.publisher.Get().Epoch {
+				d.fieldLogger.WithFields(log.Fields{
+					"new_epoch": data.Epoch,
+				}).Debug("Probed updated dconfig data")
+
 				d.publisher.Publish(data)
 			}
 		case <-d.ctx.Done():

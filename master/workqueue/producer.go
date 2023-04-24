@@ -21,7 +21,7 @@ type ProducerConfig struct {
 	FetchRowBatchSize     uint64
 
 	FileSystemName string
-	SnapshotName string
+	SnapshotName   string
 
 	DB         *meda.DB                                    `yaml:"-"`
 	Queue      *workqueue.QueueClient[*workqueue.WorkPack] `yaml:"-"`
@@ -222,6 +222,11 @@ func (p *Producer) fulfill(order *scheduler.ProductionOrder[*workqueue.WorkPack]
 			totalFileSize += file.FileSize
 			numberOfFiles++
 		}
+
+		p.fieldLogger.WithFields(log.Fields{
+			"files_count":      numberOfFiles,
+			"files_total_size": totalFileSize,
+		}).Debug("Enqueuing compute checksum job")
 
 		_, err = order.Enqueue(&workPack)
 		if err != nil {
