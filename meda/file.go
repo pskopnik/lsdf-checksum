@@ -297,8 +297,6 @@ func (f *FilesToBeReadFetcher) initialise() {
 		ChunkSize:      f.config.ChunkSize,
 		NextChunkQuery: filesToBeReadFetcherNextChunkQuery.SubstituteAll(f.db),
 	}
-	f.lastRand = -1
-	f.lastID = 0
 }
 
 func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, querier sqlx.QueryerContext, limit uint64) (*sqlx.Rows, error) {
@@ -306,11 +304,17 @@ func (f *FilesToBeReadFetcher) queryFilesToBeReadPaginated(ctx context.Context, 
 		querier = &f.db.DB
 	}
 
+	// Greatest rand value looked at so far
+	lastRand := f.lastRand
+	if f.it.PreviousRand() > lastRand {
+		lastRand = f.it.PreviousRand()
+	}
+
 	rows, err := querier.QueryxContext(
 		ctx,
 		filesToBeReadFetcherFetchQuery.SubstituteAll(f.db),
-		f.lastRand,
-		f.lastRand,
+		lastRand,
+		lastRand,
 		f.lastID,
 		f.it.LastRand(),
 		limit,
