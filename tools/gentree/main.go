@@ -132,8 +132,8 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 	specMap := objx.Map(spec)
 
 	var seed uint64
-	if v := specMap.Get("seed"); v.IsUint64() {
-		seed = v.Uint64()
+	if v := specMap.Get("seed"); v.IsInt() || v.IsUint() {
+		seed = uint64(v.Uint(uint(v.Int())))
 		log.Println("Using specified seed:", seed)
 	} else {
 		// max is (1 << 64) - 1, resulting in the range [0, 1 << 64) for cryptoRand.Int
@@ -162,7 +162,7 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 	)
 
 	c.subDirectoryDistribution = DistributionFromSpec(
-		miiToMSI(specMap.Get("sub_directory_distribution").Data()),
+		specMap.Get("sub_directory_distribution").MSI(),
 		c.src,
 	)
 	if c.subDirectoryDistribution == nil {
@@ -170,7 +170,7 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 	}
 
 	c.fileDistribution = DistributionFromSpec(
-		miiToMSI(specMap.Get("file_distribution").Data()),
+		specMap.Get("file_distribution").MSI(),
 		c.src,
 	)
 	if c.fileDistribution == nil {
@@ -178,7 +178,7 @@ func (c *CompleteTreeModel) FromSpec(spec map[string]interface{}) error {
 	}
 
 	c.fileSizeDistribution = DistributionFromSpec(
-		miiToMSI(specMap.Get("file_size_distribution").Data()),
+		specMap.Get("file_size_distribution").MSI(),
 		c.src,
 	)
 	if c.fileSizeDistribution == nil {
@@ -349,7 +349,7 @@ func DistributionFromSpec(spec map[string]interface{}, src rand.Source) distuv.R
 
 	var rander distuv.Rander
 
-	paramsMap := objx.Map(miiToMSI(specMap.Get("params").Data()))
+	paramsMap := specMap.Get("params").ObjxMap()
 
 	switch specMap.Get("name").Str() {
 	case "pareto":
@@ -377,23 +377,6 @@ func min(a, b int) int {
 	} else {
 		return b
 	}
-}
-
-func miiToMSI(mii interface{}) map[string]interface{} {
-	typedMII, ok := mii.(map[interface{}]interface{})
-	if !ok {
-		return nil
-	}
-
-	msi := make(map[string]interface{})
-
-	for key, val := range typedMII {
-		if typedKey, ok := key.(string); ok {
-			msi[typedKey] = val
-		}
-	}
-
-	return msi
 }
 
 func readConfig(path string) (*Config, error) {
