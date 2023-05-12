@@ -8,6 +8,7 @@ func (r *Config) CopyFrom(other *Config) {
 	r.Network = other.Network
 	r.Address = other.Address
 	r.Database = other.Database
+	r.Username = other.Username
 	r.Password = other.Password
 	r.MaxIdle = other.MaxIdle
 	r.IdleTimeout = other.IdleTimeout
@@ -23,6 +24,9 @@ func (r *Config) Merge(other *Config) *Config {
 	}
 	if other.Database != 0 {
 		r.Database = other.Database
+	}
+	if len(other.Username) > 0 {
+		r.Username = other.Username
 	}
 	if len(other.Password) > 0 {
 		r.Password = other.Password

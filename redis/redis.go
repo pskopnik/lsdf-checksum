@@ -16,6 +16,7 @@ type Config struct {
 	Network           string
 	Address           string
 	Database          int
+	Username          string
 	Password          string
 	MaxIdle           int
 	IdleTimeout       time.Duration
@@ -37,6 +38,7 @@ func CreatePool(config *Config) (*redis.Pool, error) {
 				config.Network,
 				config.Address,
 				redis.DialDatabase(config.Database),
+				redis.DialUsername(config.Username),
 				redis.DialPassword(config.Password),
 			)
 		},
