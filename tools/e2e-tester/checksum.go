@@ -190,9 +190,17 @@ func runChecksumWarnings(binPath string, config checksumWarningsConfig) ([]check
 
 	var warnings []checksumWarning
 
-	err = json.Unmarshal(out, &warnings)
-	if err != nil {
-		return nil, fmt.Errorf("runChecksumWarnings: decode warnings: %w", err)
+	outR := bytes.NewReader(out)
+	dec := json.NewDecoder(outR)
+	for {
+		var warning checksumWarning
+		err := dec.Decode(&warning)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, fmt.Errorf("runChecksumWarnings: decode warnings: %w", err)
+		}
+		warnings = append(warnings, warning)
 	}
 
 	return warnings, nil
@@ -264,9 +272,17 @@ func runChecksumRuns(binPath string, config checksumRunsConfig) ([]checksumRun, 
 
 	var runs []checksumRun
 
-	err = json.Unmarshal(out, &runs)
-	if err != nil {
-		return nil, fmt.Errorf("runChecksumRuns: decode warnings: %w", err)
+	outR := bytes.NewReader(out)
+	dec := json.NewDecoder(outR)
+	for {
+		var run checksumRun
+		err := dec.Decode(&run)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, fmt.Errorf("runChecksumRuns: decode runs: %w", err)
+		}
+		runs = append(runs, run)
 	}
 
 	return runs, nil
