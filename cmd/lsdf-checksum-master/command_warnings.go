@@ -28,21 +28,23 @@ var (
 	warningsOnlyLast   = warnings.Flag("only-last", "Only print warnings emitted by the very last run.").Default("false").Bool()
 	warningsOnlyLastN  = warnings.Flag("only-last-n", "Only print warnings emitted by the last n runs.").PlaceHolder("N").Short('n').Uint64()
 	warningsClear      = warnings.Flag("clear", "Clear the printed warnings. The warnings are permanently deleted from the database.").Default("false").Bool()
-	warningsFormat     = warnings.Flag("format", "Format of the output. text prints an ASCII table (the default). json prints a JSON list.").Short('f').Default("text").Enum("text", "json")
+	warningsFormat     = warnings.Flag("format", "Format of the output. text prints an ASCII table (the default). json prints JSON lines.").Short('f').Default("text").Enum("text", "json")
 )
 
 func performWarnings() error {
-	ctx, err := buildMasterContext(MasterContextBuildInputs{
-		NoOpLogger: true,
-		ConfigFile: *warningsConfigFile,
-	})
+	ctx := context.Background()
+	logger := prepareNoOpLogger()
+
+	config, err := prepareConfig(*warningsConfigFile, false, logger)
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Encountered error while building master context:", err)
 		return err
 	}
-	defer ctx.Close()
+	db, err := openDB(ctx, &config.DB)
+	if err != nil {
+		return err
+	}
 
-	warnings, err := warningsFetchChecksumWarnings(ctx, ctx.DB)
+	warnings, err := warningsFetchChecksumWarnings(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -57,7 +59,7 @@ func performWarnings() error {
 	}
 
 	if *warningsClear {
-		_, err := ctx.DB.ChecksumWarningsDeleteChecksumWarnings(ctx, nil, warnings)
+		_, err := db.ChecksumWarningsDeleteChecksumWarnings(ctx, nil, warnings)
 		if err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "Encountered error while deleting checksum warnings:", err)
 			return err
@@ -109,6 +111,9 @@ func warningsFetchChecksumWarnings(ctx context.Context, db *meda.DB) (warnings [
 
 func writeChecksumWarningsAsText(w io.Writer, warnings []meda.ChecksumWarning) error {
 	table := tablewriter.NewWriter(w)
+
+	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+	table.SetCenterSeparator("|")
 
 	table.SetHeader([]string{
 		"ID",
@@ -176,7 +181,7 @@ func (j jsonHexBytes) MarshalJSON() ([]byte, error) {
 }
 
 func writeChecksumWarningsAsJSON(w io.Writer, warnings []meda.ChecksumWarning) error {
-	jsonWarnings := make([]jsonChecksumWarning, len(warnings))
+	enc := json.NewEncoder(w)
 
 	for i := range warnings {
 		warning := &warnings[i]
@@ -194,10 +199,11 @@ func writeChecksumWarningsAsJSON(w io.Writer, warnings []meda.ChecksumWarning) e
 			Created:          time.Time(warning.Created),
 		}
 
-		jsonWarnings[i] = jsonWarning
+		err := enc.Encode(jsonWarning)
+		if err != nil {
+			return err
+		}
 	}
 
-	enc := json.NewEncoder(w)
-
-	return enc.Encode(jsonWarnings)
+	return nil
 }

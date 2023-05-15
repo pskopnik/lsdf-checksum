@@ -21,21 +21,23 @@ var (
 	runsOnlyLast       = runs.Flag("only-last", "Only print data of the very last run.").Default("false").Bool()
 	runsOnlyLastN      = runs.Flag("only-last-n", "Only print data of the last n runs.").Short('n').PlaceHolder("N").Uint64()
 	runsOnlyIncomplete = runs.Flag("only-incomplete", "Only print data of incomplete runs.").Default("false").Bool()
-	runsFormat         = runs.Flag("format", "Format of the output. text prints an ASCII table (the default). json prints a JSON list.").Short('f').Default("text").Enum("text", "json")
+	runsFormat         = runs.Flag("format", "Format of the output. text prints an ASCII table (the default). json prints JSON lines.").Short('f').Default("text").Enum("text", "json")
 )
 
 func performRuns() error {
-	ctx, err := buildMasterContext(MasterContextBuildInputs{
-		NoOpLogger: true,
-		ConfigFile: *runsConfigFile,
-	})
+	ctx := context.Background()
+	logger := prepareNoOpLogger()
+
+	config, err := prepareConfig(*runsConfigFile, false, logger)
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Encountered error while building master context:", err)
 		return err
 	}
-	defer ctx.Close()
+	db, err := openDB(ctx, &config.DB)
+	if err != nil {
+		return err
+	}
 
-	runs, err := runsFetchRuns(ctx, ctx.DB)
+	runs, err := runsFetchRuns(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -93,6 +95,9 @@ func runsFetchRuns(ctx context.Context, db *meda.DB) (runs []meda.Run, err error
 
 func writeRunsAsText(w io.Writer, runs []meda.Run) error {
 	table := tablewriter.NewWriter(w)
+
+	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+	table.SetCenterSeparator("|")
 
 	table.SetHeader([]string{
 		"ID",
@@ -162,7 +167,7 @@ func (j jsonRunState) MarshalJSON() ([]byte, error) {
 }
 
 func writeRunsAsJSON(w io.Writer, runs []meda.Run) error {
-	jsonRuns := make([]jsonRun, len(runs))
+	enc := json.NewEncoder(w)
 
 	for i := range runs {
 		run := &runs[i]
@@ -183,10 +188,11 @@ func writeRunsAsJSON(w io.Writer, runs []meda.Run) error {
 			jsonRun.RunAt = &run.RunAt.Time
 		}
 
-		jsonRuns[i] = jsonRun
+		err := enc.Encode(jsonRun)
+		if err != nil {
+			return err
+		}
 	}
 
-	enc := json.NewEncoder(w)
-
-	return enc.Encode(jsonRuns)
+	return nil
 }
