@@ -32,17 +32,19 @@ var (
 )
 
 func performWarnings() error {
-	ctx, err := buildMasterContext(MasterContextBuildInputs{
-		NoOpLogger: true,
-		ConfigFile: *warningsConfigFile,
-	})
+	ctx := context.Background()
+	logger := prepareNoOpLogger()
+
+	config, err := prepareConfig(*warningsConfigFile, false, logger)
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Encountered error while building master context:", err)
 		return err
 	}
-	defer ctx.Close()
+	db, err := openDB(ctx, &config.DB)
+	if err != nil {
+		return err
+	}
 
-	warnings, err := warningsFetchChecksumWarnings(ctx, ctx.DB)
+	warnings, err := warningsFetchChecksumWarnings(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -57,7 +59,7 @@ func performWarnings() error {
 	}
 
 	if *warningsClear {
-		_, err := ctx.DB.ChecksumWarningsDeleteChecksumWarnings(ctx, nil, warnings)
+		_, err := db.ChecksumWarningsDeleteChecksumWarnings(ctx, nil, warnings)
 		if err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "Encountered error while deleting checksum warnings:", err)
 			return err

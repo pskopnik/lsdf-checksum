@@ -25,17 +25,19 @@ var (
 )
 
 func performRuns() error {
-	ctx, err := buildMasterContext(MasterContextBuildInputs{
-		NoOpLogger: true,
-		ConfigFile: *runsConfigFile,
-	})
+	ctx := context.Background()
+	logger := prepareNoOpLogger()
+
+	config, err := prepareConfig(*runsConfigFile, false, logger)
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Encountered error while building master context:", err)
 		return err
 	}
-	defer ctx.Close()
+	db, err := openDB(ctx, &config.DB)
+	if err != nil {
+		return err
+	}
 
-	runs, err := runsFetchRuns(ctx, ctx.DB)
+	runs, err := runsFetchRuns(ctx, db)
 	if err != nil {
 		return err
 	}
