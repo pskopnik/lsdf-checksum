@@ -159,7 +159,13 @@ func (p *PerformanceMonitor) computeMaxNodeThroughput() error {
 	}
 
 	// TODO: Should this be spread across nodes or workers (threads)?
-	maxNodeThroughput := p.Config.MaxThroughput / uint64(info.NodeNum)
+	var maxNodeThroughput uint64
+	if info.NodeNum > 0 {
+		maxNodeThroughput = p.Config.MaxThroughput / uint64(info.NodeNum)
+	} else {
+		// NodeNum == 0. Assume 1 node
+		maxNodeThroughput = p.Config.MaxThroughput
+	}
 
 	_, err = p.Config.Publisher.MutatePublishData(func(d *workqueue.DConfigData) {
 		if d.MaxNodeThroughput != maxNodeThroughput {
