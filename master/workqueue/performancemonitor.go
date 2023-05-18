@@ -83,11 +83,21 @@ func (p *PerformanceMonitor) run() error {
 
 	p.fieldLogger.Info("Computing initial performance constraints")
 
+	// If queue is still paused from last run, unpause now
+	err = p.unpauseQueueIfPaused()
+	if err != nil {
+		p.fieldLogger.WithError(err).WithFields(log.Fields{
+			"action": "stopping",
+		}).Error("Encountered error while unpausing queue initially")
+
+		return err
+	}
+
 	err = p.computeAll()
 	if err != nil {
 		p.fieldLogger.WithError(err).WithFields(log.Fields{
 			"action": "stopping",
-		}).Error("Encountered error while computing performance constraints")
+		}).Error("Encountered error while computing performance constraints initially")
 
 		return err
 	}
@@ -217,6 +227,23 @@ func (p *PerformanceMonitor) pauseQueueForBackpressure() error {
 				return fmt.Errorf("pauseQueueForBackpressure: pausing queue: %w", err)
 			}
 			p.isPaused = true
+		}
+	}
+
+	return nil
+}
+
+func (p *PerformanceMonitor) unpauseQueueIfPaused() error {
+	isPaused, err := p.Config.Workqueue.Queues().ComputeChecksum().IsPaused()
+	if err != nil {
+		return fmt.Errorf("unpauseQueueIfPaused: querying queue pause state: %w", err)
+	}
+
+	if isPaused {
+		err := p.Config.Workqueue.Queues().ComputeChecksum().Unpause()
+		p.fieldLogger.Debug("Unpausing paused queue")
+		if err != nil {
+			return fmt.Errorf("unpauseQueueIfPaused: unpausing queue: %w", err)
 		}
 	}
 

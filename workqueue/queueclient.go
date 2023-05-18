@@ -3,6 +3,8 @@ package workqueue
 import (
 	"fmt"
 	"time"
+
+	"github.com/gomodule/redigo/redis"
 )
 
 // gocraft/work uses 10 seconds
@@ -82,6 +84,20 @@ func (q *QueueClient[T]) GetWorkerInfo() (QueueWorkerInfo, error) {
 		WorkerNum: workerNum,
 		NodeNum:   nodeNum,
 	}, nil
+}
+
+func (q *QueueClient[T]) IsPaused() (bool, error) {
+	conn := q.w.pool.Get()
+	defer conn.Close()
+
+	pauseKey := gocraftWorkJobPauseKey(q.w.workNamespace, q.name)
+	// the key's value does not matter
+	count, err := redis.Int(conn.Do("EXISTS", pauseKey))
+	if err != nil {
+		return false, fmt.Errorf("QueueClient.IsPaused: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 func (q *QueueClient[T]) Pause() error {
