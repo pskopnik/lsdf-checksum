@@ -49,6 +49,7 @@ type Config struct {
 	TemporaryDirectory  string
 	GlobalWorkDirectory string
 	NodeList            []string
+	ExcludePathPatterns []string
 
 	// Invocation dependent params
 
@@ -164,7 +165,7 @@ func (s *Syncer) prepareDatabase(ctx context.Context) error {
 }
 
 func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
-	options := []options.PolicyOptioner{
+	policyOpts := []options.PolicyOptioner{
 		scaleadpt.PolicyOpt.SnapshotName(s.Config.SnapshotName),
 		scaleadpt.PolicyOpt.Subpath(s.Config.Subpath),
 		scaleadpt.PolicyOpt.TempDir(s.Config.TemporaryDirectory),
@@ -180,16 +181,24 @@ func (s *Syncer) applyPolicy() (*filelist.CloseParser, error) {
 		fields["global_work_directory"] = s.Config.GlobalWorkDirectory
 		fields["node_list"] = s.Config.NodeList
 
-		options = append(
-			options,
+		policyOpts = append(
+			policyOpts,
 			scaleadpt.PolicyOpt.GlobalWorkDirectory(s.Config.GlobalWorkDirectory),
 			scaleadpt.PolicyOpt.NodeList(s.Config.NodeList),
 		)
 	}
 
+	opts := []options.FilelistPolicyOptioner{
+		filelist.Opt.PolicyOpts(policyOpts...),
+	}
+
+	if len(s.Config.ExcludePathPatterns) > 0 {
+		opts = append(opts, filelist.Opt.ExcludePathPatterns(s.Config.ExcludePathPatterns))
+	}
+
 	s.fieldLogger.WithFields(fields).Info("Starting applying list policy")
 
-	parser, err := filelist.ApplyPolicy(s.Config.FileSystem, options...)
+	parser, err := filelist.ApplyPolicy(s.Config.FileSystem, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "(*Syncer).applyPolicy: apply policy on file system")
 	}

@@ -14,6 +14,10 @@ func (s *SnapshotOptions) Apply(opts []SnapshotOptioner) *SnapshotOptions {
 	return s
 }
 
+func (s *SnapshotOptions) apply(options *SnapshotOptions) {
+	*options = *s
+}
+
 type SnapshotOptioner interface {
 	apply(*SnapshotOptions)
 }

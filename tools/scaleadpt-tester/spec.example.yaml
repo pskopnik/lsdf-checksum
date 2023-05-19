@@ -23,6 +23,10 @@ filesystems:
     list_policy:
       # Subpath in the filesystem for which to execute the list policy.
       subpath: /test-dir
+      # Optional list of SQL patterns on the filepath with matching files
+      # excluded from the output.
+      exclude_path_patterns:
+        - '%.csv'
       # Is the list of files below "complete", i.e. does it describe all files
       # in the tree?
       files_complete: false
