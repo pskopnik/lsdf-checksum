@@ -27,6 +27,10 @@ func (p *PolicyOptions) Apply(opts []PolicyOptioner) *PolicyOptions {
 	return p
 }
 
+func (p *PolicyOptions) apply(options *PolicyOptions) {
+	*options = *p
+}
+
 type PolicyOptioner interface {
 	apply(*PolicyOptions)
 }

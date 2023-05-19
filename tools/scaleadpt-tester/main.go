@@ -12,6 +12,7 @@ import (
 
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt"
 	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/filelist"
+	"git.scc.kit.edu/sdm/lsdf-checksum/scaleadpt/options"
 )
 
 type Spec struct {
@@ -35,9 +36,10 @@ type SpecSnapshotDirsInfo struct {
 }
 
 type SpecListPolicy struct {
-	Subpath       string               `yaml:"subpath"`
-	Files         []SpecListPolicyFile `yaml:"files"`
-	FilesComplete bool                 `yaml:"files_complete"`
+	Subpath             string               `yaml:"subpath"`
+	Files               []SpecListPolicyFile `yaml:"files"`
+	FilesComplete       bool                 `yaml:"files_complete"`
+	ExcludePathPatterns []string             `yaml:"exclude_path_patterns"`
 }
 
 type SpecListPolicyFile struct {
@@ -404,7 +406,17 @@ func (c *Checker) checkListPolicy() {
 		specFiles[file.Path] = file
 	}
 
-	parser, err := filelist.ApplyPolicy(c.fs, scaleadpt.PolicyOpt.Subpath(c.spec.ListPolicy.Subpath))
+	options := []options.FilelistPolicyOptioner{
+		filelist.Opt.PolicyOpts(scaleadpt.PolicyOpt.Subpath(c.spec.ListPolicy.Subpath)),
+	}
+
+	if len(c.spec.ListPolicy.ExcludePathPatterns) > 0 {
+		options = append(options,
+			filelist.Opt.ExcludePathPatterns(c.spec.ListPolicy.ExcludePathPatterns),
+		)
+	}
+
+	parser, err := filelist.ApplyPolicy(c.fs, options...)
 	if err != nil {
 		f.AddRuntimeErr(err)
 		return

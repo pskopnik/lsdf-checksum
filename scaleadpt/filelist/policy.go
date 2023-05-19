@@ -53,17 +53,22 @@ func (p *CloseParser) Close() error {
 	}
 }
 
+// Opt provides simple access to FilelistPolicyOptioners methods.
+var Opt = options.FilelistPolicyOptioners{}
+
 // ApplyPolicy applies the FileListPolicy and returns a CloseParser to read the
 // matching files.
 // The CloseParser should be closed in all cases (after processing is finished
 // or if an error occurs).
-func ApplyPolicy(fs *scaleadpt.FileSystem, opts ...options.PolicyOptioner) (*CloseParser, error) {
-	// Extract TempDir from opts
-	tempDir := (&options.PolicyOptions{}).Apply(opts).TempDir
+func ApplyPolicy(fs *scaleadpt.FileSystem, opts ...options.FilelistPolicyOptioner) (*CloseParser, error) {
+	optsAggregate := (&options.FilelistPolicyOptions{}).Apply(opts)
+
+	// Extract TempDir from PolicyOptions
+	tempDir := optsAggregate.PolicyOptions.TempDir
 
 	listPath := osutils.TouchNonExistingTempFile("scaleadpt-filelist-", ".list.files", tempDir)
 
-	err := fs.ApplyListPolicy(FileListPolicy, listPath, opts...)
+	err := fs.ApplyListPolicy(FileListPolicy, listPath, &optsAggregate.PolicyOptions)
 	if err != nil {
 		return nil, err
 	}

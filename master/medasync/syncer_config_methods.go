@@ -4,10 +4,11 @@ func (c *Config) CopyFrom(other *Config) {
 	c.SynchronisationChunkSize = other.SynchronisationChunkSize
 	c.Inserter.CopyFrom(&other.Inserter)
 
+	c.Subpath = other.Subpath
 	c.TemporaryDirectory = other.TemporaryDirectory
 	c.GlobalWorkDirectory = other.GlobalWorkDirectory
 	c.NodeList = other.NodeList
-	c.Subpath = other.Subpath
+	c.ExcludePathPatterns = other.ExcludePathPatterns
 
 	c.SnapshotName = other.SnapshotName
 	c.RunID = other.RunID
@@ -24,6 +25,9 @@ func (c *Config) Merge(other *Config) *Config {
 	}
 	c.Inserter.Merge(&other.Inserter)
 
+	if len(other.Subpath) > 0 {
+		c.Subpath = other.Subpath
+	}
 	if len(other.TemporaryDirectory) > 0 {
 		c.TemporaryDirectory = other.TemporaryDirectory
 	}
@@ -33,8 +37,8 @@ func (c *Config) Merge(other *Config) *Config {
 	if len(other.NodeList) > 0 {
 		c.NodeList = other.NodeList
 	}
-	if len(other.Subpath) > 0 {
-		c.Subpath = other.Subpath
+	if len(other.ExcludePathPatterns) > 0 {
+		c.ExcludePathPatterns = other.ExcludePathPatterns
 	}
 
 	if len(other.SnapshotName) > 0 {
