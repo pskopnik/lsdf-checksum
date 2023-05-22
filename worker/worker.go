@@ -139,11 +139,17 @@ func (w *Worker) runWorkerPool() error {
 
 	w.workerPool.Job(workqueue.ComputeChecksumJobName, (*workerContext).ComputeChecksum)
 
+	w.fieldLogger.Info("Starting worker pool")
+
 	w.workerPool.Start()
 
 	<-w.tomb.Dying()
 
+	w.fieldLogger.Info("Stopping worker pool")
+
 	w.workerPool.Stop()
+
+	w.fieldLogger.Info("Stopped worker pool")
 
 	return nil
 }

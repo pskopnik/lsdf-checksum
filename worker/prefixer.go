@@ -139,7 +139,7 @@ func (p *Prefixer) reaper() error {
 		<-timer.C
 	}
 
-	p.fieldLogger.Info("Starting reaper loop")
+	p.fieldLogger.Debug("Starting reaper loop")
 
 L:
 	for {
@@ -162,7 +162,7 @@ L:
 
 	p.fieldLogger.WithFields(log.Fields{
 		"action": "stopping",
-	}).Info("Finished reaper loop")
+	}).Debug("Finished reaper loop")
 
 	return nil
 }

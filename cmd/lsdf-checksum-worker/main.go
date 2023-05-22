@@ -79,7 +79,12 @@ func runWorker() error {
 	go func() {
 		signalChan := make(chan os.Signal, 1)
 		signal.Notify(signalChan, unix.SIGINT, unix.SIGTERM)
-		<-signalChan
+		signal := <-signalChan
+
+		logger.WithFields(log.Fields{
+			"action": "stopping",
+			"signal": signal,
+		}).Info("Received OS signal")
 
 		workr.SignalStop()
 	}()
