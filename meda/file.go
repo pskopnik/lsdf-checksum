@@ -2,6 +2,8 @@ package meda
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
@@ -415,6 +417,162 @@ func (f *FilesToBeReadFetcher) FetchNext(ctx context.Context, querier sqlx.Query
 
 func (d *DB) FilesToBeReadFetcher(config *FilesToBeReadFetcherConfig) FilesToBeReadFetcher {
 	return FilesToBeReadFetcher{
+		db:     d,
+		config: config,
+	}
+}
+
+const filesIteratorFetchQuery = GenericQuery(`
+	SELECT
+		id, rand, path, file_size
+	FROM {FILES}
+		WHERE
+				id > ?
+			AND
+				id <= ?
+		ORDER BY id ASC
+		LIMIT ?
+	;
+`)
+
+const filesIteratorNextChunkQuery = GenericQuery(`
+	(
+		SELECT
+			id
+		FROM {FILES}
+			WHERE id > ?
+			ORDER BY id ASC
+			LIMIT ?
+	)
+		ORDER BY id DESC LIMIT 1;
+`)
+
+type FilesIteratorConfig struct {
+	ChunkSize uint64
+	BatchSize uint64
+}
+
+type FilesIterator struct {
+	ctx    context.Context
+	db     *DB
+	config FilesIteratorConfig
+	// it is the ChunkIterator used to limit all queries to only a range
+	// of rows.
+	// multiple rows.
+	chunkIt           ChunkIterator
+	chunkContainsRows bool
+	lastID            uint64
+
+	completed bool
+
+	err   error
+	batch []File
+	i     int
+}
+
+func (f *FilesIterator) Next() bool {
+	if f.err != nil {
+		return false
+	}
+
+	if f.i+1 < len(f.batch) {
+		f.i++
+	} else if f.completed {
+		return false
+	} else {
+		err := f.fetchNextBatch()
+		if err == io.EOF {
+			f.completed = true
+			return false
+		} else if err != nil {
+			f.err = err
+			return false
+		}
+		f.i = 0
+	}
+
+	return true
+}
+
+func (f *FilesIterator) Element() *File {
+	return &f.batch[f.i]
+}
+
+func (f *FilesIterator) Error() error {
+	return f.err
+}
+
+func (f *FilesIterator) initialise() {
+	f.chunkIt = ChunkIterator{
+		ChunkSize:      f.config.ChunkSize,
+		NextChunkQuery: filesIteratorNextChunkQuery.SubstituteAll(f.db),
+	}
+}
+
+func (f *FilesIterator) fetchNextBatch() error {
+	if f.chunkIt.NextChunkQuery == "" {
+		f.initialise()
+	}
+
+	queryLimit := f.config.BatchSize
+
+	for {
+		if !f.chunkContainsRows {
+			ok, err := f.advanceToNextChunk()
+			if err != nil {
+				return fmt.Errorf("(*FilesIterator).fetchNextBatch: %w", err)
+			} else if !ok {
+				return io.EOF
+			}
+		}
+
+		rows, err := f.db.QueryxContext(
+			f.ctx,
+			filesIteratorFetchQuery.SubstituteAll(f.db),
+			f.lastID,
+			f.chunkIt.LastID(),
+			queryLimit,
+		)
+		if err != nil {
+			return fmt.Errorf("(*FilesIterator).fetchNextBatch: querying db: %w", err)
+		}
+
+		f.batch, err = filesAppendFromRowsAndClose(f.batch[:0], rows)
+		if err != nil {
+			return fmt.Errorf("(*FilesIterator).fetchNextBatch: %w", err)
+		}
+
+		if uint64(len(f.batch)) < queryLimit {
+			// less rows returned than requested as chunk is exhausted
+			f.chunkContainsRows = false
+		}
+
+		if len(f.batch) > 0 {
+			// at least one file was fetched
+
+			f.lastID = f.batch[len(f.batch)-1].ID
+
+			return nil
+		}
+	}
+}
+
+func (f *FilesIterator) advanceToNextChunk() (bool, error) {
+	if !f.chunkIt.Next(f.ctx, f.db) {
+		if f.chunkIt.Err() != nil {
+			return false, fmt.Errorf("(*FilesIterator).advanceToNextChunk: %w", f.chunkIt.Err())
+		}
+		// no more chunks, chunkIterator exhausted
+		return false, nil
+	}
+
+	f.chunkContainsRows = true
+	return true, nil
+}
+
+func (d *DB) FilesIterator(ctx context.Context, config FilesIteratorConfig) FilesIterator {
+	return FilesIterator{
+		ctx:    ctx,
 		db:     d,
 		config: config,
 	}
