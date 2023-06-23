@@ -226,7 +226,7 @@ func (w *WorkqueuesKeeper) reaper() {
 		<-timer.C
 	}
 
-	w.fieldLogger.Info("Starting reaper loop")
+	w.fieldLogger.Debug("Starting reaper loop")
 
 L:
 	for {
@@ -249,5 +249,5 @@ L:
 
 	w.fieldLogger.WithFields(log.Fields{
 		"action": "stopping",
-	}).Info("Finished reaper loop")
+	}).Debug("Finished reaper loop")
 }
