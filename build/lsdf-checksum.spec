@@ -1,4 +1,4 @@
-%global upstream_version 0.4.0-beta.3
+%global upstream_version 0.4.0
 
 Name:               lsdf-checksum
 Version:            %( echo %upstream_version | sed -E 's/-(beta|alpha|rc)/~\1/i' | tr '-' '.' )
@@ -73,5 +73,5 @@ install -m 644 -D man/lsdf-checksum-worker.1 %{buildroot}/%{_mandir}/man1/lsdf-c
 
 # The changelog must contain the version in the proper RPM E-V-R notation.
 %changelog
-* Mon May 22 2023 Paul Skopnik <paul.skopnik@kit.edu> - 0.4.0~beta-1
-- Initialise spec file
+* Fri Jun 23 2023 Paul Skopnik <paul.skopnik@kit.edu> - 0.4.0
+- Release v0.4.0
