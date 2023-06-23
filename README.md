@@ -54,22 +54,3 @@ go build ./cmd/lsdf-checksum-worker
 Both binaries do not depend on significant runtime libraries (e.g. libc is required).
 Both binaries contain help texts (`--help`).
 Calling the binaries only with the `--help-man` flag outputs a man page for the command.
-
-## Development Status
-
-This repository contains the prototype / work-in-progress of the lsdf-checksum project.
-Most code is functional and has already been used at scale.
-However, the code has not reached production-y stability yet.
-Hence, there are no buildable binaries included in this repository.
-
-Some open issues:
-
- * Operator binaries and interface documentation.
- * Optimisations of the meta database synchronisation queries.
- * Review of error handling.
- * Review of configuration passing (`...Config` types).
- * Embedding of LedisDB instead of requiring an external Redis server.
- * Optimisations of the checksum write-back procedure.
-   It should be possible to use HDDs to store the database.
-
-Development on this project is due to resume in December 2018.
