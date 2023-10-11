@@ -22,7 +22,7 @@ require (
 	github.com/tinylib/msgp v1.1.8
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	golang.org/x/sync v0.1.0
-	golang.org/x/sys v0.6.0
+	golang.org/x/sys v0.13.0
 	golang.org/x/time v0.3.0
 	gonum.org/v1/gonum v0.12.0
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
@@ -43,7 +43,7 @@ require (
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/thecodeteam/gofsutil v0.1.2 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
-	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 )
